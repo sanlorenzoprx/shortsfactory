@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "schedules": [
+    {
+      "id": "weekday-es-pr",
+      "enabled": true,
+      "due_at": "2020-01-01T09:00:00+00:00",
+      "batch": 1,
+      "locale": "es-PR",
+      "mode": "mock",
+      "record_app": false,
+      "tts": false,
+      "music": false,
+      "max_attempts": 3
+    }
+  ]
+}

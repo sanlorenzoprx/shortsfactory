@@ -1,0 +1,69 @@
+{
+  "job_id": "qbde6401c83e",
+  "created_at": "2026-06-27T21:46:52.540868+00:00",
+  "locale": "en-US",
+  "mode": "mock",
+  "idea": {
+    "name": "AI UGC Creator Agency",
+    "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+    "target_user": "small ecommerce brands",
+    "market": "US"
+  },
+  "verdict": {
+    "idea": {
+      "name": "AI UGC Creator Agency",
+      "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+      "target_user": "small ecommerce brands",
+      "market": "US"
+    },
+    "verdict_headline": "Build a tiny test now",
+    "lit_score": 78,
+    "risk_level": "medium",
+    "top_reason": "The idea has a clear buyer, but the first offer must be narrow.",
+    "next_step": "Pre-sell one painful use case before building a full product.",
+    "source": "mock"
+  },
+  "outputs": {
+    "idea_json": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\idea.json",
+    "verdict_json": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\verdict.json",
+    "script_txt": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\script.txt",
+    "captions_srt": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\captions.srt",
+    "thumbnail_jpg": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\thumbnail.jpg",
+    "short_mp4": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\short.mp4"
+  },
+  "warnings": [],
+  "recording": {
+    "enabled": false
+  },
+  "voiceover": {
+    "status": "disabled"
+  },
+  "music": {
+    "status": "disabled"
+  },
+  "localization": {
+    "status": "success",
+    "requested_locale": "en-US",
+    "resolved_locale": "en-US",
+    "fallback_locale": null,
+    "localized_outputs": [
+      "script.txt",
+      "captions.srt",
+      "thumbnail.jpg",
+      "short.mp4"
+    ],
+    "warnings": []
+  },
+  "queue": {
+    "status": "succeeded",
+    "queue_id": "bde6401c83ee",
+    "attempt": 1,
+    "max_attempts": 3,
+    "enqueued_at": "2026-06-27T21:46:12.275323+00:00",
+    "started_at": "2026-06-27T21:46:52.536689+00:00",
+    "finished_at": "2026-06-27T21:47:11.563424+00:00"
+  },
+  "scheduler": {
+    "status": "disabled"
+  }
+}

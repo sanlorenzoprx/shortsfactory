@@ -17,6 +17,7 @@ from content_factory.agents.video_builder import VideoBuilder
 from content_factory.agents.voiceover_agent import VoiceoverAgent
 from content_factory.config import Config
 from content_factory.integrations.playwright_recorder import record_lit_app_flow
+from content_factory.local_queue import LocalQueue, LocalScheduler
 from content_factory.schemas import ShortJobReceipt
 from content_factory.utils.files import write_json, write_text
 
@@ -35,11 +36,19 @@ class ContentFactoryOrchestrator:
         self.voiceover = VoiceoverAgent(config)
         self.music = MusicAgent(config)
 
-    def run_batch(self, batch: int = 1, locale: str = "en-US") -> List[Path]:
+    def run_batch(
+        self, batch: int = 1, locale: str = "en-US", job_id: str | None = None
+    ) -> List[Path]:
+        if job_id is not None and batch != 1:
+            raise ValueError("job_id can only be supplied when batch=1")
         ideas = self.researcher.get_trending_ideas(batch)
         receipts: List[Path] = []
         for idea in ideas:
-            receipt = ShortJobReceipt(locale=locale, mode=self.config.mode, idea=asdict(idea))
+            receipt = ShortJobReceipt(
+                locale=locale, mode=self.config.mode, idea=asdict(idea)
+            )
+            if job_id is not None:
+                receipt.job_id = job_id
             job_dir = self.config.output_dir / "jobs" / receipt.job_id
             job_dir.mkdir(parents=True, exist_ok=True)
 
@@ -222,14 +231,68 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate or load background music and mix it under existing audio",
     )
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--enqueue", action="store_true", help="Add local queue jobs")
+    actions.add_argument(
+        "--run-queue", action="store_true", help="Run pending local queue jobs once"
+    )
+    actions.add_argument(
+        "--schedule-dry-run",
+        action="store_true",
+        help="List due local schedules without enqueueing or rendering",
+    )
+    actions.add_argument(
+        "--run-due",
+        action="store_true",
+        help="Enqueue due local schedules and run queued jobs once",
+    )
+    parser.add_argument("--max-jobs", type=int, default=1, help="Queue jobs to run once")
+    parser.add_argument(
+        "--max-attempts", type=int, default=3, help="Retry cap for newly queued jobs"
+    )
+    parser.add_argument(
+        "--schedule-file",
+        default=None,
+        help="Local schedule JSON path (default: <output-dir>/schedules/schedules.json)",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    output_dir = Path(args.output_dir)
+    queue = LocalQueue(output_dir / "queue" / "jobs.json", output_dir)
+    schedule_path = (
+        Path(args.schedule_file)
+        if args.schedule_file
+        else output_dir / "schedules" / "schedules.json"
+    )
+    scheduler = LocalScheduler(schedule_path, queue)
+    if args.enqueue:
+        created = queue.enqueue(
+            batch=args.batch,
+            locale=args.locale,
+            mode=args.mode,
+            record_app=args.record_app,
+            tts=args.tts,
+            music=args.music,
+            max_attempts=args.max_attempts,
+        )
+        print(json.dumps(created, indent=2))
+        return
+    if args.run_queue:
+        print(json.dumps(queue.run_pending(max_jobs=args.max_jobs), indent=2))
+        return
+    if args.schedule_dry_run:
+        print(json.dumps(scheduler.preview_due(), indent=2))
+        return
+    if args.run_due:
+        scheduler.enqueue_due()
+        print(json.dumps(queue.run_pending(max_jobs=args.max_jobs), indent=2))
+        return
     config = Config(
         mode=args.mode,
-        output_dir=Path(args.output_dir),
+        output_dir=output_dir,
         playwright_recording_enabled=args.record_app,
         tts_enabled=args.tts,
         music_enabled=args.music,

@@ -142,6 +142,34 @@ resolved locale. Unsupported locales safely fall back to `en-US`; missing
 catalog phrases stay in English and are listed in `receipt.json.localization`
 and the top-level receipt warnings.
 
+## Phase 2F: local queue and scheduler
+
+The queue is a single-process, durable local JSON file—not a cloud worker or
+distributed system. Enqueue work, then run it once:
+
+```powershell
+python orchestrator.py --enqueue --batch 3 --locale en-US --mode mock
+python orchestrator.py --run-queue --max-jobs 3
+```
+
+Queue jobs keep a stable output job ID across retries, stop retrying at
+`--max-attempts` (default 3), and add attempt/timestamp metadata to the job
+receipt. Succeeded jobs are ignored on later queue runs.
+
+Local one-shot schedules live at `output/schedules/schedules.json` by default.
+Each enabled entry uses an ISO `due_at` plus the normal `locale`, `mode`,
+`record_app`, `tts`, and `music` options. Previewing never enqueues or renders:
+
+```powershell
+python orchestrator.py --schedule-dry-run
+python orchestrator.py --run-due --max-jobs 3
+```
+
+Pass `--schedule-file schedules.example.json` to preview the checked-in example.
+
+`--run-due` marks each due schedule after enqueueing so it cannot duplicate the
+same scheduled work. No daemon, hosted scheduler, Redis, or cloud queue is used.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
@@ -159,5 +187,4 @@ Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling
 ## What comes later
 
 - Deployed LIT API configuration.
-- Queue and scheduler.
 - Publisher integrations.

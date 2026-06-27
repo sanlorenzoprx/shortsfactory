@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "queue_id": "cef29a8fbd68",
+      "output_job_id": "qcef29a8fbd6",
+      "status": "succeeded",
+      "locale": "en-US",
+      "mode": "mock",
+      "record_app": false,
+      "tts": false,
+      "music": false,
+      "attempt": 1,
+      "max_attempts": 3,
+      "enqueued_at": "2026-06-27T21:46:12.275323+00:00",
+      "started_at": "2026-06-27T21:46:14.590181+00:00",
+      "finished_at": "2026-06-27T21:46:32.769696+00:00",
+      "receipt_path": "output\\phase2f-acceptance\\jobs\\qcef29a8fbd6\\receipt.json",
+      "error": null,
+      "scheduler": null
+    },
+    {
+      "queue_id": "c8d5f4fb1d6e",
+      "output_job_id": "qc8d5f4fb1d6",
+      "status": "succeeded",
+      "locale": "en-US",
+      "mode": "mock",
+      "record_app": false,
+      "tts": false,
+      "music": false,
+      "attempt": 1,
+      "max_attempts": 3,
+      "enqueued_at": "2026-06-27T21:46:12.275323+00:00",
+      "started_at": "2026-06-27T21:46:32.860583+00:00",
+      "finished_at": "2026-06-27T21:46:52.485275+00:00",
+      "receipt_path": "output\\phase2f-acceptance\\jobs\\qc8d5f4fb1d6\\receipt.json",
+      "error": null,
+      "scheduler": null
+    },
+    {
+      "queue_id": "bde6401c83ee",
+      "output_job_id": "qbde6401c83e",
+      "status": "succeeded",
+      "locale": "en-US",
+      "mode": "mock",
+      "record_app": false,
+      "tts": false,
+      "music": false,
+      "attempt": 1,
+      "max_attempts": 3,
+      "enqueued_at": "2026-06-27T21:46:12.275323+00:00",
+      "started_at": "2026-06-27T21:46:52.536689+00:00",
+      "finished_at": "2026-06-27T21:47:11.563424+00:00",
+      "receipt_path": "output\\phase2f-acceptance\\jobs\\qbde6401c83e\\receipt.json",
+      "error": null,
+      "scheduler": null
+    }
+  ]
+}
