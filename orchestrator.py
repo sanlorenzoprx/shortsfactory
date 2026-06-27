@@ -13,7 +13,9 @@ from content_factory.agents.localization_agent import LocalizationAgent
 from content_factory.agents.script_writer import ScriptWriter
 from content_factory.agents.thumbnail_agent import ThumbnailAgent
 from content_factory.agents.video_builder import VideoBuilder
+from content_factory.agents.voiceover_agent import VoiceoverAgent
 from content_factory.config import Config
+from content_factory.integrations.playwright_recorder import record_lit_app_flow
 from content_factory.schemas import ShortJobReceipt
 from content_factory.utils.files import write_json, write_text
 
@@ -29,6 +31,7 @@ class ContentFactoryOrchestrator:
         self.captions = CaptionAgent()
         self.thumbnails = ThumbnailAgent()
         self.video = VideoBuilder(config)
+        self.voiceover = VoiceoverAgent(config)
 
     def run_batch(self, batch: int = 1, locale: str = "en-US") -> List[Path]:
         ideas = self.researcher.get_trending_ideas(batch)
@@ -66,6 +69,64 @@ class ContentFactoryOrchestrator:
             if test_outcome.warning:
                 receipt.warnings.append(test_outcome.warning)
 
+            if self.config.tts_enabled:
+                voiceover = self.voiceover.create_voiceover(
+                    script_path=script_path,
+                    video_path=video_path,
+                    job_dir=job_dir,
+                )
+                receipt.voiceover = {
+                    "status": voiceover.status,
+                    "provider": voiceover.provider,
+                    "script_source": script_path.name,
+                    "output": voiceover.output_path.name if voiceover.output_path else None,
+                    "duration_seconds": voiceover.duration_seconds,
+                    "mixed_output": (
+                        voiceover.mixed_output_path.name
+                        if voiceover.mixed_output_path
+                        else None
+                    ),
+                    "warnings": voiceover.warnings,
+                }
+                receipt.warnings.extend(voiceover.warnings)
+                if voiceover.output_path is not None:
+                    outputs["voiceover_audio"] = str(voiceover.output_path)
+                if voiceover.mixed_output_path is not None:
+                    outputs["short_with_voice_mp4"] = str(voiceover.mixed_output_path)
+
+            if self.config.playwright_recording_enabled:
+                try:
+                    recording = record_lit_app_flow(
+                        app_url=self.config.lit_app_url,
+                        idea=idea.name,
+                        verdict=asdict(verdict),
+                        job_dir=job_dir,
+                        locale=locale,
+                        headless=self.config.playwright_headless,
+                        timeout_ms=self.config.playwright_timeout_ms,
+                        viewport_width=self.config.playwright_viewport_width,
+                        viewport_height=self.config.playwright_viewport_height,
+                    )
+                    receipt.recording = recording.metadata
+                    receipt.warnings.extend(recording.warnings)
+                    if recording.success:
+                        if recording.raw_video_path is not None:
+                            outputs["app_recording_raw_webm"] = str(recording.raw_video_path)
+                        if recording.normalized_video_path is not None:
+                            outputs["app_recording_mp4"] = str(recording.normalized_video_path)
+                        if recording.screenshot_path is not None:
+                            outputs["app_recording_final_png"] = str(recording.screenshot_path)
+                except Exception as exc:
+                    details = " ".join(str(exc).split()) or type(exc).__name__
+                    receipt.recording = {
+                        "enabled": True,
+                        "source": "playwright",
+                        "app_url": self.config.lit_app_url,
+                        "status": "failed",
+                        "error_code": "recording_error",
+                    }
+                    receipt.warnings.append(f"app_recording_failed: {details[:300]}")
+
             receipt.verdict = asdict(verdict)
             receipt.outputs = outputs
             receipt_path = write_json(job_dir / "receipt.json", receipt.to_json_dict())
@@ -81,12 +142,27 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--locale", default="en-US", help="Locale tag, e.g. en-US")
     parser.add_argument("--mode", choices=["mock", "api"], default="mock", help="mock is offline-safe")
     parser.add_argument("--output-dir", default="output", help="Output directory")
+    parser.add_argument(
+        "--record-app",
+        action="store_true",
+        help="Record the controlled LIT demo flow for this run",
+    )
+    parser.add_argument(
+        "--tts",
+        action="store_true",
+        help="Generate a local voiceover and mux it into short_with_voice.mp4",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    config = Config(mode=args.mode, output_dir=Path(args.output_dir))
+    config = Config(
+        mode=args.mode,
+        output_dir=Path(args.output_dir),
+        playwright_recording_enabled=args.record_app,
+        tts_enabled=args.tts,
+    )
     orchestrator = ContentFactoryOrchestrator(config)
     orchestrator.run_batch(batch=args.batch, locale=args.locale)
 

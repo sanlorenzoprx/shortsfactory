@@ -58,6 +58,8 @@ class ShortJobReceipt:
     verdict: Dict[str, Any] = field(default_factory=dict)
     outputs: Dict[str, str] = field(default_factory=dict)
     warnings: List[str] = field(default_factory=list)
+    recording: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
+    voiceover: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
 
     def to_json_dict(self) -> Dict[str, Any]:
         return asdict(self)

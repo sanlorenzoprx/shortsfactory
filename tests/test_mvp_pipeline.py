@@ -28,6 +28,8 @@ def test_mock_pipeline_creates_required_outputs(tmp_path: Path):
     assert receipt["idea"]
     assert receipt["verdict"]
     assert isinstance(receipt["warnings"], list)
+    assert receipt["recording"] == {"enabled": False}
+    assert receipt["voiceover"] == {"status": "disabled"}
     assert Path(receipt["outputs"]["short_mp4"]).read_bytes()[:8].endswith(b"ftyp")
     assert Path(receipt["outputs"]["thumbnail_jpg"]).read_bytes()[:2] == b"\xff\xd8"
 

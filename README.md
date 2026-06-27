@@ -26,6 +26,7 @@ output/jobs/<job_id>/receipt.json
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+python -m playwright install chromium
 pytest -q
 python orchestrator.py --batch 1 --locale en-US --mode mock
 ```
@@ -57,6 +58,50 @@ If the endpoint is unavailable, times out, or returns an incomplete verdict,
 the job still completes with a deterministic `api_fallback` verdict and records
 the reason in `receipt.json`. Mock mode never calls the API.
 
+## Phase 2B: controlled LIT app recording
+
+Start the local LIT app, then request one explicit recording run:
+
+```powershell
+cd "C:\repos\LIT-GhostTown"
+npm run dev
+```
+
+```powershell
+cd "C:\repos\Shorts Factory"
+$env:LIT_APP_URL="http://127.0.0.1:5173"
+python orchestrator.py --batch 1 --locale en-US --mode api --record-app
+```
+
+The flag records synthetic seed input only. It creates
+`app_recording_raw.webm`, normalized vertical `app_recording.mp4`, and
+`app_recording_final.png` beside the existing job artifacts. Recording is off
+by default, and a browser/app failure is recorded as a receipt warning without
+breaking short generation.
+
+## Phase 2C: local voiceover
+
+Voiceover is opt-in and leaves the existing `short.mp4` unchanged:
+
+```powershell
+python orchestrator.py --batch 1 --locale en-US --mode api --tts
+python orchestrator.py --batch 1 --locale en-US --mode api --record-app --tts
+```
+
+The default `TTS_PROVIDER=auto` uses Windows SAPI on Windows and `pyttsx3`
+when available on other platforms. It requires no paid credentials. Set
+`TTS_VOICE` to an installed local voice name to override the system default.
+Provider failures are non-fatal by default: the job creates audible
+`voiceover.wav` fallback audio and records the warning in `receipt.json`. Set
+`TTS_STRICT=true` to make provider or muxing failures fail the run.
+
+An enabled run adds `voiceover.wav` and `short_with_voice.mp4`. Verify the AAC
+audio stream with:
+
+```powershell
+ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,duration -of json output/jobs/<job_id>/short_with_voice.mp4
+```
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
@@ -74,8 +119,6 @@ Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling
 ## What comes later
 
 - Deployed LIT API configuration.
-- Playwright app recording.
-- Real voiceover/TTS.
 - Background music and audio mix.
 - Real localization.
 - Queue and scheduler.

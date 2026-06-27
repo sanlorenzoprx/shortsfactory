@@ -179,6 +179,7 @@ def test_api_fallback_writes_warning_and_no_raw_response(tmp_path, monkeypatch):
     assert "server unavailable" in receipt["warnings"][0]
     assert "lit_api_response_json" not in receipt["outputs"]
     assert not (receipt_path.parent / "lit_api_response.json").exists()
+    assert receipt["voiceover"] == {"status": "disabled"}
 
 
 def test_orchestrator_passes_requested_locale_to_lit(monkeypatch, tmp_path):
