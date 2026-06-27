@@ -170,6 +170,30 @@ Pass `--schedule-file schedules.example.json` to preview the checked-in example.
 `--run-due` marks each due schedule after enqueueing so it cannot duplicate the
 same scheduled work. No daemon, hosted scheduler, Redis, or cloud queue is used.
 
+## Phase 2G: dry-run publisher packages
+
+Publisher mode prepares local upload metadata and never posts to a live account:
+
+```powershell
+python orchestrator.py --batch 1 --locale en-US --mode api --record-app --tts --music --publish-dry-run
+```
+
+Each job gets `publish/publisher_plan.json` plus `metadata.json` and a copied
+`captions.srt` for `youtube_shorts`, `tiktok`, and `instagram_reels`. The
+manifests reference the existing final MP4 and thumbnail, so large media files
+are not duplicated. Every package records `live_publish_enabled: false` and
+requires human approval.
+
+Dry-run publishing also works through the local queue:
+
+```powershell
+python orchestrator.py --enqueue --batch 1 --locale es-PR --mode mock --tts --music --publish-dry-run
+python orchestrator.py --run-queue --max-jobs 1
+```
+
+There are no OAuth flows, upload tokens, platform API clients, or live posting
+commands in Phase 2G. Attempts to invoke the publisher's live path are refused.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
@@ -187,4 +211,3 @@ Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling
 ## What comes later
 
 - Deployed LIT API configuration.
-- Publisher integrations.

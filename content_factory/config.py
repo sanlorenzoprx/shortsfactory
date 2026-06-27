@@ -67,6 +67,9 @@ class Config:
     )
     music_strict: bool = field(default_factory=lambda: _env_bool("MUSIC_STRICT", False))
     music_path: str = field(default_factory=lambda: os.getenv("MUSIC_PATH", ""))
+    publish_dry_run_enabled: bool = field(
+        default_factory=lambda: _env_bool("PUBLISH_DRY_RUN_ENABLED", False)
+    )
     output_dir: Path = field(default_factory=lambda: Path(os.getenv("OUTPUT_DIR", "output")))
     video_width: int = 1080
     video_height: int = 1920

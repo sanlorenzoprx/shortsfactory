@@ -1,0 +1,14 @@
+{
+  "idea": {
+    "name": "Agencia de creadores UGC con IA",
+    "description": "Un servicio que crea videos cortos de productos para marcas con avatares y guiones de IA.",
+    "target_user": "marcas pequeñas de comercio electrónico",
+    "market": "US"
+  },
+  "verdict_headline": "Haz una prueba pequeña ahora",
+  "lit_score": 78,
+  "risk_level": "medio",
+  "top_reason": "La idea tiene un comprador claro, pero la primera oferta debe ser específica.",
+  "next_step": "Prevende un caso de uso urgente antes de crear el producto completo.",
+  "source": "mock"
+}

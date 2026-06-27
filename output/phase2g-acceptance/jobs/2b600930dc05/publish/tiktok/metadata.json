@@ -1,0 +1,19 @@
+{
+  "status": "dry_run_ready",
+  "live_publish_enabled": false,
+  "platform": "tiktok",
+  "source_job_id": "2b600930dc05",
+  "locale": "en-US",
+  "title": "You have the advantage",
+  "description": "I ran this business idea through the Ghost Town Test: AI UGC Creator Agency. Clear demand, strong LIT score, and unfair advantage. The conditions are right. Do not build blind. Test your idea first.",
+  "caption": "Do not build blind. Test your idea first. #BusinessIdeas #Startup #Validation #TikTok",
+  "hashtags": [
+    "#BusinessIdeas",
+    "#Startup",
+    "#Validation",
+    "#TikTok"
+  ],
+  "video": "../../short_with_voice_and_music.mp4",
+  "thumbnail": "../../thumbnail.jpg",
+  "captions": "captions.srt"
+}

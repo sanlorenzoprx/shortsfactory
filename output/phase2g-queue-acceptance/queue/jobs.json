@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "jobs": [
+    {
+      "queue_id": "2de0d151344c",
+      "output_job_id": "q2de0d151344",
+      "status": "succeeded",
+      "locale": "es-PR",
+      "mode": "mock",
+      "record_app": false,
+      "tts": false,
+      "music": false,
+      "publish_dry_run": true,
+      "attempt": 1,
+      "max_attempts": 3,
+      "enqueued_at": "2026-06-27T21:54:08.612104+00:00",
+      "started_at": "2026-06-27T21:54:11.263919+00:00",
+      "finished_at": "2026-06-27T21:54:29.177512+00:00",
+      "receipt_path": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\receipt.json",
+      "error": null,
+      "scheduler": null
+    }
+  ]
+}

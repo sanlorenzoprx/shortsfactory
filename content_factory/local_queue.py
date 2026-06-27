@@ -42,6 +42,7 @@ class LocalQueue:
         record_app: bool = False,
         tts: bool = False,
         music: bool = False,
+        publish_dry_run: bool = False,
         max_attempts: int = 3,
         scheduler: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
@@ -63,6 +64,7 @@ class LocalQueue:
                 "record_app": bool(record_app),
                 "tts": bool(tts),
                 "music": bool(music),
+                "publish_dry_run": bool(publish_dry_run),
                 "attempt": 0,
                 "max_attempts": max_attempts,
                 "enqueued_at": _utc_now(),
@@ -130,19 +132,23 @@ class LocalQueue:
     def _execute_job(self, item: dict[str, Any]) -> Path:
         from orchestrator import ContentFactoryOrchestrator
 
-        config = Config(
-            mode=item["mode"],
-            output_dir=self.output_dir,
-            playwright_recording_enabled=item["record_app"],
-            tts_enabled=item["tts"],
-            music_enabled=item["music"],
-        )
+        config = self.config_for_item(item)
         receipts = ContentFactoryOrchestrator(config).run_batch(
             batch=1,
             locale=item["locale"],
             job_id=item["output_job_id"],
         )
         return receipts[0]
+
+    def config_for_item(self, item: dict[str, Any]) -> Config:
+        return Config(
+            mode=item["mode"],
+            output_dir=self.output_dir,
+            playwright_recording_enabled=item["record_app"],
+            tts_enabled=item["tts"],
+            music_enabled=item["music"],
+            publish_dry_run_enabled=item.get("publish_dry_run", False),
+        )
 
     @staticmethod
     def _patch_receipt(
@@ -218,6 +224,7 @@ class LocalScheduler:
                     record_app=bool(schedule.get("record_app", False)),
                     tts=bool(schedule.get("tts", False)),
                     music=bool(schedule.get("music", False)),
+                    publish_dry_run=bool(schedule.get("publish_dry_run", False)),
                     max_attempts=int(schedule.get("max_attempts", 3)),
                     scheduler=scheduler,
                 )

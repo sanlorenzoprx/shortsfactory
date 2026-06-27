@@ -11,6 +11,7 @@ from content_factory.agents.caption_agent import CaptionAgent
 from content_factory.agents.idea_researcher import IdeaResearcher
 from content_factory.agents.localization_agent import LocalizationAgent
 from content_factory.agents.music_agent import MusicAgent
+from content_factory.agents.publisher_agent import PublisherAgent
 from content_factory.agents.script_writer import ScriptWriter
 from content_factory.agents.thumbnail_agent import ThumbnailAgent
 from content_factory.agents.video_builder import VideoBuilder
@@ -35,6 +36,7 @@ class ContentFactoryOrchestrator:
         self.video = VideoBuilder(config)
         self.voiceover = VoiceoverAgent(config)
         self.music = MusicAgent(config)
+        self.publisher = PublisherAgent()
 
     def run_batch(
         self, batch: int = 1, locale: str = "en-US", job_id: str | None = None
@@ -167,6 +169,7 @@ class ContentFactoryOrchestrator:
                     outputs["short_with_voice_and_music_mp4"] = str(
                         music.mixed_output_path
                     )
+                    final_audio_video_path = music.mixed_output_path
 
             if self.config.playwright_recording_enabled:
                 try:
@@ -201,6 +204,29 @@ class ContentFactoryOrchestrator:
                     }
                     receipt.warnings.append(f"app_recording_failed: {details[:300]}")
 
+            if self.config.publish_dry_run_enabled:
+                publisher = self.publisher.create_dry_run_packages(
+                    job_id=receipt.job_id,
+                    locale=localization.resolved_locale,
+                    script=script,
+                    verdict=verdict,
+                    video_path=final_audio_video_path,
+                    thumbnail_path=thumbnail_path,
+                    captions_path=captions_path,
+                    job_dir=job_dir,
+                )
+                receipt.publisher = {
+                    "status": publisher.status,
+                    "live_publish_enabled": False,
+                    "platforms": publisher.platforms,
+                    "publisher_plan": str(
+                        publisher.plan_path.relative_to(job_dir).as_posix()
+                    ),
+                    "warnings": publisher.warnings,
+                }
+                receipt.warnings.extend(publisher.warnings)
+                outputs["publisher_plan_json"] = str(publisher.plan_path)
+
             receipt.verdict = asdict(verdict)
             receipt.outputs = outputs
             receipt_path = write_json(job_dir / "receipt.json", receipt.to_json_dict())
@@ -230,6 +256,11 @@ def parse_args() -> argparse.Namespace:
         "--music",
         action="store_true",
         help="Generate or load background music and mix it under existing audio",
+    )
+    parser.add_argument(
+        "--publish-dry-run",
+        action="store_true",
+        help="Create local platform packages without uploading anything",
     )
     actions = parser.add_mutually_exclusive_group()
     actions.add_argument("--enqueue", action="store_true", help="Add local queue jobs")
@@ -276,6 +307,7 @@ def main() -> None:
             record_app=args.record_app,
             tts=args.tts,
             music=args.music,
+            publish_dry_run=args.publish_dry_run,
             max_attempts=args.max_attempts,
         )
         print(json.dumps(created, indent=2))
@@ -296,6 +328,7 @@ def main() -> None:
         playwright_recording_enabled=args.record_app,
         tts_enabled=args.tts,
         music_enabled=args.music,
+        publish_dry_run_enabled=args.publish_dry_run,
     )
     orchestrator = ContentFactoryOrchestrator(config)
     orchestrator.run_batch(batch=args.batch, locale=args.locale)

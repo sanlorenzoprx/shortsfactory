@@ -1,0 +1,15 @@
+{
+  "status": "dry_run_ready",
+  "live_publish_enabled": false,
+  "requires_human_approval": true,
+  "source_job_id": "2b600930dc05",
+  "locale": "en-US",
+  "video": "../short_with_voice_and_music.mp4",
+  "thumbnail": "../thumbnail.jpg",
+  "platforms": {
+    "youtube_shorts": "youtube_shorts/metadata.json",
+    "tiktok": "tiktok/metadata.json",
+    "instagram_reels": "instagram_reels/metadata.json"
+  },
+  "generated_at": "2026-06-27T21:54:06.286517+00:00"
+}

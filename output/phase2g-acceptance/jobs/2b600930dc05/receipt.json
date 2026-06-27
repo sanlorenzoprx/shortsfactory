@@ -1,0 +1,107 @@
+{
+  "job_id": "2b600930dc05",
+  "created_at": "2026-06-27T21:53:11.490293+00:00",
+  "locale": "en-US",
+  "mode": "api",
+  "idea": {
+    "name": "AI UGC Creator Agency",
+    "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+    "target_user": "small ecommerce brands",
+    "market": "US"
+  },
+  "verdict": {
+    "idea": {
+      "name": "AI UGC Creator Agency",
+      "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+      "target_user": "small ecommerce brands",
+      "market": "US"
+    },
+    "verdict_headline": "You have the advantage.",
+    "lit_score": 80,
+    "risk_level": "low",
+    "top_reason": "Clear demand, strong LIT score, and unfair advantage. The conditions are right.",
+    "next_step": "Build a minimal MVP and test with your first 3 customers.",
+    "source": "lit_api"
+  },
+  "outputs": {
+    "idea_json": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\idea.json",
+    "verdict_json": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\verdict.json",
+    "script_txt": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\script.txt",
+    "captions_srt": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\captions.srt",
+    "thumbnail_jpg": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\thumbnail.jpg",
+    "short_mp4": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\short.mp4",
+    "lit_api_response_json": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\lit_api_response.json",
+    "voiceover_audio": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\voiceover.wav",
+    "short_with_voice_mp4": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\short_with_voice.mp4",
+    "background_music_audio": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\background_music.wav",
+    "short_with_voice_and_music_mp4": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\short_with_voice_and_music.mp4",
+    "app_recording_raw_webm": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\app_recording_raw.webm",
+    "app_recording_mp4": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\app_recording.mp4",
+    "app_recording_final_png": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\app_recording_final.png",
+    "publisher_plan_json": "output\\phase2g-acceptance\\jobs\\2b600930dc05\\publish\\publisher_plan.json"
+  },
+  "warnings": [],
+  "recording": {
+    "enabled": true,
+    "source": "playwright",
+    "app_url": "http://127.0.0.1:5173",
+    "status": "success",
+    "viewport": {
+      "width": 1080,
+      "height": 1920
+    },
+    "locale": "en-US",
+    "flow": "controlled_synthetic_demo",
+    "recorded_at": "2026-06-27T21:53:43.058351+00:00",
+    "raw_video": "app_recording_raw.webm",
+    "normalized_video": "app_recording.mp4",
+    "screenshot": "app_recording_final.png"
+  },
+  "voiceover": {
+    "status": "success",
+    "provider": "windows_sapi",
+    "script_source": "script.txt",
+    "output": "voiceover.wav",
+    "duration_seconds": 25.216,
+    "mixed_output": "short_with_voice.mp4",
+    "warnings": []
+  },
+  "music": {
+    "status": "success",
+    "source": "generated",
+    "output": "background_music.wav",
+    "volume": 0.12,
+    "mixed_output": "short_with_voice_and_music.mp4",
+    "warnings": []
+  },
+  "localization": {
+    "status": "success",
+    "requested_locale": "en-US",
+    "resolved_locale": "en-US",
+    "fallback_locale": null,
+    "localized_outputs": [
+      "script.txt",
+      "captions.srt",
+      "thumbnail.jpg",
+      "short.mp4"
+    ],
+    "warnings": []
+  },
+  "queue": {
+    "status": "disabled"
+  },
+  "scheduler": {
+    "status": "disabled"
+  },
+  "publisher": {
+    "status": "dry_run_ready",
+    "live_publish_enabled": false,
+    "platforms": [
+      "youtube_shorts",
+      "tiktok",
+      "instagram_reels"
+    ],
+    "publisher_plan": "publish/publisher_plan.json",
+    "warnings": []
+  }
+}

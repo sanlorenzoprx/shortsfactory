@@ -1,0 +1,11 @@
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/01_hook.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/02_score.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/03_reason.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/04_verdict.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/05_cta.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/phase2g-queue-acceptance/jobs/q2de0d151344/scenes/05_cta.png'

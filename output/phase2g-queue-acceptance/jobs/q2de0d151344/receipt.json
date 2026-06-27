@@ -1,0 +1,81 @@
+{
+  "job_id": "q2de0d151344",
+  "created_at": "2026-06-27T21:54:11.270091+00:00",
+  "locale": "es-PR",
+  "mode": "mock",
+  "idea": {
+    "name": "Agencia de creadores UGC con IA",
+    "description": "Un servicio que crea videos cortos de productos para marcas con avatares y guiones de IA.",
+    "target_user": "marcas pequeñas de comercio electrónico",
+    "market": "US"
+  },
+  "verdict": {
+    "idea": {
+      "name": "Agencia de creadores UGC con IA",
+      "description": "Un servicio que crea videos cortos de productos para marcas con avatares y guiones de IA.",
+      "target_user": "marcas pequeñas de comercio electrónico",
+      "market": "US"
+    },
+    "verdict_headline": "Haz una prueba pequeña ahora",
+    "lit_score": 78,
+    "risk_level": "medio",
+    "top_reason": "La idea tiene un comprador claro, pero la primera oferta debe ser específica.",
+    "next_step": "Prevende un caso de uso urgente antes de crear el producto completo.",
+    "source": "mock"
+  },
+  "outputs": {
+    "idea_json": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\idea.json",
+    "verdict_json": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\verdict.json",
+    "script_txt": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\script.txt",
+    "captions_srt": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\captions.srt",
+    "thumbnail_jpg": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\thumbnail.jpg",
+    "short_mp4": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\short.mp4",
+    "publisher_plan_json": "output\\phase2g-queue-acceptance\\jobs\\q2de0d151344\\publish\\publisher_plan.json"
+  },
+  "warnings": [],
+  "recording": {
+    "enabled": false
+  },
+  "voiceover": {
+    "status": "disabled"
+  },
+  "music": {
+    "status": "disabled"
+  },
+  "localization": {
+    "status": "success",
+    "requested_locale": "es-PR",
+    "resolved_locale": "es-PR",
+    "fallback_locale": null,
+    "localized_outputs": [
+      "script.txt",
+      "captions.srt",
+      "thumbnail.jpg",
+      "short.mp4"
+    ],
+    "warnings": []
+  },
+  "queue": {
+    "status": "succeeded",
+    "queue_id": "2de0d151344c",
+    "attempt": 1,
+    "max_attempts": 3,
+    "enqueued_at": "2026-06-27T21:54:08.612104+00:00",
+    "started_at": "2026-06-27T21:54:11.263919+00:00",
+    "finished_at": "2026-06-27T21:54:29.177512+00:00"
+  },
+  "scheduler": {
+    "status": "disabled"
+  },
+  "publisher": {
+    "status": "dry_run_ready",
+    "live_publish_enabled": false,
+    "platforms": [
+      "youtube_shorts",
+      "tiktok",
+      "instagram_reels"
+    ],
+    "publisher_plan": "publish/publisher_plan.json",
+    "warnings": []
+  }
+}
