@@ -116,7 +116,7 @@ def test_lit_client_sends_payload_timeout_and_optional_auth(
 def _fast_orchestrator(config: Config, monkeypatch) -> ContentFactoryOrchestrator:
     orchestrator = ContentFactoryOrchestrator(config)
 
-    def create_short(_script, _verdict, job_dir: Path) -> Path:
+    def create_short(_script, _verdict, job_dir: Path, **_kwargs) -> Path:
         path = job_dir / "short.mp4"
         path.write_bytes(b"test-mp4")
         return path

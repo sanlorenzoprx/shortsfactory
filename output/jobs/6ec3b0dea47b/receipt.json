@@ -1,0 +1,89 @@
+{
+  "job_id": "6ec3b0dea47b",
+  "created_at": "2026-06-27T21:34:46.510602+00:00",
+  "locale": "es-PR",
+  "mode": "api",
+  "idea": {
+    "name": "Agencia de creadores UGC con IA",
+    "description": "Un servicio que crea videos cortos de productos para marcas con avatares y guiones de IA.",
+    "target_user": "marcas pequeñas de comercio electrónico",
+    "market": "US"
+  },
+  "verdict": {
+    "idea": {
+      "name": "Agencia de creadores UGC con IA",
+      "description": "Un servicio que crea videos cortos de productos para marcas con avatares y guiones de IA.",
+      "target_user": "marcas pequeñas de comercio electrónico",
+      "market": "US"
+    },
+    "verdict_headline": "Tienes la ventaja.",
+    "lit_score": 80,
+    "risk_level": "bajo",
+    "top_reason": "Hay demanda clara, una puntuación LIT sólida y una ventaja difícil de copiar. Las condiciones son favorables.",
+    "next_step": "Crea un MVP mínimo y pruébalo con tus primeros 3 clientes.",
+    "source": "lit_api"
+  },
+  "outputs": {
+    "idea_json": "output\\jobs\\6ec3b0dea47b\\idea.json",
+    "verdict_json": "output\\jobs\\6ec3b0dea47b\\verdict.json",
+    "script_txt": "output\\jobs\\6ec3b0dea47b\\script.txt",
+    "captions_srt": "output\\jobs\\6ec3b0dea47b\\captions.srt",
+    "thumbnail_jpg": "output\\jobs\\6ec3b0dea47b\\thumbnail.jpg",
+    "short_mp4": "output\\jobs\\6ec3b0dea47b\\short.mp4",
+    "lit_api_response_json": "output\\jobs\\6ec3b0dea47b\\lit_api_response.json",
+    "voiceover_audio": "output\\jobs\\6ec3b0dea47b\\voiceover.wav",
+    "short_with_voice_mp4": "output\\jobs\\6ec3b0dea47b\\short_with_voice.mp4",
+    "background_music_audio": "output\\jobs\\6ec3b0dea47b\\background_music.wav",
+    "short_with_voice_and_music_mp4": "output\\jobs\\6ec3b0dea47b\\short_with_voice_and_music.mp4",
+    "app_recording_raw_webm": "output\\jobs\\6ec3b0dea47b\\app_recording_raw.webm",
+    "app_recording_mp4": "output\\jobs\\6ec3b0dea47b\\app_recording.mp4",
+    "app_recording_final_png": "output\\jobs\\6ec3b0dea47b\\app_recording_final.png"
+  },
+  "warnings": [],
+  "recording": {
+    "enabled": true,
+    "source": "playwright",
+    "app_url": "http://127.0.0.1:5173",
+    "status": "success",
+    "viewport": {
+      "width": 1080,
+      "height": 1920
+    },
+    "locale": "es-PR",
+    "flow": "controlled_synthetic_demo",
+    "recorded_at": "2026-06-27T21:35:18.446411+00:00",
+    "raw_video": "app_recording_raw.webm",
+    "normalized_video": "app_recording.mp4",
+    "screenshot": "app_recording_final.png"
+  },
+  "voiceover": {
+    "status": "success",
+    "provider": "windows_sapi",
+    "script_source": "script.txt",
+    "output": "voiceover.wav",
+    "duration_seconds": 27.755,
+    "mixed_output": "short_with_voice.mp4",
+    "warnings": []
+  },
+  "music": {
+    "status": "success",
+    "source": "generated",
+    "output": "background_music.wav",
+    "volume": 0.12,
+    "mixed_output": "short_with_voice_and_music.mp4",
+    "warnings": []
+  },
+  "localization": {
+    "status": "success",
+    "requested_locale": "es-PR",
+    "resolved_locale": "es-PR",
+    "fallback_locale": null,
+    "localized_outputs": [
+      "script.txt",
+      "captions.srt",
+      "thumbnail.jpg",
+      "short.mp4"
+    ],
+    "warnings": []
+  }
+}

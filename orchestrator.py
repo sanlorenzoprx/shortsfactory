@@ -44,16 +44,48 @@ class ContentFactoryOrchestrator:
             job_dir.mkdir(parents=True, exist_ok=True)
 
             test_outcome = self.tester.run_test_with_details(idea, locale=locale)
-            verdict = test_outcome.verdict
-            script = self.writer.generate_script(verdict, locale=locale)
-            script = self.localizer.adapt(script, locale)
+            localization = self.localizer.resolve(locale)
+            verdict, localization_warnings = self.localizer.localize_verdict(
+                test_outcome.verdict, localization
+            )
+            localization_warnings = [
+                *localization.warnings,
+                *localization_warnings,
+            ]
+            script = self.writer.generate_script(
+                verdict, locale=localization.resolved_locale
+            )
+            receipt.idea = asdict(verdict.idea)
+            receipt.localization = {
+                "status": localization.status,
+                "requested_locale": localization.requested_locale,
+                "resolved_locale": localization.resolved_locale,
+                "fallback_locale": localization.fallback_locale,
+                "localized_outputs": [
+                    "script.txt",
+                    "captions.srt",
+                    "thumbnail.jpg",
+                    "short.mp4",
+                ],
+                "warnings": localization_warnings,
+            }
+            receipt.warnings.extend(localization_warnings)
 
-            idea_path = write_json(job_dir / "idea.json", asdict(idea))
+            idea_path = write_json(job_dir / "idea.json", asdict(verdict.idea))
             verdict_path = write_json(job_dir / "verdict.json", asdict(verdict))
             script_path = write_text(job_dir / "script.txt", script.as_text())
             captions_path = self.captions.generate_captions(script, job_dir / "captions.srt")
-            thumbnail_path = self.thumbnails.create_thumbnail(verdict, job_dir / "thumbnail.jpg")
-            video_path = self.video.create_short(script, verdict, job_dir)
+            thumbnail_path = self.thumbnails.create_thumbnail(
+                verdict,
+                job_dir / "thumbnail.jpg",
+                locale=localization.resolved_locale,
+            )
+            video_path = self.video.create_short(
+                script,
+                verdict,
+                job_dir,
+                locale=localization.resolved_locale,
+            )
 
             outputs = {
                 "idea_json": str(idea_path),
@@ -131,7 +163,7 @@ class ContentFactoryOrchestrator:
                 try:
                     recording = record_lit_app_flow(
                         app_url=self.config.lit_app_url,
-                        idea=idea.name,
+                        idea=verdict.idea.name,
                         verdict=asdict(verdict),
                         job_dir=job_dir,
                         locale=locale,

@@ -126,6 +126,22 @@ the final AAC stream with:
 ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,duration -of json output/jobs/<job_id>/short_with_voice_and_music.mp4
 ```
 
+## Phase 2E: deterministic localization
+
+`en-US` and practical Puerto Rico Spanish (`es-PR`) are supported without an
+LLM or translation API. Spanish aliases `es`, `es-US`, and `es-ES` resolve to
+`es-PR`:
+
+```powershell
+python orchestrator.py --batch 1 --locale es-PR --mode mock
+python orchestrator.py --batch 1 --locale es-PR --mode api --record-app --tts --music
+```
+
+The script, captions, thumbnail, rendered video scenes, and TTS input use the
+resolved locale. Unsupported locales safely fall back to `en-US`; missing
+catalog phrases stay in English and are listed in `receipt.json.localization`
+and the top-level receipt warnings.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
@@ -143,6 +159,5 @@ Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling
 ## What comes later
 
 - Deployed LIT API configuration.
-- Real localization.
 - Queue and scheduler.
 - Publisher integrations.

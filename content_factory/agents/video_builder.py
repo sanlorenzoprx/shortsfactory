@@ -9,6 +9,7 @@ from typing import List
 from PIL import Image, ImageDraw, ImageFont
 
 from content_factory.config import Config
+from content_factory.locales.catalog import labels_for
 from content_factory.schemas import LitVerdict, ShortScript
 
 
@@ -33,10 +34,16 @@ class VideoBuilder:
         # so resolve it to the real executable before launch.
         return str(Path(executable).resolve())
 
-    def create_short(self, script: ShortScript, verdict: LitVerdict, job_dir: Path) -> Path:
+    def create_short(
+        self,
+        script: ShortScript,
+        verdict: LitVerdict,
+        job_dir: Path,
+        locale: str = "en-US",
+    ) -> Path:
         scenes_dir = job_dir / "scenes"
         scenes_dir.mkdir(parents=True, exist_ok=True)
-        scene_paths = self._render_scenes(script, verdict, scenes_dir)
+        scene_paths = self._render_scenes(script, verdict, scenes_dir, locale)
         concat_path = job_dir / "concat.txt"
         duration = self.config.video_seconds / len(scene_paths)
         concat_lines: List[str] = []
@@ -84,22 +91,36 @@ class VideoBuilder:
             raise RuntimeError(f"ffmpeg could not create {output_path}: {details}") from exc
         return output_path
 
-    def _render_scenes(self, script: ShortScript, verdict: LitVerdict, scenes_dir: Path) -> List[Path]:
+    def _render_scenes(
+        self,
+        script: ShortScript,
+        verdict: LitVerdict,
+        scenes_dir: Path,
+        locale: str = "en-US",
+    ) -> List[Path]:
+        labels = labels_for(locale)
         scene_specs = [
-            ("01_hook.png", "I TESTED THIS IDEA", script.hook),
-            ("02_score.png", f"SCORE: {verdict.lit_score}/100", f"Risk level: {verdict.risk_level}"),
-            ("03_reason.png", "WHY IT MATTERS", verdict.top_reason),
-            ("04_verdict.png", "VERDICT", verdict.verdict_headline),
-            ("05_cta.png", "DO NOT BUILD BLIND", script.cta),
+            ("01_hook.png", labels["hook_title"], script.hook),
+            (
+                "02_score.png",
+                f"{labels['score']}: {verdict.lit_score}/100",
+                f"{labels['risk_level']}: {verdict.risk_level}",
+            ),
+            ("03_reason.png", labels["reason_title"], verdict.top_reason),
+            ("04_verdict.png", labels["verdict_title"], verdict.verdict_headline),
+            ("05_cta.png", labels["cta_title"], script.cta),
         ]
         paths = []
         for filename, title, body in scene_specs:
             path = scenes_dir / filename
-            self._render_scene(path, title, body)
+            self._render_scene(path, title, body, locale)
             paths.append(path)
         return paths
 
-    def _render_scene(self, output_path: Path, title: str, body: str) -> None:
+    def _render_scene(
+        self, output_path: Path, title: str, body: str, locale: str = "en-US"
+    ) -> None:
+        labels = labels_for(locale)
         img = Image.new("RGB", (self.config.video_width, self.config.video_height), color=(2, 6, 23))
         draw = ImageDraw.Draw(img)
         try:
@@ -117,6 +138,6 @@ class VideoBuilder:
             draw.text((90, y), line, fill=(226, 232, 240), font=body_font)
             y += 82
 
-        draw.text((90, 1720), "LIT Ghost Town Test", fill=(148, 163, 184), font=footer_font)
-        draw.text((90, 1780), "Test the idea before you build.", fill=(148, 163, 184), font=footer_font)
+        draw.text((90, 1720), labels["footer_product"], fill=(148, 163, 184), font=footer_font)
+        draw.text((90, 1780), labels["footer_cta"], fill=(148, 163, 184), font=footer_font)
         img.save(output_path)

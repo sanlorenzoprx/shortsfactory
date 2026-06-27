@@ -17,7 +17,7 @@ def _fast_orchestrator(
 ) -> ContentFactoryOrchestrator:
     orchestrator = ContentFactoryOrchestrator(config)
 
-    def create_short(_script, _verdict, job_dir: Path) -> Path:
+    def create_short(_script, _verdict, job_dir: Path, **_kwargs) -> Path:
         path = job_dir / "short.mp4"
         path.write_bytes(b"test-mp4")
         return path

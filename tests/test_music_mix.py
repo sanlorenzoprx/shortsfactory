@@ -62,7 +62,7 @@ def _fast_orchestrator(
     monkeypatch.setattr(
         orchestrator.video,
         "create_short",
-        lambda _script, _verdict, job_dir: _video_with_voice_tone(
+        lambda _script, _verdict, job_dir, **_kwargs: _video_with_voice_tone(
             job_dir / "short.mp4"
         ),
     )

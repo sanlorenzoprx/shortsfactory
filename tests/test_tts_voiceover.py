@@ -49,7 +49,9 @@ def _fast_orchestrator(
     monkeypatch.setattr(
         orchestrator.video,
         "create_short",
-        lambda _script, _verdict, job_dir: _fast_video(job_dir / "short.mp4"),
+        lambda _script, _verdict, job_dir, **_kwargs: _fast_video(
+            job_dir / "short.mp4"
+        ),
     )
     return orchestrator
 

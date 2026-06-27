@@ -61,6 +61,7 @@ class ShortJobReceipt:
     recording: Dict[str, Any] = field(default_factory=lambda: {"enabled": False})
     voiceover: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
     music: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
+    localization: Dict[str, Any] = field(default_factory=dict)
 
     def to_json_dict(self) -> Dict[str, Any]:
         return asdict(self)

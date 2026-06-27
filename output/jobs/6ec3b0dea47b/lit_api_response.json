@@ -1,0 +1,22 @@
+{
+  "idea": {
+    "name": "AI UGC Creator Agency",
+    "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+    "target_user": "small ecommerce brands",
+    "market": "US"
+  },
+  "verdict_headline": "You have the advantage.",
+  "lit_score": 80,
+  "risk_level": "low",
+  "top_reason": "Clear demand, strong LIT score, and unfair advantage. The conditions are right.",
+  "next_step": "Build a minimal MVP and test with your first 3 customers.",
+  "source": "lit_api",
+  "deterministic_scores": {
+    "clarity": 16,
+    "pain": 16,
+    "reachability": 16,
+    "willingness_to_pay": 16,
+    "advantage": 16
+  },
+  "warnings": []
+}
