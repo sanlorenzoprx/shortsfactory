@@ -1,0 +1,35 @@
+{
+  "job_id": "29068170549a",
+  "created_at": "2026-06-27T14:53:37.869210+00:00",
+  "locale": "en-US",
+  "mode": "mock",
+  "idea": {
+    "name": "AI UGC Creator Agency",
+    "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+    "target_user": "small ecommerce brands",
+    "market": "US"
+  },
+  "verdict": {
+    "idea": {
+      "name": "AI UGC Creator Agency",
+      "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+      "target_user": "small ecommerce brands",
+      "market": "US"
+    },
+    "verdict_headline": "Build a tiny test now",
+    "lit_score": 78,
+    "risk_level": "medium",
+    "top_reason": "The idea has a clear buyer, but the first offer must be narrow.",
+    "next_step": "Pre-sell one painful use case before building a full product.",
+    "source": "mock"
+  },
+  "outputs": {
+    "idea_json": "output\\acceptance-mock\\jobs\\29068170549a\\idea.json",
+    "verdict_json": "output\\acceptance-mock\\jobs\\29068170549a\\verdict.json",
+    "script_txt": "output\\acceptance-mock\\jobs\\29068170549a\\script.txt",
+    "captions_srt": "output\\acceptance-mock\\jobs\\29068170549a\\captions.srt",
+    "thumbnail_jpg": "output\\acceptance-mock\\jobs\\29068170549a\\thumbnail.jpg",
+    "short_mp4": "output\\acceptance-mock\\jobs\\29068170549a\\short.mp4"
+  },
+  "warnings": []
+}

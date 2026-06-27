@@ -1,0 +1,14 @@
+{
+  "idea": {
+    "name": "AI UGC Creator Agency",
+    "description": "A service that creates short-form product videos for brands using AI avatars and scripts.",
+    "target_user": "small ecommerce brands",
+    "market": "US"
+  },
+  "verdict_headline": "Build a tiny test now",
+  "lit_score": 78,
+  "risk_level": "medium",
+  "top_reason": "The idea has a clear buyer, but the first offer must be narrow.",
+  "next_step": "Pre-sell one painful use case before building a full product.",
+  "source": "api_fallback"
+}

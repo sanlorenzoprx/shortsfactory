@@ -1,0 +1,23 @@
+1
+00:00:00,000 --> 00:00:05,000
+I ran this business idea through the Ghost Town Test: AI UGC Creator Agency.
+
+2
+00:00:05,000 --> 00:00:10,000
+Score: 78/100.
+
+3
+00:00:10,000 --> 00:00:15,000
+Main risk: medium.
+
+4
+00:00:15,000 --> 00:00:20,000
+The idea has a clear buyer, but the first offer must be narrow.
+
+5
+00:00:20,000 --> 00:00:25,000
+Verdict: Build a tiny test now.
+
+6
+00:00:25,000 --> 00:00:30,000
+Do not build blind. Test your idea first.
