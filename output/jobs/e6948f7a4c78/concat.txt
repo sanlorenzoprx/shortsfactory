@@ -1,0 +1,11 @@
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/01_hook.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/02_score.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/03_reason.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/04_verdict.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/05_cta.png'
+duration 6.000
+file 'C:/repos/Shorts Factory/output/jobs/e6948f7a4c78/scenes/05_cta.png'

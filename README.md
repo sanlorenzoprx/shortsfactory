@@ -102,6 +102,30 @@ audio stream with:
 ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,duration -of json output/jobs/<job_id>/short_with_voice.mp4
 ```
 
+## Phase 2D: background music mix
+
+Music is also opt-in. Use it with TTS to keep the voiceover and add a quiet
+background bed:
+
+```powershell
+python orchestrator.py --batch 1 --locale en-US --mode api --record-app --tts --music
+```
+
+By default, `MUSIC_SOURCE=generated` creates a deterministic, royalty-safe
+ambient WAV locally. Set `MUSIC_SOURCE=local` and `MUSIC_PATH` to use a local
+audio file after ffprobe validation. `MUSIC_VOLUME=0.12` keeps the bed below
+the existing voiceover. If a configured local file is missing or invalid, the
+non-strict default generates fallback music and records a receipt warning;
+`MUSIC_STRICT=true` makes that error fatal.
+
+The music run adds `background_music.wav` (or a copied local audio file) and
+`short_with_voice_and_music.mp4`, while preserving all earlier outputs. Verify
+the final AAC stream with:
+
+```powershell
+ffprobe -v error -select_streams a:0 -show_entries stream=codec_name,duration -of json output/jobs/<job_id>/short_with_voice_and_music.mp4
+```
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
@@ -119,7 +143,6 @@ Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling
 ## What comes later
 
 - Deployed LIT API configuration.
-- Background music and audio mix.
 - Real localization.
 - Queue and scheduler.
 - Publisher integrations.

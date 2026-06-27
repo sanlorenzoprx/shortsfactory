@@ -60,6 +60,13 @@ class Config:
         default_factory=lambda: float(os.getenv("TTS_TIMEOUT_SECONDS", "30"))
     )
     tts_strict: bool = field(default_factory=lambda: _env_bool("TTS_STRICT", False))
+    music_enabled: bool = field(default_factory=lambda: _env_bool("MUSIC_ENABLED", False))
+    music_source: str = field(default_factory=lambda: os.getenv("MUSIC_SOURCE", "generated"))
+    music_volume: float = field(
+        default_factory=lambda: float(os.getenv("MUSIC_VOLUME", "0.12"))
+    )
+    music_strict: bool = field(default_factory=lambda: _env_bool("MUSIC_STRICT", False))
+    music_path: str = field(default_factory=lambda: os.getenv("MUSIC_PATH", ""))
     output_dir: Path = field(default_factory=lambda: Path(os.getenv("OUTPUT_DIR", "output")))
     video_width: int = 1080
     video_height: int = 1920

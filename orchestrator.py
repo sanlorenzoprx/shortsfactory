@@ -10,6 +10,7 @@ from content_factory.agents.app_tester import AppTester
 from content_factory.agents.caption_agent import CaptionAgent
 from content_factory.agents.idea_researcher import IdeaResearcher
 from content_factory.agents.localization_agent import LocalizationAgent
+from content_factory.agents.music_agent import MusicAgent
 from content_factory.agents.script_writer import ScriptWriter
 from content_factory.agents.thumbnail_agent import ThumbnailAgent
 from content_factory.agents.video_builder import VideoBuilder
@@ -32,6 +33,7 @@ class ContentFactoryOrchestrator:
         self.thumbnails = ThumbnailAgent()
         self.video = VideoBuilder(config)
         self.voiceover = VoiceoverAgent(config)
+        self.music = MusicAgent(config)
 
     def run_batch(self, batch: int = 1, locale: str = "en-US") -> List[Path]:
         ideas = self.researcher.get_trending_ideas(batch)
@@ -69,6 +71,7 @@ class ContentFactoryOrchestrator:
             if test_outcome.warning:
                 receipt.warnings.append(test_outcome.warning)
 
+            final_audio_video_path = video_path
             if self.config.tts_enabled:
                 voiceover = self.voiceover.create_voiceover(
                     script_path=script_path,
@@ -93,6 +96,36 @@ class ContentFactoryOrchestrator:
                     outputs["voiceover_audio"] = str(voiceover.output_path)
                 if voiceover.mixed_output_path is not None:
                     outputs["short_with_voice_mp4"] = str(voiceover.mixed_output_path)
+                    final_audio_video_path = voiceover.mixed_output_path
+
+            if self.config.music_enabled:
+                music = self.music.create_mix(
+                    video_path=final_audio_video_path,
+                    job_dir=job_dir,
+                    duration_seconds=self.config.video_seconds,
+                )
+                music_warnings = list(music.warnings)
+                if self.config.tts_enabled and final_audio_video_path == video_path:
+                    music_warnings.append(
+                        "Voiceover mix was unavailable; mixed music with short.mp4"
+                    )
+                receipt.music = {
+                    "status": music.status,
+                    "source": music.source,
+                    "output": music.output_path.name if music.output_path else None,
+                    "volume": music.volume,
+                    "mixed_output": (
+                        music.mixed_output_path.name if music.mixed_output_path else None
+                    ),
+                    "warnings": music_warnings,
+                }
+                receipt.warnings.extend(music_warnings)
+                if music.output_path is not None:
+                    outputs["background_music_audio"] = str(music.output_path)
+                if music.mixed_output_path is not None:
+                    outputs["short_with_voice_and_music_mp4"] = str(
+                        music.mixed_output_path
+                    )
 
             if self.config.playwright_recording_enabled:
                 try:
@@ -152,6 +185,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate a local voiceover and mux it into short_with_voice.mp4",
     )
+    parser.add_argument(
+        "--music",
+        action="store_true",
+        help="Generate or load background music and mix it under existing audio",
+    )
     return parser.parse_args()
 
 
@@ -162,6 +200,7 @@ def main() -> None:
         output_dir=Path(args.output_dir),
         playwright_recording_enabled=args.record_app,
         tts_enabled=args.tts,
+        music_enabled=args.music,
     )
     orchestrator = ContentFactoryOrchestrator(config)
     orchestrator.run_batch(batch=args.batch, locale=args.locale)
