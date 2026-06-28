@@ -70,6 +70,9 @@ class Config:
     publish_dry_run_enabled: bool = field(
         default_factory=lambda: _env_bool("PUBLISH_DRY_RUN_ENABLED", False)
     )
+    template_root: Path = field(
+        default_factory=lambda: Path(os.getenv("TEMPLATE_ROOT", "templates"))
+    )
     output_dir: Path = field(default_factory=lambda: Path(os.getenv("OUTPUT_DIR", "output")))
     video_width: int = 1080
     video_height: int = 1920

@@ -28,9 +28,10 @@ No by default. Keep generated outputs untracked unless promoted to small fixture
 ## Q006 — What should Phase 3 be?
 
 Current answer:
-Phase 3A through 3E are complete: local Mission Control, approval-gated export
+Phase 3A through 3F are complete: local Mission Control, approval-gated export
 bundles, the human revision queue, advisory quality scoring, and manual upload
-kits. Do not extend Phase 3 without a bounded handoff.
+kits, plus the local text-only template editor. Do not extend Phase 3 without a
+bounded handoff.
 
 ## Q007 — What should Phase 3D be?
 
@@ -47,6 +48,13 @@ YouTube Shorts, TikTok, and Instagram Reels without any upload automation.
 ## Q009 — What should Phase 3F be?
 
 Current answer:
-Not decided. Possible directions are a local prompt/template editor, approved
-bundle comparison, analytics/learning ledger, publisher preview cards, or a
-final pre-publish compliance checklist. Do not start one without approval.
+Complete: Phase 3F added a local text-only prompt/template editor with strict
+placeholder validation, deterministic rendering, version history, restore,
+preview, pipeline provenance, and safe fallback behavior.
+
+## Q010 — What should Phase 3G be?
+
+Current answer:
+Not decided. Possible directions include approved-bundle comparison, a local
+analytics/learning ledger, publisher preview cards, or a final pre-publish
+compliance checklist. Do not start one without approval.

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from content_factory.templates import TemplateRenderError, TemplateStore, render_template
+
 
 CHECKLISTS = {
     "youtube_shorts": """# YouTube Shorts Manual Upload Checklist
@@ -44,8 +48,23 @@ Status: DRY RUN ONLY - NOT PUBLISHED BY SHORTS FACTORY.
 }
 
 
-def build_checklist(platform: str) -> str:
+def build_checklist_details(platform: str, template_root: str | Path = "templates", job_id: str = "") -> tuple[str, dict[str, str] | None, str | None]:
     try:
-        return CHECKLISTS[platform]
+        fallback = CHECKLISTS[platform]
     except KeyError as exc:
         raise ValueError(f"unsupported checklist platform: {platform}") from exc
+    template_id = f"upload_checklist.{platform}"
+    template = TemplateStore(template_root).get(template_id)
+    if template is None:
+        return fallback, None, f"{template_id} missing or unreadable; deterministic fallback used"
+    try:
+        rendered = render_template(template, {"job_id": job_id, "platform": platform})
+        text = "\n".join(rendered) if isinstance(rendered, list) else rendered
+        usage = {"template_id": template_id, "template_version_hash": str(template["template_version_hash"]), "source": "local_template"}
+        return text, usage, None
+    except (TemplateRenderError, KeyError, TypeError, ValueError) as exc:
+        return fallback, None, f"{template_id} invalid; deterministic fallback used: {exc}"
+
+
+def build_checklist(platform: str, template_root: str | Path = "templates", job_id: str = "") -> str:
+    return build_checklist_details(platform, template_root, job_id)[0]

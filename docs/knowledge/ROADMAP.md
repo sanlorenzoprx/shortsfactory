@@ -15,10 +15,11 @@
 - Phase 3C human revision queue
 - Phase 3D deterministic local quality scoring dashboard
 - Phase 3E manual upload checklists and publisher-specific export formatting
+- Phase 3F local prompt/template editor
 
 ## Current checkpoint
 
-Phase 3E green gate complete. Stop before Phase 3F.
+Phase 3F green gate complete. Stop before Phase 3G.
 
 ## Recommended next options
 
@@ -51,4 +52,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 3F prompt editing, bundle comparison, learning ledger, or compliance checklist
+- Phase 3G bundle comparison, learning ledger, publisher preview cards, or compliance checklist

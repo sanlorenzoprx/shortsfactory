@@ -13,7 +13,7 @@ from typing import Any, Sequence
 from content_factory.mission_control.approvals import validate_job_id
 from content_factory.mission_control.job_index import is_within
 
-from .checklist_builder import build_checklist
+from .checklist_builder import build_checklist_details
 from .manifest import (
     MANIFEST_NAME,
     SAFETY_FIELDS,
@@ -139,6 +139,7 @@ def _build_platform(
     kit_root: Path,
     export_root: Path,
     created_at: str,
+    template_root: str | Path,
 ) -> dict[str, Any]:
     destination = kit_root / profile.key
     if not is_within(destination, export_root):
@@ -157,7 +158,7 @@ def _build_platform(
                 missing_optional.append(optional)
 
         copy = format_platform_copy(
-            profile, source.receipt, source.script, source.publisher_package
+            profile, source.receipt, source.script, source.publisher_package, template_root
         )
         if profile.has_title:
             _write_text(temporary / "title.txt", copy["title"])
@@ -170,7 +171,10 @@ def _build_platform(
             files.append("caption.txt")
         _write_text(temporary / "hashtags.txt", "\n".join(copy["hashtags"]))
         files.append("hashtags.txt")
-        _write_text(temporary / "upload_checklist.md", build_checklist(profile.key))
+        checklist, checklist_template, checklist_warning = build_checklist_details(
+            profile.key, template_root, source.job_id
+        )
+        _write_text(temporary / "upload_checklist.md", checklist)
         files.append("upload_checklist.md")
         files.append("platform_metadata.json")
         metadata = {
@@ -185,8 +189,20 @@ def _build_platform(
             "caption": copy["caption"],
             "description": copy["description"],
             "hashtags": copy["hashtags"],
+            "templates": {
+                key: value
+                for key, value in {
+                    "publisher_metadata": copy.get("template"),
+                    "upload_checklist": checklist_template,
+                }.items()
+                if value is not None
+            },
             **SAFETY_FIELDS,
-            "warnings": list(source.warnings),
+            "warnings": [
+                *source.warnings,
+                *([str(copy["template_warning"])] if copy.get("template_warning") else []),
+                *([checklist_warning] if checklist_warning else []),
+            ],
         }
         _write_json(temporary / "platform_metadata.json", metadata)
         _replace_directory(temporary, destination, export_root)
@@ -218,6 +234,7 @@ def build_upload_kit(
     job_id: str,
     export_root: str | Path = "exports",
     platform: str = "all",
+    template_root: str | Path = "templates",
 ) -> UploadKitResult:
     root = Path(export_root).expanduser().resolve()
     source = _source(root, job_id)
@@ -234,7 +251,7 @@ def build_upload_kit(
         else datetime.now(timezone.utc).isoformat()
     )
     for profile in profiles:
-        _build_platform(source, profile, kit_root, root, created_at)
+        _build_platform(source, profile, kit_root, root, created_at, template_root)
 
     platform_metadata = {
         key: metadata

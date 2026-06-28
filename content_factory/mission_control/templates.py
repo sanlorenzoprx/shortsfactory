@@ -31,7 +31,7 @@ def _page(title: str, body: str) -> str:
 <body>
   <header class="site-header">
     <a class="brand" href="/">SHORTS FACTORY <span>MISSION CONTROL</span></a>
-    <div class="local-badge">LOCAL ONLY</div>
+    <nav class="site-nav"><a href="/">Jobs</a><a href="/templates">Templates</a><span class="local-badge">LOCAL ONLY</span></nav>
   </header>
   <main>{body}</main>
 </body>
@@ -96,6 +96,73 @@ def render_index(
   </div>
 </section>"""
     return _page("Mission Control", body)
+
+
+def _template_url(template_id: str) -> str:
+    return quote(template_id, safe="")
+
+
+def render_template_index(templates: list[dict[str, object]]) -> str:
+    rows = []
+    for template in templates:
+        validation = template.get("validation", {})
+        valid = bool(validation.get("valid")) if isinstance(validation, dict) else False
+        status = "valid" if valid else "invalid"
+        rows.append(
+            f"""<tr>
+  <td><a class="job-link" href="/templates/{_template_url(str(template.get('template_id', '')))}">{_escape(template.get('template_id', ''))}</a></td>
+  <td>{_escape(template.get('template_type', ''))}</td><td>{_escape(template.get('name', ''))}</td>
+  <td>{_escape(template.get('source', ''))}</td><td>{_escape(template.get('version', ''))}</td>
+  <td>{_escape(template.get('updated_at', ''))}</td><td><span class="quality-badge quality-{'pass' if valid else 'fail'}">{status}</span></td>
+  <td class="hash-cell">{_escape(template.get('template_version_hash', ''))}</td>
+</tr>"""
+        )
+    body = f"""<section class="hero"><p class="eyebrow">Local creative control</p><h1>Template Editor</h1>
+<p>View, validate, version, restore, and preview text-only templates. Templates never execute code or publish.</p></section>
+<section class="panel"><div class="panel-heading"><h2>Templates</h2><span>{len(templates)} local/built-in assets</span></div>
+<div class="table-wrap"><table><thead><tr><th>ID</th><th>Type</th><th>Name</th><th>Source</th><th>Version</th><th>Updated</th><th>Validation</th><th>Hash</th></tr></thead>
+<tbody>{''.join(rows)}</tbody></table></div></section>"""
+    return _page("Template Editor", body)
+
+
+def render_template_detail(
+    template: dict[str, object],
+    history: list[dict[str, str]],
+    *,
+    raw_json: str | None = None,
+    validation: dict[str, object] | None = None,
+    preview: str | None = None,
+    message: str | None = None,
+) -> str:
+    template_id = str(template.get("template_id", ""))
+    raw = raw_json if raw_json is not None else json.dumps(template, indent=2, ensure_ascii=False)
+    current_validation = validation or template.get("validation") or {}
+    validation_text = json.dumps(current_validation, indent=2, ensure_ascii=False)
+    history_items = []
+    for revision in history:
+        history_id = revision.get("history_id", "")
+        history_items.append(
+            f'<li><code>{_escape(history_id)}</code><form class="inline-form" method="post" action="/templates/{_template_url(template_id)}/restore"><input type="hidden" name="history_id" value="{_escape(history_id)}"><button type="submit" class="reset">Restore as new version</button></form></li>'
+        )
+    history_html = "".join(history_items) or '<li class="quiet">No saved history yet.</li>'
+    preview_html = f'<section class="panel"><div class="panel-heading"><h2>Preview</h2><span>fixed sample context</span></div><pre>{_escape(preview)}</pre></section>' if preview is not None else ""
+    message_html = f'<p class="template-message">{_escape(message)}</p>' if message else ""
+    locked = bool(template.get("locked"))
+    save_disabled = " disabled" if locked else ""
+    body = f"""<section class="hero"><p class="eyebrow"><a href="/templates">Template Editor</a> / {_escape(template_id)}</p>
+<h1>{_escape(template.get('name', template_id))}</h1><p>{_escape(template.get('description', ''))}</p>{message_html}</section>
+<section class="panel"><div class="panel-heading"><h2>Edit JSON</h2><span>v{_escape(template.get('version', ''))} · {_escape(template.get('template_version_hash', ''))}</span></div>
+<p>Text only. Known placeholders use <code>{{name}}</code>. Expressions, filters, code, and path traversal are rejected.</p>
+<form method="post"><textarea class="json-editor" name="template_json" rows="28" spellcheck="false">{_escape(raw)}</textarea>
+<div class="actions">
+<button formaction="/templates/{_template_url(template_id)}/validate" type="submit">Validate</button>
+<button formaction="/templates/{_template_url(template_id)}/preview" type="submit">Preview</button>
+<button formaction="/templates/{_template_url(template_id)}/save" type="submit" class="approve"{save_disabled}>Save new version</button>
+</div></form>{'<p class="warning-count">Locked built-in: save and restore are disabled.</p>' if locked else ''}</section>
+<section class="text-grid"><article class="panel"><div class="panel-heading"><h2>Validation</h2></div><pre>{_escape(validation_text)}</pre></article>
+<article class="panel"><div class="panel-heading"><h2>History</h2><span>{len(history)} revisions</span></div><ul class="template-history">{history_html}</ul></article></section>
+{preview_html}"""
+    return _page(f"Template {template_id}", body)
 
 
 def _read_text(path: Path | None) -> str:
@@ -164,6 +231,12 @@ def render_job_detail(
     script = _escape(_read_text(job.artifacts.get("script.txt")))
     captions = _escape(_read_text(job.artifacts.get("captions.srt")))
     receipt = _escape(_json_text(job.artifacts.get("receipt.json"), job.receipt))
+    template_usage = job.receipt.get("templates", {})
+    if not isinstance(template_usage, dict):
+        template_usage = {}
+    template_usage_panel = ""
+    if template_usage:
+        template_usage_panel = f'<section class="panel"><div class="panel-heading"><h2>Template usage</h2><span>recorded in receipt</span></div><pre>{_escape(json.dumps(template_usage, indent=2, ensure_ascii=False))}</pre></section>'
     publisher_path = job.artifacts.get("publisher_package.json")
     publisher = _escape(_json_text(publisher_path))
     publisher_class = "" if publisher_path else " muted-panel"
@@ -386,6 +459,7 @@ def render_job_detail(
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>
   <article class="panel"><div class="panel-heading"><h2>Captions</h2></div><pre>{captions}</pre></article>
 </section>
+{template_usage_panel}
 <section class="panel"><div class="panel-heading"><h2>Receipt</h2><span>receipt.json</span></div><pre>{receipt}</pre></section>
 <section class="panel publisher-panel{publisher_class}">
   <div class="dry-run">{DRY_RUN_LABEL}</div>

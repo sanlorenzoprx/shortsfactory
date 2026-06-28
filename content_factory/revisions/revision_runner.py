@@ -19,6 +19,7 @@ from content_factory.config import Config
 from content_factory.mission_control.approvals import ApprovalStore, validate_job_id
 from content_factory.mission_control.job_index import JobRecord, find_job, is_within
 from content_factory.schemas import Idea, LitVerdict, ShortScript
+from content_factory.templates import TemplateRenderError, TemplateStore, render_template
 
 from .revision_manifest import (
     MANIFEST_NAME,
@@ -110,6 +111,7 @@ def revise_script(
     note: str,
     idea_name: str,
     locale: str,
+    template_root: str | Path = "templates",
 ) -> ShortScript:
     """Apply deliberately small, deterministic human-note rules."""
     lowered = note.casefold()
@@ -141,7 +143,15 @@ def revise_script(
         cta = _trim_line(cta)
     if not (hook_requested or cta_requested or shorter_requested):
         prefix = "Enfoque de revisión" if locale == "es-PR" and locale_requested else "Revision focus"
-        body.append(f"{prefix}: {_trim_line(note, 120)}")
+        fallback = f"{prefix}: {_trim_line(note, 120)}"
+        template = TemplateStore(template_root).get("revision.default")
+        if locale == "en-US" and template is not None:
+            try:
+                rendered = render_template(template, {"revision_note": _trim_line(note, 120), "original_job_id": "", "locale": locale})
+                fallback = " ".join(rendered) if isinstance(rendered, list) else rendered
+            except (TemplateRenderError, KeyError, TypeError, ValueError):
+                pass
+        body.append(fallback)
     return ShortScript(hook=hook, body_lines=body, verdict_reveal=reveal, cta=cta)
 
 
@@ -186,6 +196,7 @@ def run_revision(
     job_id: str,
     output_root: str | Path = "output",
     note: str | None = None,
+    template_root: str | Path = "templates",
 ) -> RevisionResult:
     try:
         safe_id = validate_job_id(job_id)
@@ -238,10 +249,13 @@ def run_revision(
             revision_note,
             verdict.idea.name,
             resolved_locale,
+            template_root,
         )
         (temporary_dir / "script.txt").write_text(script.as_text() + "\n", encoding="utf-8")
-        CaptionAgent().generate_captions(script, temporary_dir / "captions.srt")
-        ThumbnailAgent().create_thumbnail(
+        caption_agent = CaptionAgent(template_root)
+        thumbnail_agent = ThumbnailAgent(template_root)
+        caption_agent.generate_captions(script, temporary_dir / "captions.srt", resolved_locale)
+        thumbnail_agent.create_thumbnail(
             verdict, temporary_dir / "thumbnail.jpg", locale=resolved_locale
         )
         VideoBuilder(Config(mode="mock", output_dir=root)).create_short(
@@ -250,6 +264,29 @@ def run_revision(
 
         created_at = utc_now_iso()
         revised_receipt = deepcopy(job.receipt)
+        templates = revised_receipt.get("templates")
+        if not isinstance(templates, dict):
+            templates = {}
+        if caption_agent.last_template_usage is not None:
+            templates["caption"] = caption_agent.last_template_usage
+        if thumbnail_agent.last_template_usage is not None:
+            templates["thumbnail"] = thumbnail_agent.last_template_usage
+        lowered_note = revision_note.casefold()
+        named_rule = (
+            "hook" in lowered_note
+            or "cta" in lowered_note
+            or "call to action" in lowered_note
+            or any(token in lowered_note for token in ("shorter", "trim", "too long"))
+        )
+        revision_template = TemplateStore(template_root).get("revision.default")
+        if not named_rule and resolved_locale == "en-US" and revision_template is not None:
+            validation = TemplateStore(template_root).validate("revision.default")
+            if validation["valid"]:
+                templates["revision"] = {
+                    "template_id": "revision.default",
+                    "template_version_hash": revision_template["template_version_hash"],
+                    "source": "local_template",
+                }
         revised_receipt.update(
             {
                 "job_id": revised_id,
@@ -268,6 +305,7 @@ def run_revision(
                 "queue": {"status": "disabled"},
                 "scheduler": {"status": "disabled"},
                 "publisher": {"status": "disabled"},
+                "templates": templates,
                 "revision": {
                     "is_revision": True,
                     "original_job_id": safe_id,

@@ -29,10 +29,10 @@ class ContentFactoryOrchestrator:
         self.config.ensure_dirs()
         self.researcher = IdeaResearcher()
         self.tester = AppTester(config)
-        self.writer = ScriptWriter()
+        self.writer = ScriptWriter(config.template_root)
         self.localizer = LocalizationAgent()
-        self.captions = CaptionAgent()
-        self.thumbnails = ThumbnailAgent()
+        self.captions = CaptionAgent(config.template_root)
+        self.thumbnails = ThumbnailAgent(config.template_root)
         self.video = VideoBuilder(config)
         self.voiceover = VoiceoverAgent(config)
         self.music = MusicAgent(config)
@@ -66,6 +66,10 @@ class ContentFactoryOrchestrator:
             script = self.writer.generate_script(
                 verdict, locale=localization.resolved_locale
             )
+            if self.writer.last_template_usage is not None:
+                receipt.templates["script"] = self.writer.last_template_usage
+            if self.writer.last_template_warning:
+                receipt.warnings.append(self.writer.last_template_warning)
             receipt.idea = asdict(verdict.idea)
             receipt.localization = {
                 "status": localization.status,
@@ -85,12 +89,19 @@ class ContentFactoryOrchestrator:
             idea_path = write_json(job_dir / "idea.json", asdict(verdict.idea))
             verdict_path = write_json(job_dir / "verdict.json", asdict(verdict))
             script_path = write_text(job_dir / "script.txt", script.as_text())
-            captions_path = self.captions.generate_captions(script, job_dir / "captions.srt")
+            captions_path = self.captions.generate_captions(script, job_dir / "captions.srt", localization.resolved_locale)
             thumbnail_path = self.thumbnails.create_thumbnail(
                 verdict,
                 job_dir / "thumbnail.jpg",
                 locale=localization.resolved_locale,
             )
+            if self.captions.last_template_usage is not None:
+                receipt.templates["caption"] = self.captions.last_template_usage
+            if self.thumbnails.last_template_usage is not None:
+                receipt.templates["thumbnail"] = self.thumbnails.last_template_usage
+            for template_warning in (self.captions.last_template_warning, self.thumbnails.last_template_warning):
+                if template_warning:
+                    receipt.warnings.append(template_warning)
             video_path = self.video.create_short(
                 script,
                 verdict,

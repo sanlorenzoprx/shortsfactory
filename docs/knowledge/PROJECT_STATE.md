@@ -2,14 +2,14 @@
 
 ## Current status
 
-Phase 3E is complete locally: sealed approved export bundles can be formatted
-into deterministic manual upload kits for YouTube Shorts, TikTok, and Instagram
-Reels. Kits contain no upload or publishing capability.
+Phase 3F is complete locally: Mission Control and the CLI can view, validate,
+preview, version, restore, and safely render deterministic text-only templates.
+Template editing has no approval, export, upload, or publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-9392193 Add Phase 3D quality scoring dashboard
+9b938e5 Add Phase 3E manual upload kits
 ```
 
 ## Last known commit log
@@ -33,7 +33,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-121 passed in 52.42s
+146 passed in 58.84s
 ```
 
 ## Known working capabilities
@@ -59,6 +59,12 @@ pytest -q
 - Platform-specific local manual upload kits for three supported platforms
 - Deterministic titles, captions, descriptions, hashtag caps, and checklists
 - Mission Control upload-kit status and safely escaped previews
+- Local built-in and editable template registry
+- Strict placeholder/schema/path validation with deterministic hashes
+- Atomic local template saves, ignored history, and validated restore
+- Mission Control template editing, validation, history, restore, and preview
+- Script, upload-kit, and revision template use with deterministic fallbacks
+- Job receipt template ID/hash provenance
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -80,9 +86,14 @@ pytest -q
 - Quality reports remain local under `output/quality/` and are ignored by Git.
 - Manual upload kits remain local under `exports/upload_kits/` and are ignored
   by Git.
+- Editable template copies remain local under `templates/`; generated
+  `templates/history/` and `templates/local/` are ignored by Git.
+- Templates are text only and cannot execute expressions, code, shell commands,
+  imports, HTML, network requests, approval, export, or publishing actions.
 
 ## Current risk
 
-Manual upload kits still depend on intentional human review and platform upload.
-Do not begin Phase 3F or add browser login automation, upload clients, or live
-publisher integrations without explicit approval.
+Template changes can alter generated creative copy, so their recorded hash must
+remain visible during review. Do not begin Phase 3G or add browser login
+automation, remote marketplaces, upload clients, or live publisher integrations
+without explicit approval.

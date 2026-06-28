@@ -284,3 +284,42 @@ Evidence:
 - No live Publish button appeared
 - Generated upload kits were confirmed ignored by Git
 - No platform API, OAuth, browser login, upload, cloud, scraping, or publishing was added
+
+## Phase 3F — Local Prompt/Template Editor
+
+Status: complete
+
+Commit:
+`Add Phase 3F local template editor`
+
+Implemented:
+- Text-only JSON template model for scripts, captions, thumbnails, publisher
+  metadata, upload checklists, revisions, and quality messages
+- Built-in local defaults plus editable copies under `templates/`
+- Strict template ID, schema, placeholder, expression, and path validation
+- Deterministic SHA-256 template hashes and replacement-only rendering
+- Atomic saves with monotonic versions, ignored history, and validated restore
+- Locked-template overwrite refusal
+- `template_editor.py` list, show, validate, and fixed-context preview commands
+- Mission Control template list/detail, escaped JSON editor, validate, save,
+  history, restore, and preview routes
+- ScriptWriter template use with unchanged deterministic fallback
+- Receipt template ID/hash/source provenance and Mission Control display
+- Upload-kit publisher metadata/checklist templates with safe fallback
+- Revision text templates with safe fallback and lineage preservation
+
+Evidence:
+- Baseline `pytest -q`: 121 passed
+- Focused Phase 3F tests: 25 passed
+- Final `pytest -q`: 146 passed in 58.84s
+- All four first-win template CLI commands passed
+- Template, Mission Control, upload-kit, score, export, and revision help passed
+- Exact Mission Control start command served jobs and templates on 127.0.0.1
+- Templates page returned 200, listed `script.default`, and had no Publish button
+- Real generated job `cedefcd5ec72` recorded `script.default` and its SHA-256 hash
+- Invalid/forbidden placeholders and path traversal were refused
+- HTML/script template text rendered escaped in Mission Control
+- Template code-like text remained inert plain text in deterministic tests
+- Generated output and template history remained ignored by Git
+- No network, platform API, OAuth, browser login, cloud upload, scraping,
+  external database, paid API, LLM, remote marketplace, or live publishing was added

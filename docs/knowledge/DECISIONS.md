@@ -147,3 +147,16 @@ any live publisher APIs.
 Reason:
 Manual kits let the user verify platform-specific metadata and upload
 intentionally before any automation can publish externally.
+
+## D014 — Templates are local text assets, not executable prompts
+
+Status: accepted
+
+Decision:
+Shorts Factory templates are editable local text assets with strict placeholder
+validation. They must not execute code, call APIs, or bypass approval/export
+gates.
+
+Reason:
+Creative control should not weaken local safety, reproducibility, or publishing
+boundaries.

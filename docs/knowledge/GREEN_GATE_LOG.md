@@ -244,3 +244,35 @@ Commands/evidence:
 
 Notes:
 Phase 3E ends at local manual-upload preparation. Phase 3F was not started.
+
+## Phase 3F — Local Prompt/Template Editor
+
+Status: passed
+
+Commit:
+`Add Phase 3F local template editor`
+
+Commands/evidence:
+- Baseline `pytest -q`: 121 passed
+- Focused template/editor suite: 25 passed
+- Final `pytest -q`: 146 passed in 58.84s
+- `python template_editor.py --help`: passed
+- `python template_editor.py --list`: passed
+- `python template_editor.py --show script.default`: passed
+- `python template_editor.py --validate script.default`: passed
+- `python template_editor.py --preview script.default`: passed
+- Mission Control, upload-kit, score, export, and revision CLI help passed
+- Exact Mission Control command served `/` and `/templates` with HTTP 200
+- Version increment, history write, validated restore, lock refusal, and atomic
+  local writes passed
+- Unknown/forbidden placeholders, suspicious expressions, invalid JSON, missing
+  context, and path traversal were rejected
+- Mission Control escaped HTML/script template content
+- Real mock generation recorded template ID/hash/source in `receipt.json`
+- Existing approval, export, revision reapproval, upload-kit, and not-published
+  gates remained unchanged
+- Scope scan found no live publishing, platform API, OAuth, browser automation,
+  remote marketplace, upload, scraping, external database, paid API, or LLM integration
+
+Notes:
+Phase 3F ends at safe local creative-template control. Phase 3G was not started.

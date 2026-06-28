@@ -65,6 +65,7 @@ class ShortJobReceipt:
     queue: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
     scheduler: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
     publisher: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
+    templates: Dict[str, Any] = field(default_factory=dict)
 
     def to_json_dict(self) -> Dict[str, Any]:
         return asdict(self)

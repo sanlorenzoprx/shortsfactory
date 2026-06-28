@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Any
+
+from content_factory.templates import TemplateRenderError, TemplateStore, render_template
 
 from .platform_profiles import PlatformProfile
 
@@ -66,6 +69,7 @@ def format_platform_copy(
     receipt: dict[str, Any],
     script: str,
     publisher_package: dict[str, Any],
+    template_root: str | Path = "templates",
 ) -> dict[str, Any]:
     verdict = _verdict(receipt)
     lines = _script_lines(script)
@@ -94,9 +98,36 @@ def format_platform_copy(
             description_parts.append(_clean(cta))
         description_parts.append(" ".join(hashtags))
         description = "\n\n".join(part for part in description_parts if part)
-    return {
+    result = {
         "title": title,
         "caption": caption,
         "description": description,
         "hashtags": hashtags,
     }
+    template_id = f"publisher_metadata.{profile.key}"
+    template = TemplateStore(template_root).get(template_id)
+    if template is None:
+        result["template_warning"] = f"{template_id} missing or unreadable; deterministic fallback used"
+        return result
+    try:
+        rendered = render_template(
+            template,
+            {
+                **result,
+                "hashtags": " ".join(hashtags),
+                "platform": profile.key,
+            },
+        )
+        text = "\n".join(rendered) if isinstance(rendered, list) else rendered
+        if profile.has_description:
+            result["description"] = text
+        else:
+            result["caption"] = _truncate(text, profile.caption_max)
+        result["template"] = {
+            "template_id": template_id,
+            "template_version_hash": template["template_version_hash"],
+            "source": "local_template",
+        }
+    except (TemplateRenderError, KeyError, TypeError, ValueError) as exc:
+        result["template_warning"] = f"{template_id} invalid; deterministic fallback used: {exc}"
+    return result

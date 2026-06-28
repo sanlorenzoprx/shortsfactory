@@ -16,6 +16,9 @@
 body { margin: 0; background: radial-gradient(circle at 10% -20%, #1d2c26 0, var(--bg) 38%); color: var(--text); font: 15px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; }
 a { color: var(--cyan); }
 .site-header { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: 18px max(24px, calc((100vw - 1240px) / 2)); background: rgba(9,11,13,.92); border-bottom: 1px solid var(--line); backdrop-filter: blur(12px); }
+.site-nav { display: flex; align-items: center; gap: 1rem; }
+.site-nav a { color: var(--muted); text-decoration: none; font-weight: 700; }
+.site-nav a:hover { color: var(--text); }
 .brand { color: var(--text); font-weight: 800; letter-spacing: .08em; text-decoration: none; }
 .brand span { color: var(--acid); }
 .local-badge, .dry-run { color: #0b0e0c; background: var(--acid); padding: 5px 9px; font-weight: 900; letter-spacing: .06em; font-size: 12px; }
@@ -47,6 +50,12 @@ tbody tr:hover { background: rgba(200,255,74,.035); }
 .approval-panel, main > .panel { margin-bottom: 24px; }
 form { padding: 20px; } label { display: block; margin-bottom: 8px; color: var(--muted); }
 textarea { width: 100%; resize: vertical; padding: 12px; color: var(--text); background: #090c0e; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+.json-editor { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: #08111f; }
+.template-history { display: grid; gap: .75rem; padding: 20px 40px; }
+.template-history li { overflow-wrap: anywhere; }
+.inline-form { display: inline-block; padding: 0; margin-left: .75rem; }
+.template-message { padding: .7rem 1rem; border-left: 3px solid var(--acid); background: rgba(200,255,74,.08); }
+.hash-cell { max-width: 18rem; overflow-wrap: anywhere; white-space: normal; font-size: .78rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 button { cursor: pointer; padding: 10px 14px; border: 1px solid currentColor; border-radius: 5px; background: transparent; font: 800 12px/1 ui-monospace, monospace; text-transform: uppercase; }
 button.approve { color: var(--acid); } button.reject { color: var(--red); } button.revise { color: var(--amber); } button.reset { color: var(--muted); }

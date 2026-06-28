@@ -318,6 +318,35 @@ PUBLISHED**. Shorts Factory does not log in, call platform APIs, automate a
 browser, upload files, or publish content; the final upload remains an
 intentional human action.
 
+## Phase 3F: local prompt/template editor
+
+List, inspect, validate, and preview the built-in/local text templates:
+
+```powershell
+python template_editor.py --list
+python template_editor.py --show script.default
+python template_editor.py --validate script.default
+python template_editor.py --preview script.default
+```
+
+Mission Control now includes a **Templates** page for viewing JSON templates,
+validating edits, previewing against fixed sample data, saving versioned local
+copies, browsing history, and restoring an earlier revision as a new version.
+Editable copies live under `templates/`; generated history lives under
+`templates/history/` and is ignored by Git.
+
+Templates control script layout, caption/thumbnail text references, publisher
+metadata, manual-upload checklist wording, and deterministic revision text.
+Script generation, revision fallback text, and manual upload kits use a valid
+local template when available and retain their existing deterministic behavior
+when a template is missing or invalid. Job receipts record the selected script
+template ID and hash; Mission Control shows recorded template provenance.
+
+Templates are local, text-only JSON assets. Placeholder names are allowlisted;
+expressions, filters, loops, HTML execution, Python, JavaScript, shell code,
+dynamic imports, and path traversal are not supported. Template editing cannot
+approve, export, upload, or publish a job.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

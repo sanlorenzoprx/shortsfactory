@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import mimetypes
 import re
 import webbrowser
@@ -22,10 +23,11 @@ from content_factory.upload_kits.kit_builder import (
     build_upload_kit,
     load_upload_kit_preview,
 )
+from content_factory.templates import TemplateRenderError, TemplateStore, TemplateStoreError, render_template, validate_template_json
 
 from .approvals import APPROVAL_STATES, ApprovalStore
 from .job_index import find_job, is_within, scan_jobs
-from .templates import render_error, render_index, render_job_detail
+from .templates import render_error, render_index, render_job_detail, render_template_detail, render_template_index
 
 
 MAX_FORM_BYTES = 64 * 1024
@@ -36,17 +38,31 @@ REVISION_TASK_ROUTE = re.compile(r"^/jobs/([^/]+)/revision-task$")
 RUN_REVISION_ROUTE = re.compile(r"^/jobs/([^/]+)/run-revision$")
 QUALITY_ROUTE = re.compile(r"^/jobs/([^/]+)/score$")
 UPLOAD_KIT_ROUTE = re.compile(r"^/jobs/([^/]+)/upload-kit$")
+TEMPLATE_ROUTE = re.compile(r"^/templates/([^/]+)$")
+TEMPLATE_ACTION_ROUTE = re.compile(r"^/templates/([^/]+)/(validate|preview|save|restore)$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
 STATIC_ROOT = Path(__file__).with_name("static").resolve()
+TEMPLATE_SAMPLE_CONTEXT = {
+    "job_id": "sample", "idea": "AI tool that tests startup ideas before builders waste months",
+    "hook": "Would this idea survive the ghost town test?", "verdict_headline": "Promising, but distribution is the risk",
+    "lit_score": 78, "risk_level": "medium", "top_reason": "The pain is real, but the buyer path needs proof.",
+    "next_step": "Test one landing page with ten builders.", "source": "sample", "locale": "en-US",
+    "cta": "Run your idea through the test before you build.", "created_at": "2026-06-28T00:00:00+00:00",
+    "platform": "youtube_shorts", "hashtags": "#shorts #startup #ideavalidation", "title": "Would this idea survive?",
+    "caption": "Promising, but distribution is the risk.", "description": "A deterministic sample description.",
+    "revision_note": "Make the hook clearer.", "original_job_id": "sample-original", "quality_score": 88,
+    "quality_status": "pass", "recommended_action": "approve",
+}
 
 
-def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequestHandler]:
+def _handler_class(output_root: Path, export_root: Path, template_root: Path) -> type[BaseHTTPRequestHandler]:
     approvals = ApprovalStore(output_root)
     revisions = RevisionQueue(output_root)
     quality = QualityStore(output_root)
+    template_store = TemplateStore(template_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/3E"
+        server_version = "ShortsFactoryMissionControl/3F"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -62,6 +78,23 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 return
             if path == "/static/mission_control.css":
                 self._static_css()
+                return
+            if path == "/templates":
+                self._html(HTTPStatus.OK, render_template_index(template_store.list()))
+                return
+            template_match = TEMPLATE_ROUTE.fullmatch(path)
+            if template_match:
+                template_id = unquote(template_match.group(1))
+                try:
+                    template = template_store.get(template_id)
+                    if template is None:
+                        raise TemplateStoreError(f"template not found: {template_id}")
+                    validation = template_store.validate(template_id)
+                    history = template_store.history(template_id)
+                except TemplateStoreError as exc:
+                    self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                    return
+                self._html(HTTPStatus.OK, render_template_detail(template, history, validation=validation))
                 return
             job_match = JOB_ROUTE.fullmatch(path)
             if job_match:
@@ -110,6 +143,10 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
 
         def do_POST(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
+            template_action = TEMPLATE_ACTION_ROUTE.fullmatch(path)
+            if template_action:
+                self._template_action(unquote(template_action.group(1)), template_action.group(2))
+                return
             match = APPROVAL_ROUTE.fullmatch(path)
             if not match:
                 export_match = EXPORT_ROUTE.fullmatch(path)
@@ -185,7 +222,7 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
                 return
             try:
-                run_revision(job.job_id, output_root)
+                run_revision(job.job_id, output_root, template_root=template_root)
             except (RevisionRunError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
@@ -209,11 +246,63 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
                 return
             try:
-                build_upload_kit(job.job_id, export_root, "all")
+                build_upload_kit(job.job_id, export_root, "all", template_root)
             except (UploadKitError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
             self._redirect_to_job(job.job_id)
+
+        def _template_action(self, template_id: str, action: str) -> None:
+            try:
+                current = template_store.get(template_id)
+                if current is None:
+                    raise TemplateStoreError(f"template not found: {template_id}")
+            except TemplateStoreError as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            form = self._read_form()
+            if form is None:
+                return
+            try:
+                if action == "restore":
+                    template_store.restore(template_id, form.get("history_id", [""])[0])
+                    self._redirect_to_template(template_id)
+                    return
+                raw = form.get("template_json", [""])[0]
+                validation = validate_template_json(raw)
+                try:
+                    candidate = json.loads(raw)
+                except json.JSONDecodeError:
+                    candidate = None
+                if action == "validate":
+                    self._html(
+                        HTTPStatus.OK if validation["valid"] else HTTPStatus.BAD_REQUEST,
+                        render_template_detail(current, template_store.history(template_id), raw_json=raw, validation=validation, message="Template is valid." if validation["valid"] else "Template validation failed."),
+                    )
+                    return
+                if not validation["valid"] or not isinstance(candidate, dict):
+                    raise TemplateStoreError("Invalid template: " + "; ".join(validation["errors"]))
+                if candidate.get("template_id") != template_id:
+                    raise TemplateStoreError("template_id cannot be changed")
+                if action == "preview":
+                    rendered = render_template(candidate, TEMPLATE_SAMPLE_CONTEXT)
+                    preview = "\n".join(rendered) if isinstance(rendered, list) else rendered
+                    self._html(HTTPStatus.OK, render_template_detail(current, template_store.history(template_id), raw_json=raw, validation=validation, preview=preview, message="Preview uses fixed local sample data."))
+                    return
+                if action == "save":
+                    template_store.save(template_id, candidate)
+                    self._redirect_to_template(template_id)
+                    return
+                raise TemplateStoreError("unknown template action")
+            except (TemplateStoreError, TemplateRenderError, OSError) as exc:
+                validation = validate_template_json(form.get("template_json", [json.dumps(current)])[0])
+                self._html(HTTPStatus.BAD_REQUEST, render_template_detail(current, template_store.history(template_id), raw_json=form.get("template_json", [None])[0], validation=validation, message=str(exc)))
+
+        def _redirect_to_template(self, template_id: str) -> None:
+            self.send_response(HTTPStatus.SEE_OTHER)
+            self.send_header("Location", f"/templates/{job_match_id(template_id)}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
 
         def _read_form(self) -> dict[str, list[str]] | None:
             try:
@@ -310,11 +399,13 @@ def create_server(
     host: str = "127.0.0.1",
     port: int = 8765,
     export_root: str | Path = "exports",
+    template_root: str | Path = "templates",
 ) -> ThreadingHTTPServer:
     root = Path(output_root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     exports = Path(export_root).expanduser().resolve()
-    return ThreadingHTTPServer((host, port), _handler_class(root, exports))
+    templates = Path(template_root).expanduser().resolve()
+    return ThreadingHTTPServer((host, port), _handler_class(root, exports, templates))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -325,13 +416,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--host", default="127.0.0.1", help="Bind host (default: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
     parser.add_argument("--export-root", default="exports", help="Local export root (default: exports)")
+    parser.add_argument("--template-root", default="templates", help="Local template root (default: templates)")
     parser.add_argument("--open", action="store_true", help="Open the local dashboard in a browser")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    server = create_server(args.output_root, args.host, args.port, args.export_root)
+    server = create_server(args.output_root, args.host, args.port, args.export_root, args.template_root)
     url = f"http://{args.host}:{server.server_port}"
     print(f"Mission Control running at {url}", flush=True)
     print("Local review only. Live publishing is disabled.", flush=True)
