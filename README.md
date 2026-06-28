@@ -269,7 +269,9 @@ back to the untouched original job.
 Every revised job starts with its own pending approval. The original approval
 never carries over: review and approve the revised job separately before using
 the Phase 3B export action. Revision manifests always state that reapproval is
-required, publishing has not occurred, and live publishing is disabled.
+required, publishing has not occurred, and live publishing is disabled. After
+**Run Local Revision** succeeds, Mission Control opens the newly revised job
+directly so it can be reviewed and separately approved.
 
 ## Phase 3D: deterministic local quality scoring
 

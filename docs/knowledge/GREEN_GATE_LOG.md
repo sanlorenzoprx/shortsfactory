@@ -276,3 +276,25 @@ Commands/evidence:
 
 Notes:
 Phase 3F ends at safe local creative-template control. Phase 3G was not started.
+
+## Maintenance — Mission Control Revision Route
+
+Status: passed
+
+Commit:
+`Fix Mission Control revision route`
+
+Commands/evidence:
+- Focused Mission Control/revision tests: 8 passed
+- Final `pytest -q`: 148 passed in 76.94s
+- `python mission_control.py --help`: passed
+- `python revise_job.py --help`: passed
+- Space-containing output/export/template roots passed through the HTTP route
+- Successful POST redirected to the returned revised job page
+- Real completed revision redirected to `/jobs/f1632efa9488-r356e819a9d`
+- Original hashes, revision manifest, pending approval, and reapproval requirement verified
+- Refused revision returned a safe HTTP 409 page without a traceback
+
+Notes:
+This is a bounded Mission Control route correction. No revision-engine,
+publishing, or Phase 3G work was added.

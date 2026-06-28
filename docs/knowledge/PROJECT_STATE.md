@@ -9,12 +9,14 @@ Template editing has no approval, export, upload, or publishing capability.
 ## Last known remote HEAD
 
 ```txt
-9b938e5 Add Phase 3E manual upload kits
+8c5bec4 Add Phase 3F local template editor
 ```
 
 ## Last known commit log
 
 ```txt
+8c5bec4 Add Phase 3F local template editor
+9b938e5 Add Phase 3E manual upload kits
 9392193 Add Phase 3D quality scoring dashboard
 47cd02b Add Phase 3C human revision queue
 5187209 Add Phase 3B approval-gated export bundles
@@ -33,7 +35,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-146 passed in 58.84s
+148 passed in 76.94s
 ```
 
 ## Known working capabilities
@@ -53,6 +55,7 @@ pytest -q
 - Human revision tasks with queued, complete, and failed local states
 - Deterministic revised jobs with immutable source lineage
 - Mandatory separate approval for every revised job
+- Mission Control revision runs redirect directly to the new pending revised job
 - Deterministic nine-category local quality scoring
 - Mission Control score/status, issues, fixes, and readiness dashboard
 - Advisory quality gates that cannot approve or export automatically

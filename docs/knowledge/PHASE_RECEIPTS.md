@@ -323,3 +323,26 @@ Evidence:
 - Generated output and template history remained ignored by Git
 - No network, platform API, OAuth, browser login, cloud upload, scraping,
   external database, paid API, LLM, remote marketplace, or live publishing was added
+
+## Maintenance — Mission Control Revision Route
+
+Status: complete
+
+Commit:
+`Fix Mission Control revision route`
+
+Implemented:
+- Preserved the existing direct Python call to the deterministic revision runner
+- Redirected a successful run to the returned revised job ID instead of the original
+- Preserved safe HTTP 409 error rendering for refused/failed revisions
+- Left the revision engine, other Mission Control pages, and publishing gates unchanged
+
+Evidence:
+- Route test passed with output, export, and template roots containing spaces
+- Revised job contained `REVISION_MANIFEST.json`
+- Original source artifact hashes remained unchanged
+- Revised job remained pending and required separate reapproval
+- Real job `f1632efa9488` returned HTTP 303 to
+  `/jobs/f1632efa9488-r356e819a9d`
+- Final `pytest -q`: 148 passed in 76.94s
+- Mission Control and revision CLI help commands passed

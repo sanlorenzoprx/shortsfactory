@@ -222,11 +222,13 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
                 return
             try:
-                run_revision(job.job_id, output_root, template_root=template_root)
+                result = run_revision(
+                    job.job_id, output_root, template_root=template_root
+                )
             except (RevisionRunError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
-            self._redirect_to_job(job.job_id)
+            self._redirect_to_job(result.revised_job_id)
 
         def _score_job(self, job_id: str) -> None:
             job = find_job(output_root, job_id)
