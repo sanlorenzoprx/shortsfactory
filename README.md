@@ -296,6 +296,28 @@ changes approval state, creates an export, or publishes anything. Phase 3B
 still requires an explicit approval, and Phase 3C revisions still require
 their own separate approval.
 
+## Phase 3E: manual upload kits
+
+Convert an existing approved export bundle into platform-specific local files:
+
+```powershell
+python upload_kit.py --job-id <job_id> --export-root exports --platform all
+python upload_kit.py --job-id <job_id> --export-root exports --platform youtube_shorts
+python upload_kit.py --job-id <job_id> --export-root exports --platform tiktok
+python upload_kit.py --job-id <job_id> --export-root exports --platform instagram_reels
+```
+
+Kits are written under `exports/upload_kits/<job_id>/` for YouTube Shorts,
+TikTok, and Instagram Reels. Each platform receives the approved `final.mp4`,
+available thumbnail/captions, deterministic metadata, capped hashtags, and a
+practical human upload checklist.
+
+Mission Control can create, refresh, and preview these local kits after an
+approved export exists. Every kit is labeled **MANUAL UPLOAD ONLY - NOT
+PUBLISHED**. Shorts Factory does not log in, call platform APIs, automate a
+browser, upload files, or publish content; the final upload remains an
+intentional human action.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

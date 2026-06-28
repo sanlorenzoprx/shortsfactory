@@ -28,9 +28,9 @@ No by default. Keep generated outputs untracked unless promoted to small fixture
 ## Q006 — What should Phase 3 be?
 
 Current answer:
-Phase 3A through 3D are complete: local Mission Control, approval-gated export
-bundles, the human revision queue, and advisory quality scoring. Do not extend
-Phase 3 without a bounded handoff.
+Phase 3A through 3E are complete: local Mission Control, approval-gated export
+bundles, the human revision queue, advisory quality scoring, and manual upload
+kits. Do not extend Phase 3 without a bounded handoff.
 
 ## Q007 — What should Phase 3D be?
 
@@ -41,6 +41,12 @@ Mission Control dashboard. Scores never approve or export automatically.
 ## Q008 — What should Phase 3E be?
 
 Current answer:
-Not decided. Possible directions are a local prompt/template editor, manual
-upload checklist, publisher-specific export formatting, approved-bundle
-comparison, or a learning ledger. Do not start one without explicit approval.
+Complete: Phase 3E added platform-specific manual upload kits and checklists for
+YouTube Shorts, TikTok, and Instagram Reels without any upload automation.
+
+## Q009 — What should Phase 3F be?
+
+Current answer:
+Not decided. Possible directions are a local prompt/template editor, approved
+bundle comparison, analytics/learning ledger, publisher preview cards, or a
+final pre-publish compliance checklist. Do not start one without approval.

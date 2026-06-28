@@ -218,3 +218,29 @@ Commands/evidence:
 
 Notes:
 Phase 3D ends at advisory local scoring. Phase 3E was not started.
+
+## Phase 3E — Manual Upload Checklists and Platform Formatting
+
+Status: passed
+
+Commit:
+`Add Phase 3E manual upload kits`
+
+Commands/evidence:
+- Baseline `pytest -q`: 103 passed
+- Upload kit builder tests: 11 passed
+- Metadata and manifest tests: 5 passed
+- Mission Control upload-kit tests: 2 passed
+- Final `pytest -q`: 121 passed
+- `python upload_kit.py --help`: passed
+- Existing score, Mission Control, export, and revision CLI help commands passed
+- Exact all-platform command created YouTube Shorts, TikTok, and Instagram kits
+- Required/optional files, metadata, hashtags, and checklists were inspected
+- Root and platform safety fields all matched manual-only/not-published policy
+- Re-run replacement and real Mission Control refresh POST passed
+- Approved source export remained byte-identical
+- Generated kits were ignored by Git
+- Scope scan found no platform API, OAuth, browser automation, upload, or database code
+
+Notes:
+Phase 3E ends at local manual-upload preparation. Phase 3F was not started.

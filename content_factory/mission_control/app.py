@@ -17,6 +17,11 @@ from content_factory.quality.quality_store import QualityStore, QualityStoreErro
 from content_factory.revisions.revision_manifest import read_revision_manifest
 from content_factory.revisions.revision_queue import RevisionQueue, RevisionTaskError
 from content_factory.revisions.revision_runner import RevisionRunError, run_revision
+from content_factory.upload_kits.kit_builder import (
+    UploadKitError,
+    build_upload_kit,
+    load_upload_kit_preview,
+)
 
 from .approvals import APPROVAL_STATES, ApprovalStore
 from .job_index import find_job, is_within, scan_jobs
@@ -30,6 +35,7 @@ EXPORT_ROUTE = re.compile(r"^/jobs/([^/]+)/export$")
 REVISION_TASK_ROUTE = re.compile(r"^/jobs/([^/]+)/revision-task$")
 RUN_REVISION_ROUTE = re.compile(r"^/jobs/([^/]+)/run-revision$")
 QUALITY_ROUTE = re.compile(r"^/jobs/([^/]+)/score$")
+UPLOAD_KIT_ROUTE = re.compile(r"^/jobs/([^/]+)/upload-kit$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
 STATIC_ROOT = Path(__file__).with_name("static").resolve()
 
@@ -40,7 +46,7 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
     quality = QualityStore(output_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/3D"
+        server_version = "ShortsFactoryMissionControl/3E"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -78,6 +84,11 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 except QualityStoreError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
+                try:
+                    upload_kit_preview = load_upload_kit_preview(export_root, job.job_id)
+                except UploadKitError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
                 self._html(
                     HTTPStatus.OK,
                     render_job_detail(
@@ -87,6 +98,7 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                         revision_task,
                         revision_manifest,
                         quality_report,
+                        upload_kit_preview,
                     ),
                 )
                 return
@@ -107,12 +119,15 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                     revision_task_match = REVISION_TASK_ROUTE.fullmatch(path)
                     run_revision_match = RUN_REVISION_ROUTE.fullmatch(path)
                     quality_match = QUALITY_ROUTE.fullmatch(path)
+                    upload_kit_match = UPLOAD_KIT_ROUTE.fullmatch(path)
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
                         self._run_revision(unquote(run_revision_match.group(1)))
                     elif quality_match:
                         self._score_job(unquote(quality_match.group(1)))
+                    elif upload_kit_match:
+                        self._build_upload_kit(unquote(upload_kit_match.group(1)))
                     else:
                         self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
@@ -184,6 +199,18 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
             try:
                 score_job(job.job_id, output_root)
             except (QualityScoringError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _build_upload_kit(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                build_upload_kit(job.job_id, export_root, "all")
+            except (UploadKitError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
             self._redirect_to_job(job.job_id)

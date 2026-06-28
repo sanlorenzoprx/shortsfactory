@@ -135,3 +135,15 @@ publish content automatically.
 Reason:
 A deterministic score can catch missing artifacts and weak structure, but
 human judgment remains the approval gate.
+
+## D013 — Manual upload kits before live publisher APIs
+
+Status: accepted
+
+Decision:
+Shorts Factory must generate platform-specific manual upload kits before adding
+any live publisher APIs.
+
+Reason:
+Manual kits let the user verify platform-specific metadata and upload
+intentionally before any automation can publish externally.

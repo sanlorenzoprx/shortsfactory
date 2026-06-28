@@ -2,19 +2,20 @@
 
 ## Current status
 
-Phase 3D is complete locally: every receipt-backed job can receive a
-deterministic advisory quality report with category scores, issues, fixes, and
-approval/export readiness. Scoring never changes workflow state.
+Phase 3E is complete locally: sealed approved export bundles can be formatted
+into deterministic manual upload kits for YouTube Shorts, TikTok, and Instagram
+Reels. Kits contain no upload or publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-47cd02b Add Phase 3C human revision queue
+9392193 Add Phase 3D quality scoring dashboard
 ```
 
 ## Last known commit log
 
 ```txt
+9392193 Add Phase 3D quality scoring dashboard
 47cd02b Add Phase 3C human revision queue
 5187209 Add Phase 3B approval-gated export bundles
 866bdf6 Add Phase 3A local mission control dashboard
@@ -32,7 +33,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-103 passed in 46.83s
+121 passed in 52.42s
 ```
 
 ## Known working capabilities
@@ -55,6 +56,9 @@ pytest -q
 - Deterministic nine-category local quality scoring
 - Mission Control score/status, issues, fixes, and readiness dashboard
 - Advisory quality gates that cannot approve or export automatically
+- Platform-specific local manual upload kits for three supported platforms
+- Deterministic titles, captions, descriptions, hashtag caps, and checklists
+- Mission Control upload-kit status and safely escaped previews
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -74,9 +78,11 @@ pytest -q
 - Revision tasks and revised job outputs remain local under `output/` and are
   ignored by Git.
 - Quality reports remain local under `output/quality/` and are ignored by Git.
+- Manual upload kits remain local under `exports/upload_kits/` and are ignored
+  by Git.
 
 ## Current risk
 
-Quality reports are advisory snapshots and can become stale after a human
-approval change; re-score when workflow state changes. Do not begin Phase 3E
-or add automated upload/live publisher integration without explicit approval.
+Manual upload kits still depend on intentional human review and platform upload.
+Do not begin Phase 3F or add browser login automation, upload clients, or live
+publisher integrations without explicit approval.

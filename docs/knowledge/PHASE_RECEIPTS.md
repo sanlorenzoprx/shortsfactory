@@ -250,3 +250,37 @@ Evidence:
 - Approval, export, and job artifact hashes remained unchanged by scoring
 - Generated reports were confirmed ignored by Git
 - No approval, export, revision, platform, cloud, LLM, or publishing action was triggered
+
+## Phase 3E — Manual Upload Checklists and Platform Formatting
+
+Status: complete
+
+Commit:
+`Add Phase 3E manual upload kits`
+
+Implemented:
+- `upload_kit.py` local CLI for one platform or all supported platforms
+- Strict source validation limited to sealed `exports/approved/<job_id>/`
+- YouTube Shorts title/description, TikTok caption, and Instagram Reels caption
+- Deterministic capped hashtags and exact platform-specific manual checklists
+- Per-platform metadata plus root `UPLOAD_KIT_MANIFEST.json`
+- Five mandatory manual-only/not-published/no-API safety fields
+- Optional thumbnail/caption copying with missing-file records
+- Idempotent per-platform replacement without deleting sibling kits
+- Mission Control create/refresh action and escaped manifest/metadata/checklist previews
+- Explicit absence of any live Publish button
+
+Evidence:
+- Baseline `pytest -q`: 103 passed
+- Focused Phase 3E tests: 18 passed
+- Final `pytest -q`: 121 passed
+- All five required CLI help commands passed
+- Exact first-win command created all three real platform kits
+- Final MP4 copies matched the sealed approved export by hash
+- YouTube title length was 23; hashtag counts were 8, 6, and 9 within caps
+- All platform and root manifests contained all five safety fields
+- Source export hashes remained unchanged
+- Mission Control displayed all platform metadata/checklist previews
+- No live Publish button appeared
+- Generated upload kits were confirmed ignored by Git
+- No platform API, OAuth, browser login, upload, cloud, scraping, or publishing was added

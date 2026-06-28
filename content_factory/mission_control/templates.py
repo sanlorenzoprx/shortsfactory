@@ -129,6 +129,7 @@ def render_job_detail(
     revision_task: dict[str, object] | None = None,
     revision_manifest: dict[str, object] | None = None,
     quality_report: dict[str, object] | None = None,
+    upload_kit_preview: dict[str, object] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -296,6 +297,56 @@ def render_job_detail(
     <p class="quiet">Quality pass does not approve or export this job.</p>
   </form>
 </section>"""
+    if export_manifest is None:
+        upload_kit_panel = """
+<section class="panel upload-kit-panel">
+  <div class="panel-heading"><h2>Manual upload kits</h2><span>Local only</span></div>
+  <div class="upload-kit-content"><p>Create an approved export bundle before making upload kits.</p></div>
+</section>"""
+    elif upload_kit_preview is None:
+        upload_kit_panel = f"""
+<section class="panel upload-kit-panel">
+  <div class="manual-only">MANUAL UPLOAD ONLY - NOT PUBLISHED</div>
+  <div class="panel-heading"><h2>Manual upload kits</h2><span>Not created</span></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/upload-kit">
+    <p>Create local formatting and checklists for YouTube Shorts, TikTok, and Instagram Reels.</p>
+    <button class="upload-kit" type="submit">Create Manual Upload Kit</button>
+    <p class="quiet">No API, login, browser automation, upload, or publishing occurs.</p>
+  </form>
+</section>"""
+    else:
+        kit_manifest = upload_kit_preview.get("manifest", {})
+        if not isinstance(kit_manifest, dict):
+            kit_manifest = {}
+        manifest_json = _escape(json.dumps(kit_manifest, indent=2, ensure_ascii=False))
+        platform_previews = upload_kit_preview.get("platforms", {})
+        if not isinstance(platform_previews, dict):
+            platform_previews = {}
+        preview_sections = []
+        for platform, preview in platform_previews.items():
+            if not isinstance(preview, dict):
+                continue
+            metadata = preview.get("metadata", {})
+            if not isinstance(metadata, dict):
+                metadata = {}
+            checklist = str(preview.get("checklist", "Checklist unavailable."))
+            platform_dir = metadata.get("platform_dir", "local kit folder")
+            preview_sections.append(
+                f'<div class="platform-preview"><div class="panel-heading subheading"><h3>{_escape(platform.replace("_", " ").title())}</h3><span>{_escape(platform_dir)}</span></div><h4>Platform metadata</h4><pre>{_escape(json.dumps(metadata, indent=2, ensure_ascii=False))}</pre><h4>Upload checklist</h4><pre>{_escape(checklist)}</pre></div>'
+            )
+        previews_html = "".join(preview_sections) or '<div class="upload-kit-content"><p class="quiet">Platform previews are unavailable.</p></div>'
+        upload_kit_panel = f"""
+<section class="panel upload-kit-panel">
+  <div class="manual-only">MANUAL UPLOAD ONLY - NOT PUBLISHED</div>
+  <div class="panel-heading"><h2>Manual upload kits</h2><span>{len(platform_previews)} platforms</span></div>
+  <div class="upload-kit-content"><p>Local folder: <code>{_escape(kit_manifest.get("upload_kit_dir", "exports/upload_kits"))}</code></p></div>
+  <h3 class="section-label">Upload kit manifest</h3><pre>{manifest_json}</pre>
+  {previews_html}
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/upload-kit">
+    <button class="upload-kit" type="submit">Refresh Manual Upload Kit</button>
+    <p class="quiet">Files remain local and require intentional human upload.</p>
+  </form>
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -329,6 +380,7 @@ def render_job_detail(
 </section>
 {revision_panel}
 {export_panel}
+{upload_kit_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>
