@@ -16,10 +16,11 @@
 - Phase 3D deterministic local quality scoring dashboard
 - Phase 3E manual upload checklists and publisher-specific export formatting
 - Phase 3F local prompt/template editor
+- Phase 3G Phase 3 audit report and demo dataset
 
 ## Current checkpoint
 
-Phase 3F green gate complete. Stop before Phase 3G.
+Phase 3G green gate complete. Stop before Phase 4.
 
 ## Recommended next options
 
@@ -52,4 +53,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 3G bundle comparison, learning ledger, publisher preview cards, or compliance checklist
+- Phase 4 work of any kind without a bounded approved handoff

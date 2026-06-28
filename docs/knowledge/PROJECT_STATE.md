@@ -2,19 +2,20 @@
 
 ## Current status
 
-Phase 3F is complete locally: Mission Control and the CLI can view, validate,
-preview, version, restore, and safely render deterministic text-only templates.
-Template editing has no approval, export, upload, or publishing capability.
+Phase 3G is complete locally: one audit command proves and packages the complete
+Phase 3 local operating system as a committed audit report plus an ignored demo
+dataset. The audit adds no product, upload, or publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-8c5bec4 Add Phase 3F local template editor
+49b012d Fix Mission Control revision route
 ```
 
 ## Last known commit log
 
 ```txt
+49b012d Fix Mission Control revision route
 8c5bec4 Add Phase 3F local template editor
 9b938e5 Add Phase 3E manual upload kits
 9392193 Add Phase 3D quality scoring dashboard
@@ -35,7 +36,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-148 passed in 76.94s
+153 passed in 74.16s
 ```
 
 ## Known working capabilities
@@ -68,6 +69,9 @@ pytest -q
 - Mission Control template editing, validation, history, restore, and preview
 - Script, upload-kit, and revision template use with deterministic fallbacks
 - Job receipt template ID/hash provenance
+- One-command Phase 3 local OS audit and demo evidence package
+- Default media manifests without copying large generated media
+- Audit receipt with all nine flow steps and mandatory publishing safety flags
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -93,10 +97,11 @@ pytest -q
   `templates/history/` and `templates/local/` are ignored by Git.
 - Templates are text only and cannot execute expressions, code, shell commands,
   imports, HTML, network requests, approval, export, or publishing actions.
+- Generated `demo_dataset/` evidence is local and ignored by Git; only the
+  lightweight Markdown audit report is committed.
 
 ## Current risk
 
-Template changes can alter generated creative copy, so their recorded hash must
-remain visible during review. Do not begin Phase 3G or add browser login
-automation, remote marketplaces, upload clients, or live publisher integrations
-without explicit approval.
+Phase 3 is now frozen behind a reproducible audit baseline. Do not begin Phase 4
+or add browser login automation, remote marketplaces, upload clients, or live
+publisher integrations without explicit approval.

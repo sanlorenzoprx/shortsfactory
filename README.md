@@ -349,6 +349,33 @@ expressions, filters, loops, HTML execution, Python, JavaScript, shell code,
 dynamic imports, and path traversal are not supported. Template editing cannot
 approve, export, upload, or publish a job.
 
+## Phase 3G: local OS audit and demo dataset
+
+Freeze the complete Phase 3 workflow into a reproducible local proof package:
+
+```powershell
+python phase3_audit.py --output-root output --export-root exports --demo-root demo_dataset
+python phase3_audit.py --help
+```
+
+The audit proves:
+
+```txt
+Generate -> Score -> Review -> Revise -> Re-score -> Approve -> Export -> Manual Upload Kit -> Template Control
+```
+
+It writes the committed report to
+`docs/audits/PHASE_3_LOCAL_OS_AUDIT.md` and a generated local dataset to
+`demo_dataset/`. The dataset includes receipts, scripts, captions, revision and
+quality evidence, approval/export manifests, all three manual upload kits, and
+template validation/preview evidence.
+
+Large media is detected and recorded in manifests but is not copied by default.
+`demo_dataset/` is ignored by Git. Use `--copy-media` only when local media
+copies are explicitly wanted. The audit never uploads or publishes anything;
+its receipt always records live publishing disabled, no API upload attempt, and
+manual upload only.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

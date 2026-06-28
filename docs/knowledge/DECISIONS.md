@@ -160,3 +160,16 @@ gates.
 Reason:
 Creative control should not weaken local safety, reproducibility, or publishing
 boundaries.
+
+## D015 — Audit proof before Phase 4
+
+Status: accepted
+
+Decision:
+Before adding Phase 4 or live publishing capabilities, Shorts Factory must
+maintain a local audit report and demo dataset proving the end-to-end Phase 3
+operating system.
+
+Reason:
+The project is now complex enough that future work needs a reproducible proof
+baseline.

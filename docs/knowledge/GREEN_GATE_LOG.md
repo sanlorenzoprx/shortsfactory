@@ -298,3 +298,30 @@ Commands/evidence:
 Notes:
 This is a bounded Mission Control route correction. No revision-engine,
 publishing, or Phase 3G work was added.
+
+## Phase 3G — Phase 3 Audit Report and Demo Dataset
+
+Status: passed
+
+Commit:
+`Add Phase 3G audit report and demo dataset`
+
+Commands/evidence:
+- Baseline `pytest -q`: 148 passed
+- Focused audit/dataset/report tests: 5 passed
+- Final `pytest -q`: 153 passed in 74.16s
+- `python phase3_audit.py --help`: passed
+- Exact audit command produced the report and complete demo dataset
+- Audit receipt marked every Generate-through-Template-Control step true
+- Audit receipt recorded live publishing disabled, no API upload attempt, and
+  manual upload only
+- Original/revised jobs, both quality reports, revision manifest, approval,
+  export manifest, three platform kits, and template evidence were inspected
+- Default dataset contained zero copied media files
+- Explicit media-copy behavior and traversal refusal passed fixture tests
+- `demo_dataset/` was ignored while the Markdown report remained tracked
+- Scope scan found no publishing, platform API, OAuth, cloud, scraping,
+  real-user recording, database, paid API, LLM, or Phase 4 implementation
+
+Notes:
+Phase 3G freezes the Phase 3 proof baseline. Phase 4 was not started.

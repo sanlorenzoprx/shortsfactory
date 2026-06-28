@@ -28,10 +28,10 @@ No by default. Keep generated outputs untracked unless promoted to small fixture
 ## Q006 — What should Phase 3 be?
 
 Current answer:
-Phase 3A through 3F are complete: local Mission Control, approval-gated export
+Phase 3A through 3G are complete: local Mission Control, approval-gated export
 bundles, the human revision queue, advisory quality scoring, and manual upload
-kits, plus the local text-only template editor. Do not extend Phase 3 without a
-bounded handoff.
+kits, the local text-only template editor, and the reproducible audit/demo proof
+package. Do not begin Phase 4 without a bounded handoff.
 
 ## Q007 — What should Phase 3D be?
 
@@ -55,6 +55,11 @@ preview, pipeline provenance, and safe fallback behavior.
 ## Q010 — What should Phase 3G be?
 
 Current answer:
-Not decided. Possible directions include approved-bundle comparison, a local
-analytics/learning ledger, publisher preview cards, or a final pre-publish
-compliance checklist. Do not start one without approval.
+Complete: Phase 3G added the Phase 3 Local OS audit report, safety receipt, and
+ignored demo dataset that prove all nine local workflow steps without publishing.
+
+## Q011 — What should Phase 4 be?
+
+Current answer:
+Not decided. Do not start desktop packaging, preview cards, compliance checks,
+analytics, cloud planning, or publisher research without explicit approval.

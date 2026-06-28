@@ -346,3 +346,41 @@ Evidence:
   `/jobs/f1632efa9488-r356e819a9d`
 - Final `pytest -q`: 148 passed in 76.94s
 - Mission Control and revision CLI help commands passed
+
+## Phase 3G — Phase 3 Audit Report and Demo Dataset
+
+Status: complete
+
+Commit:
+`Add Phase 3G audit report and demo dataset`
+
+Implemented:
+- `phase3_audit.py` local audit CLI with optional JSON, existing-pair, and
+  explicit media-copy modes
+- In-process reuse of generation, scoring, Mission Control rendering, revision,
+  approval, export, manual upload-kit, and template-control paths
+- Dedicated stable audit job that avoids mutating unrelated jobs by default
+- Complete ignored `demo_dataset/` with original/revised job evidence, quality
+  reports, approval/export manifests, all platform kit text/JSON, and templates
+- Media detection/size manifests with no media copying by default
+- Explicit `--copy-media` behavior for intentional local media copies
+- `audit_receipt.json` proving all nine flow steps and six safety constraints
+- Committed `docs/audits/PHASE_3_LOCAL_OS_AUDIT.md`
+- Configured-root containment and path traversal refusal
+
+Evidence:
+- Baseline `pytest -q`: 148 passed
+- Focused Phase 3G tests: 5 passed
+- Final `pytest -q`: 153 passed in 74.16s
+- Exact first-win audit command passed
+- Audit generated/reused `phase3-audit-original` and a linked revised job
+- Original and revised quality reports, revision manifest, approval snapshot,
+  export manifest, upload-kit manifest, and template evidence were inspected
+- All nine `flow_verified` fields were true
+- `live_publishing_enabled: false`
+- `api_upload_attempted: false`
+- `manual_upload_only: true`
+- No media appeared under the default demo dataset
+- `demo_dataset/` was confirmed ignored by Git
+- No live publishing, platform API, OAuth, cloud upload, scraping, real-user
+  recording, external database, paid API, LLM dependency, or Phase 4 work was added
