@@ -2,7 +2,9 @@
 
 ## Current status
 
-Phase 2 is complete through Phase 2G and pushed to `origin/main`.
+Phase 3A is complete locally: Shorts Factory now has a local-only Mission
+Control review dashboard. Phase 2 remains complete through Phase 2G and pushed
+to `origin/main`.
 
 ## Last known remote HEAD
 
@@ -25,7 +27,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-44 passed in 63.06s
+56 passed in 27.56s
 ```
 
 ## Known working capabilities
@@ -38,6 +40,8 @@ pytest -q
 - Deterministic en-US / es-PR localization
 - Local queue and scheduler
 - Dry-run publisher packages
+- Local Mission Control job and artifact review
+- Local pending / approved / rejected / needs-revision decisions
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -51,21 +55,10 @@ pytest -q
 - No cloud workers.
 - No paid API dependency for core tests.
 - Dry-run publisher packages require human approval before any real publishing.
-
-## Current untracked files reported by user
-
-```txt
-?? PHASE_2A_RECEIPT.md
-?? "SHORTS_FACTORY_KNOWLEDGE_BASE_AND_AUTONOMOUS_GOVERNANCE_HANDOFF (1).md"
-?? output/jobs/d1be5b686709/
-```
-
-Recommended handling:
-
-- Do not commit `output/jobs/d1be5b686709/` unless there is a specific reason to preserve it as a fixture.
-- Fold useful content from `PHASE_2A_RECEIPT.md` into `docs/knowledge/PHASE_RECEIPTS.md`, then decide whether to delete or keep it.
-- Do not commit the handoff file unless you want repo-local handoff history.
+- Mission Control approval records are local JSON files under `output/approvals/`.
 
 ## Current risk
 
-The project is now mature enough that further autonomous development should not proceed without updating this knowledge base first.
+Mission Control records human review state but intentionally has no export or
+publishing path. Do not begin Phase 3B or add any live publisher integration
+without explicit user approval.

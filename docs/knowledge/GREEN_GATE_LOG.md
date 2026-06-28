@@ -111,3 +111,28 @@ Result:
 
 Commit:
 Pending knowledge base commit.
+
+## Phase 3A — Local Mission Control
+
+Status: passed
+
+Commit:
+`Add Phase 3A local mission control dashboard`
+
+Commands/evidence:
+- Baseline preflight: 44 passed
+- Final `pytest -q`: 56 passed
+- `python mission_control.py --help`: passed
+- `python mission_control.py --output-root output`: started on
+  `http://127.0.0.1:8765`
+- Existing Phase 2G acceptance job appeared in the review queue
+- Job detail exposed video, thumbnail, script, captions, receipt, warnings, and
+  publisher plan previews
+- Publisher package was explicitly labeled dry-run only and not published
+- Approve and reset actions wrote valid local JSON under `output/approvals/`
+- Encoded traversal request returned 404
+- No live publishing, OAuth, external database, cloud hosting, scraping, or
+  platform API integration was added
+
+Notes:
+Phase 3A ends at local human review and approval state. Phase 3B was not started.

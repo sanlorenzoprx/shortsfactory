@@ -122,3 +122,31 @@ Evidence:
 
 Reported receipt:
 `output/phase2g-acceptance/jobs/2b600930dc05/receipt.json`
+
+## Phase 3A — Local Mission Control
+
+Status: complete
+
+Commit:
+`Add Phase 3A local mission control dashboard`
+
+Implemented:
+- Standard-library local HTTP dashboard bound to `127.0.0.1` by default
+- Receipt-backed job index for normal output and Phase 2G acceptance output
+- Safe previews for video, thumbnail, script, captions, receipt, warnings, and
+  publisher package data
+- Dry-run publisher package labeling
+- Local pending / approved / rejected / needs-revision JSON approval records
+- Allowlisted artifact serving with resolved-path containment checks
+- HTML escaping for generated text and JSON
+
+Evidence:
+- `pytest -q`: 56 passed
+- `python mission_control.py --help`: passed
+- Exact first-win server command started at `http://127.0.0.1:8765`
+- Existing job `2b600930dc05` appeared and its detail page returned 200
+- Thumbnail served as JPEG and generated video preview was present
+- `publish/publisher_plan.json` appeared with `DRY RUN ONLY — NOT PUBLISHED`
+- Approval was written under `output/approvals/2b600930dc05.json`
+- Encoded path traversal smoke request returned 404
+- No live publishing or external integration was added

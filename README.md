@@ -194,6 +194,29 @@ python orchestrator.py --run-queue --max-jobs 1
 There are no OAuth flows, upload tokens, platform API clients, or live posting
 commands in Phase 2G. Attempts to invoke the publisher's live path are refused.
 
+## Phase 3A: local Mission Control
+
+Start the local review dashboard against generated output:
+
+```powershell
+python mission_control.py --output-root output
+```
+
+Mission Control listens on `http://127.0.0.1:8765` by default. It indexes
+receipt-backed jobs under `output/jobs/` and
+`output/phase2g-acceptance/jobs/`, then previews available video, thumbnail,
+script, captions, receipt, warnings, and dry-run publisher package artifacts.
+
+Review actions are local only. Approve, Reject, Needs Revision, and Reset to
+Pending write one JSON record per job under `output/approvals/`. Mission Control
+does not publish, call a platform API, authenticate a platform account, or send
+job data off the machine.
+
+```powershell
+python mission_control.py --output-root output --host 127.0.0.1 --port 8765
+python mission_control.py --help
+```
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

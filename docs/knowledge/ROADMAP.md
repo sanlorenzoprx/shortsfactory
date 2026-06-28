@@ -10,10 +10,11 @@
 - Phase 2E real localization
 - Phase 2F local queue and scheduler
 - Phase 2G dry-run publisher packages
+- Phase 3A local Mission Control review dashboard
 
 ## Current checkpoint
 
-Post-Phase-2 audit and knowledge base.
+Phase 3A green gate complete. Stop before Phase 3B.
 
 ## Recommended next options
 
@@ -21,11 +22,13 @@ Choose one next. Do not start all.
 
 ### Option A — Phase 3 Dashboard / Mission Control
 
-Build a local web UI to inspect jobs, receipts, artifacts, queues, and publisher packages.
+Completed in Phase 3A for jobs, receipts, generated artifacts, local approvals,
+and dry-run publisher packages.
 
 ### Option B — Publisher Approval Workflow
 
-Turn dry-run publisher packages into a human approval workflow without live posting.
+Local approval state is complete in Phase 3A. Approval-gated export work is
+deferred and requires explicit Phase 3B approval.
 
 ### Option C — Vertical Templates
 

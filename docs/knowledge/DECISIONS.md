@@ -87,3 +87,15 @@ Before Phase 3 or any new autonomous development, update and commit `docs/knowle
 
 Reason:
 The repo needs durable memory so agents do not rely only on chat history.
+
+## D009 — Local Mission Control before live publishing
+
+Status: accepted
+
+Decision:
+Before adding live publisher integrations, Shorts Factory must have a local
+Mission Control review dashboard.
+
+Reason:
+Human approval and artifact inspection are required before anything leaves the
+local machine.
