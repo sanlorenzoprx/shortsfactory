@@ -136,3 +136,29 @@ Commands/evidence:
 
 Notes:
 Phase 3A ends at local human review and approval state. Phase 3B was not started.
+
+## Phase 3B — Approval-Gated Local Export Bundles
+
+Status: passed
+
+Commit:
+`Add Phase 3B approval-gated export bundles`
+
+Commands/evidence:
+- Baseline `pytest -q`: 56 passed
+- Focused export suite: 18 passed
+- Final `pytest -q`: 74 passed
+- `python export_bundle.py --help`: passed
+- `python mission_control.py --help`: passed
+- Pending export refusal: exit code 1 with clear not-approved message
+- Mission Control approval POST, export POST, and exported detail GET passed
+- Exact first-win CLI created `exports/approved/2b600930dc05/`
+- All available source artifacts were included under normalized export names
+- Re-running the CLI safely replaced the same bundle
+- Manifest confirmed `publishing_status: not_published`
+- Manifest confirmed `live_publishing_enabled: false`
+- `.gitignore` confirmed `exports/` is ignored
+- Scope scan confirmed no platform API or external integration code
+
+Notes:
+Phase 3B ends at approval-gated local packaging. Phase 3C was not started.

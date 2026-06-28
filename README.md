@@ -217,6 +217,32 @@ python mission_control.py --output-root output --host 127.0.0.1 --port 8765
 python mission_control.py --help
 ```
 
+## Phase 3B: approval-gated local export bundles
+
+Open Mission Control, review a job, and select **Approve**. An approved job can
+then be exported from its detail page with **Export Approved Bundle**, or with
+the local CLI:
+
+```powershell
+python export_bundle.py --job-id <job_id> --output-root output --export-root exports
+```
+
+Unapproved jobs are refused. Approved bundles are written deterministically to:
+
+```txt
+exports/approved/<job_id>/
+```
+
+Each bundle contains the best available video as `final.mp4`, the source
+receipt, an unchanged `APPROVAL.json`, an `EXPORT_MANIFEST.json`, and all
+available supporting assets. Phase 2G publisher plans are copied locally as
+`publisher_package.json` when present.
+
+The manifest always records `publishing_status: not_published` and
+`live_publishing_enabled: false`. Export bundles are ignored by Git and are
+prepared only for human inspection or manual upload; no platform API, OAuth,
+cloud upload, or live publishing is involved.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

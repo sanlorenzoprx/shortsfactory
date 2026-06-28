@@ -150,3 +150,36 @@ Evidence:
 - Approval was written under `output/approvals/2b600930dc05.json`
 - Encoded path traversal smoke request returned 404
 - No live publishing or external integration was added
+
+## Phase 3B — Approval-Gated Local Export Bundles
+
+Status: complete
+
+Commit:
+`Add Phase 3B approval-gated export bundles`
+
+Implemented:
+- `export_bundle.py` local CLI with clear non-zero refusal behavior
+- Strict local `approved` state requirement using the original approval record
+- Final-video selection priority and normalized `final.mp4` output
+- Deterministic replacement at `exports/approved/<job_id>/`
+- Required receipt and approval snapshots plus all available supporting assets
+- `EXPORT_MANIFEST.json` with missing optional files and source/export paths
+- Mandatory `publishing_status: not_published` and
+  `live_publishing_enabled: false` manifest fields
+- Minimal Mission Control local export POST action, status, and manifest preview
+- Resolved-path containment checks for source and destination paths
+
+Evidence:
+- Baseline `pytest -q`: 56 passed
+- Final `pytest -q`: 74 passed
+- Both CLI help commands passed
+- Pending real job `2b600930dc05` was refused with exit code 1
+- Mission Control approved and exported that job through local POST actions
+- Exact first-win CLI exported successfully and was idempotent
+- Export contained `final.mp4`, receipt, approval, manifest, thumbnail, captions,
+  script, publisher package, app recording assets, and LIT response
+- Exported video hash matched the preferred music-mixed source
+- Manifest recorded not published and live publishing disabled
+- Generated export was confirmed ignored by Git
+- No platform API, OAuth, cloud upload, scraping, or live publishing was added

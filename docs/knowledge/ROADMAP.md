@@ -11,10 +11,11 @@
 - Phase 2F local queue and scheduler
 - Phase 2G dry-run publisher packages
 - Phase 3A local Mission Control review dashboard
+- Phase 3B approval-gated local export bundles
 
 ## Current checkpoint
 
-Phase 3A green gate complete. Stop before Phase 3B.
+Phase 3B green gate complete. Stop before Phase 3C.
 
 ## Recommended next options
 
@@ -27,8 +28,8 @@ and dry-run publisher packages.
 
 ### Option B — Publisher Approval Workflow
 
-Local approval state is complete in Phase 3A. Approval-gated export work is
-deferred and requires explicit Phase 3B approval.
+Completed in Phase 3B. Approved jobs produce deterministic local bundles with
+explicit not-published manifests; unapproved jobs are refused.
 
 ### Option C — Vertical Templates
 
@@ -47,3 +48,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
+- Phase 3C revision queues, scoring, prompt editing, or upload formatting

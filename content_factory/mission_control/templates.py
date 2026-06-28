@@ -110,7 +110,11 @@ def _artifact_url(job: JobRecord, artifact_name: str) -> str:
     return f"/artifacts/{_url_job_id(job.job_id)}/{quote(artifact_name, safe='')}"
 
 
-def render_job_detail(job: JobRecord, approval: dict[str, object]) -> str:
+def render_job_detail(
+    job: JobRecord,
+    approval: dict[str, object],
+    export_manifest: dict[str, object] | None = None,
+) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
         (
@@ -149,6 +153,35 @@ def render_job_detail(job: JobRecord, approval: dict[str, object]) -> str:
     publisher_class = "" if publisher_path else " muted-panel"
     notes = _escape(approval.get("notes", ""))
     updated = _escape(approval.get("updated_at") or "Not yet reviewed")
+    if state != "approved":
+        export_panel = """
+<section class="panel export-panel">
+  <div class="panel-heading"><h2>Approved export bundle</h2><span>Local only</span></div>
+  <div class="export-content"><p>Approve this job before export.</p><p class="quiet">No files are uploaded or published.</p></div>
+</section>"""
+    elif export_manifest is None:
+        export_panel = f"""
+<section class="panel export-panel">
+  <div class="panel-heading"><h2>Approved export bundle</h2><span>Not exported</span></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/export">
+    <p>Build a deterministic local bundle for manual review or upload.</p>
+    <button class="export" type="submit">Export Approved Bundle</button>
+    <p class="quiet">This action does not publish or contact a platform.</p>
+  </form>
+</section>"""
+    else:
+        export_json = _escape(json.dumps(export_manifest, indent=2, ensure_ascii=False))
+        export_dir = _escape(export_manifest.get("export_dir", "exports/approved"))
+        export_panel = f"""
+<section class="panel export-panel">
+  <div class="panel-heading"><h2>Approved export bundle</h2><span>Exported · not published</span></div>
+  <div class="export-content"><p>Local folder: <code>{export_dir}</code></p></div>
+  <pre>{export_json}</pre>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/export">
+    <button class="export" type="submit">Refresh Approved Bundle</button>
+    <p class="quiet">Local replacement only. Live publishing remains disabled.</p>
+  </form>
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -179,6 +212,7 @@ def render_job_detail(job: JobRecord, approval: dict[str, object]) -> str:
     </div>
   </form>
 </section>
+{export_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>

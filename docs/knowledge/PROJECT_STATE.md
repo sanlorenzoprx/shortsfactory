@@ -2,19 +2,22 @@
 
 ## Current status
 
-Phase 3A is complete locally: Shorts Factory now has a local-only Mission
-Control review dashboard. Phase 2 remains complete through Phase 2G and pushed
-to `origin/main`.
+Phase 3B is complete locally: approved jobs can be packaged into deterministic
+local export bundles from Mission Control or the CLI. Phase 3A remains the
+human review gate, and no live publishing exists.
 
 ## Last known remote HEAD
 
 ```txt
-48fb757 Add Phase 2G dry-run publisher packages
+866bdf6 Add Phase 3A local mission control dashboard
 ```
 
 ## Last known commit log
 
 ```txt
+866bdf6 Add Phase 3A local mission control dashboard
+d9ac9d7 Clean generated files and ignore runtime artifacts
+f478817 Organize project docs and knowledge base
 48fb757 Add Phase 2G dry-run publisher packages
 a3edbba Add Phase 2F local queue and scheduler
 53a2b4f Add Phase 2E localization support
@@ -27,7 +30,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-56 passed in 27.56s
+74 passed in 29.42s
 ```
 
 ## Known working capabilities
@@ -42,6 +45,8 @@ pytest -q
 - Dry-run publisher packages
 - Local Mission Control job and artifact review
 - Local pending / approved / rejected / needs-revision decisions
+- Approval-gated local export bundles with deterministic replacement
+- Export manifests that explicitly disable live publishing
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -56,9 +61,11 @@ pytest -q
 - No paid API dependency for core tests.
 - Dry-run publisher packages require human approval before any real publishing.
 - Mission Control approval records are local JSON files under `output/approvals/`.
+- Export bundles are local generated artifacts under `exports/approved/` and
+  are ignored by Git.
 
 ## Current risk
 
-Mission Control records human review state but intentionally has no export or
-publishing path. Do not begin Phase 3B or add any live publisher integration
-without explicit user approval.
+Export bundles are suitable only for human inspection or manual upload. Do not
+begin Phase 3C or add any automated upload/live publisher integration without
+explicit user approval.

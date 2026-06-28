@@ -50,7 +50,9 @@ textarea { width: 100%; resize: vertical; padding: 12px; color: var(--text); bac
 .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
 button { cursor: pointer; padding: 10px 14px; border: 1px solid currentColor; border-radius: 5px; background: transparent; font: 800 12px/1 ui-monospace, monospace; text-transform: uppercase; }
 button.approve { color: var(--acid); } button.reject { color: var(--red); } button.revise { color: var(--amber); } button.reset { color: var(--muted); }
+button.export { color: var(--cyan); }
 button:hover { background: currentColor; box-shadow: inset 0 0 0 99px rgba(0,0,0,.78); }
+.export-content { padding: 18px 20px; }.export-content p { margin: 0 0 8px; }.export-content code { color: var(--cyan); word-break: break-all; }
 .warnings { margin: 0; padding: 20px 40px; }.warnings li { margin: 5px 0; color: var(--amber); }
 pre { max-height: 520px; overflow: auto; margin: 0; padding: 20px; white-space: pre-wrap; word-break: break-word; color: #dce6df; background: rgba(4,6,7,.45); }
 .dry-run { display: inline-block; margin: 20px 20px 0; background: var(--amber); }

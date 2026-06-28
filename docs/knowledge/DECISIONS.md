@@ -99,3 +99,15 @@ Mission Control review dashboard.
 Reason:
 Human approval and artifact inspection are required before anything leaves the
 local machine.
+
+## D010 — Approval-gated exports before live publishing
+
+Status: accepted
+
+Decision:
+Shorts Factory must create local approval-gated export bundles before adding
+any live publisher integrations.
+
+Reason:
+A human must approve the generated content and inspect the export bundle before
+anything can be uploaded manually or published later.
