@@ -452,3 +452,50 @@ Evidence:
 - Unsafe flags, missing kits, and non-approved exports were refused
 - No platform API, OAuth, browser automation, upload, cloud, scraping,
   real-user recording, external database, paid dependency, or Phase 4C work was added
+
+## Phase 4C â€” Final Pre-Publish Compliance Checklist
+
+Status: complete
+
+Commit:
+`Add Phase 4C final compliance checklist`
+
+Implemented:
+- `compliance_check.py` local CLI for deterministic compliance generation and
+  explicit local mark-reviewed confirmation
+- Strict approved-export, upload-kit, preview-manifest, preview-file, final
+  video, receipt, and five-flag safety validation before writing output
+- Local JSON and Markdown checklist artifacts under
+  `exports/upload_kits/<job_id>/compliance/`
+- Deterministic artifact checks plus advisory placeholder, risky-wording, and
+  local platform copy checks without any LLM or moderation API
+- Default `needs_human_review` and `ready_for_manual_upload: false`
+- Explicit `ready_for_manual_upload` only after human review confirmation
+- Mission Control compliance generate/open/refresh/mark-reviewed controls and
+  allowlisted static file serving
+- Escaped Mission Control warning rendering and safe HTTP 409 refusal pages
+
+Evidence:
+- Baseline `pytest -q`: 172 passed
+- Focused Phase 4C tests: 13 passed
+- Final `pytest -q`: 185 passed in 94.09s
+- `python compliance_check.py --help`: passed
+- `python compliance_check.py --job-id phase3-audit-original-re054436d34 --export-root exports`: passed
+- `python compliance_check.py --job-id phase3-audit-original-re054436d34 --export-root exports --mark-reviewed`: passed
+- `python preview_cards.py --help`: passed
+- `python shorts_factory_launcher.py --health`: passed with the existing optional
+  `dotenv` warning only
+- `python mission_control.py --help`: passed
+- `python upload_kit.py --help`: passed
+- `python phase3_audit.py --help`: passed
+- Generated checklist status begins at `needs_human_review`
+- Generated reviewed checklist records `review_method` and `reviewed_at`
+- Compliance output retains all five manual-only/not-published safety flags
+- Real JSON and Markdown checklist files were inspected under
+  `exports/upload_kits/phase3-audit-original-re054436d34/compliance/`
+- Mission Control localhost smoke re-generated the checklist, showed Needs Human
+  Review, marked it reviewed, then showed Ready for Manual Upload
+- Mission Control showed compliance controls without any Publish/Post/OAuth
+  button or automatic upload path
+- No platform API, OAuth, browser automation, upload, cloud, scraping,
+  external database, paid dependency, or Phase 4D work was added

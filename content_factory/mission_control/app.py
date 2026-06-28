@@ -11,6 +11,15 @@ from pathlib import Path
 from typing import Sequence
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from content_factory.compliance import (
+    ComplianceChecklistError,
+    generate_compliance_checklist,
+    load_compliance_checklist,
+    mark_compliance_reviewed,
+)
+from content_factory.compliance.compliance_models import JSON_NAME as COMPLIANCE_JSON_NAME
+from content_factory.compliance.compliance_models import MARKDOWN_NAME as COMPLIANCE_MARKDOWN_NAME
+from content_factory.compliance.compliance_store import compliance_directory
 from content_factory.exporting.bundle_exporter import BundleExportError, export_approved_bundle
 from content_factory.exporting.manifest import read_export_manifest
 from content_factory.quality.quality_scorer import QualityScoringError, score_job
@@ -42,6 +51,9 @@ QUALITY_ROUTE = re.compile(r"^/jobs/([^/]+)/score$")
 UPLOAD_KIT_ROUTE = re.compile(r"^/jobs/([^/]+)/upload-kit$")
 PREVIEW_CARDS_ROUTE = re.compile(r"^/jobs/([^/]+)/preview-cards$")
 PREVIEW_FILE_ROUTE = re.compile(r"^/previews/([^/]+)/([^/]+)$")
+COMPLIANCE_ROUTE = re.compile(r"^/jobs/([^/]+)/compliance$")
+COMPLIANCE_REVIEW_ROUTE = re.compile(r"^/jobs/([^/]+)/compliance/review$")
+COMPLIANCE_FILE_ROUTE = re.compile(r"^/compliance/([^/]+)/([^/]+)$")
 TEMPLATE_ROUTE = re.compile(r"^/templates/([^/]+)$")
 TEMPLATE_ACTION_ROUTE = re.compile(r"^/templates/([^/]+)/(validate|preview|save|restore)$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
@@ -66,7 +78,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
     template_store = TemplateStore(template_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/4B"
+        server_version = "ShortsFactoryMissionControl/4C"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -124,10 +136,14 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 try:
                     upload_kit_preview = load_upload_kit_preview(export_root, job.job_id)
                     preview_manifest = load_preview_manifest(export_root, job.job_id)
+                    compliance_checklist = load_compliance_checklist(export_root, job.job_id)
                 except UploadKitError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
                 except PreviewCardError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                except ComplianceChecklistError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
                 self._html(
@@ -141,6 +157,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         quality_report,
                         upload_kit_preview,
                         preview_manifest,
+                        compliance_checklist,
                     ),
                 )
                 return
@@ -149,6 +166,13 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 self._preview_file(
                     unquote(preview_file_match.group(1)),
                     unquote(preview_file_match.group(2)),
+                )
+                return
+            compliance_file_match = COMPLIANCE_FILE_ROUTE.fullmatch(path)
+            if compliance_file_match:
+                self._compliance_file(
+                    unquote(compliance_file_match.group(1)),
+                    unquote(compliance_file_match.group(2)),
                 )
                 return
             artifact_match = ARTIFACT_ROUTE.fullmatch(path)
@@ -174,6 +198,8 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     quality_match = QUALITY_ROUTE.fullmatch(path)
                     upload_kit_match = UPLOAD_KIT_ROUTE.fullmatch(path)
                     preview_cards_match = PREVIEW_CARDS_ROUTE.fullmatch(path)
+                    compliance_match = COMPLIANCE_ROUTE.fullmatch(path)
+                    compliance_review_match = COMPLIANCE_REVIEW_ROUTE.fullmatch(path)
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
@@ -184,6 +210,10 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         self._build_upload_kit(unquote(upload_kit_match.group(1)))
                     elif preview_cards_match:
                         self._generate_preview_cards(unquote(preview_cards_match.group(1)))
+                    elif compliance_match:
+                        self._generate_compliance_checklist(unquote(compliance_match.group(1)))
+                    elif compliance_review_match:
+                        self._mark_compliance_reviewed(unquote(compliance_review_match.group(1)))
                     else:
                         self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
@@ -285,6 +315,30 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 return
             self._redirect_to_job(job.job_id)
 
+        def _generate_compliance_checklist(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                generate_compliance_checklist(job.job_id, export_root)
+            except (ComplianceChecklistError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _mark_compliance_reviewed(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                mark_compliance_reviewed(job.job_id, export_root, review_method="local_dashboard")
+            except (ComplianceChecklistError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
         def _preview_file(self, job_id: str, filename: str) -> None:
             try:
                 manifest = load_preview_manifest(export_root, job_id)
@@ -315,6 +369,41 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
             self.send_header("Content-Disposition", "inline")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                self.close_connection = True
+
+        def _compliance_file(self, job_id: str, filename: str) -> None:
+            try:
+                checklist = load_compliance_checklist(export_root, job_id)
+                if checklist is None:
+                    raise ComplianceChecklistError("compliance checklist is missing")
+                allowed = {COMPLIANCE_JSON_NAME, COMPLIANCE_MARKDOWN_NAME}
+                if filename not in allowed or Path(filename).name != filename:
+                    raise ComplianceChecklistError("compliance file is not allowlisted")
+                path = compliance_directory(export_root, job_id) / filename
+                if not path.is_file() or not is_within(path, export_root):
+                    raise ComplianceChecklistError("compliance file is missing")
+                data = path.read_bytes()
+            except (ComplianceChecklistError, OSError) as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            content_type = (
+                "application/json; charset=utf-8"
+                if path.suffix == ".json"
+                else "text/markdown; charset=utf-8"
+            )
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+            )
             self.end_headers()
             try:
                 self.wfile.write(data)

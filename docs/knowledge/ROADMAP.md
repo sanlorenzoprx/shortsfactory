@@ -19,10 +19,11 @@
 - Phase 3G Phase 3 audit report and demo dataset
 - Phase 4A local desktop launcher
 - Phase 4B publisher-specific preview cards
+- Phase 4C final pre-publish compliance checklist
 
 ## Current checkpoint
 
-Phase 4B green gate complete. Stop before Phase 4C.
+Phase 4C green gate complete. Stop before Phase 4D.
 
 ## Recommended next options
 
@@ -55,4 +56,7 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 4C compliance, analytics, packaging, demo-mode, or result-tracking work
+- analytics/learning ledgers
+- packaging/demo-mode work
+- local result tracking after manual upload
+- Phase 4D or later work

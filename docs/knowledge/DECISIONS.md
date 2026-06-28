@@ -198,3 +198,15 @@ future live publishing work is considered.
 Reason:
 Manual visual review reduces mistakes and keeps the platform boundary
 human-controlled.
+
+## D018 â€” Compliance before manual upload
+
+Status: accepted
+
+Decision:
+Shorts Factory requires a final local compliance checklist before a job is
+marked ready for manual upload.
+
+Reason:
+Preview cards show how content will look. Compliance checks verify the content
+is complete, safe, and human-reviewed before manual upload.

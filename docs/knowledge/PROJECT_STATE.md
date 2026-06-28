@@ -2,19 +2,21 @@
 
 ## Current status
 
-Phase 4B is complete locally: approved manual-upload kits can produce static,
-escaped, publisher-specific HTML/text review cards from sealed local artifacts.
-Preview generation adds no upload, platform, account, or publishing capability.
+Phase 4C is complete locally: approved manual-upload kits can produce a final
+deterministic compliance checklist after preview cards exist, and a human can
+explicitly mark that checklist ready for manual upload without adding any live
+publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-c545567 Add Phase 4A local desktop launcher
+d648e4b Add Phase 4B publisher preview cards
 ```
 
 ## Last known commit log
 
 ```txt
+d648e4b Add Phase 4B publisher preview cards
 c545567 Add Phase 4A local desktop launcher
 ca13c8e Add Phase 3G audit report and demo dataset
 49b012d Fix Mission Control revision route
@@ -38,7 +40,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-172 passed in 82.15s
+185 passed in 94.09s
 ```
 
 ## Known working capabilities
@@ -80,6 +82,11 @@ pytest -q
 - Static local YouTube Shorts, TikTok, and Instagram Reels preview cards
 - Preview provenance/safety refusal and offline advisory platform checks
 - Mission Control preview generation, links, and allowlisted static serving
+- Final compliance checklist JSON/Markdown under ignored upload-kit folders
+- Deterministic prerequisite, safety, placeholder, and risky-wording checks
+- Explicit local human confirmation gate before manual upload readiness
+- Mission Control compliance generation, open links, readiness status, and
+  mark-reviewed action
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -111,9 +118,11 @@ pytest -q
   paths, and no timers or hidden background scheduling.
 - Preview cards live under ignored `exports/upload_kits/`; HTML is escaped and
   contains no remote scripts, styles, tracking, account, upload, or post action.
+- Compliance checklists live under ignored `exports/upload_kits/<job_id>/compliance/`;
+  they remain local Markdown/JSON only and cannot publish or upload.
 
 ## Current risk
 
-Phase 4B ends at local publisher preview/review. Do not begin Phase 4C or add
-compliance automation, result tracking, packaging, upload clients, remote
+Phase 4C ends at final local manual-upload readiness review. Do not begin Phase
+4D or add result tracking, deployment packaging, upload clients, remote
 services, or live publisher integrations without explicit approval.

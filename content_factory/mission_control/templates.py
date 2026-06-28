@@ -5,6 +5,12 @@ import json
 from pathlib import Path
 from urllib.parse import quote
 
+from content_factory.compliance.compliance_renderer import (
+    human_status,
+    machine_status,
+    status_label,
+)
+
 from .job_index import JobRecord
 
 
@@ -198,6 +204,7 @@ def render_job_detail(
     quality_report: dict[str, object] | None = None,
     upload_kit_preview: dict[str, object] | None = None,
     preview_manifest: dict[str, object] | None = None,
+    compliance_checklist: dict[str, object] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -458,6 +465,62 @@ def render_job_detail(
     <p class="quiet">Static local previews only. Human upload remains required.</p>
   </form>
 </section>"""
+    if upload_kit_preview is None or preview_manifest is None:
+        compliance_panel = ""
+    elif compliance_checklist is None:
+        compliance_panel = f"""
+<section class="panel compliance-panel">
+  <div class="manual-only">FINAL HUMAN GATE - MANUAL UPLOAD ONLY</div>
+  <div class="panel-heading"><h2>Final compliance checklist</h2><span>Not generated</span></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/compliance">
+    <p>Generate the final local compliance checklist after preview cards are ready.</p>
+    <button class="compliance" type="submit">Generate Compliance Checklist</button>
+    <p class="quiet">This is a local review gate only. No account connection or upload action exists here.</p>
+  </form>
+</section>"""
+    else:
+        compliance_status = status_label(str(compliance_checklist.get("status", "needs_human_review")))
+        compliance_machine = machine_status(compliance_checklist)
+        compliance_human = human_status(compliance_checklist)
+        advisory_items = compliance_checklist.get("warnings", [])
+        if not isinstance(advisory_items, list):
+            advisory_items = []
+        warning_rows = []
+        for advisory in advisory_items:
+            if isinstance(advisory, dict):
+                warning_rows.append(f"<li>{_escape(advisory.get('message', 'Warning'))}</li>")
+            else:
+                warning_rows.append(f"<li>{_escape(advisory)}</li>")
+        warning_html = "".join(warning_rows) or '<li class="quiet">No advisory warnings recorded.</li>'
+        if compliance_checklist.get("ready_for_manual_upload") is True:
+            review_action = '<p class="quiet compliance-ready-note">This job is ready for manual upload only. Shorts Factory still has not published anything.</p>'
+        else:
+            review_action = f"""
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/compliance/review">
+    <button class="compliance" type="submit">Mark Reviewed for Manual Upload</button>
+    <p class="quiet">Explicit local human confirmation only. This never publishes or uploads.</p>
+  </form>"""
+        compliance_panel = f"""
+<section class="panel compliance-panel">
+  <div class="manual-only">FINAL HUMAN GATE - MANUAL UPLOAD ONLY</div>
+  <div class="panel-heading"><h2>Final compliance checklist</h2><span class="quality-badge quality-{_escape(compliance_machine)}">{_escape(compliance_status)}</span></div>
+  <div class="quality-summary">
+    <div><span>Compliance status</span><strong>{_escape(compliance_status)}</strong></div>
+    <div><span>Machine checks</span><strong>{_escape(compliance_machine)}</strong></div>
+    <div><span>Human review</span><strong>{_escape(compliance_human)}</strong></div>
+  </div>
+  <div class="preview-card-links">
+    <a class="preview-link" href="/compliance/{_url_job_id(job.job_id)}/COMPLIANCE_CHECKLIST.md" target="_blank" rel="noopener">Open Compliance Checklist</a>
+    <a class="preview-link" href="/compliance/{_url_job_id(job.job_id)}/COMPLIANCE_CHECKLIST.json" target="_blank" rel="noopener">Open Compliance JSON</a>
+  </div>
+  <h3 class="section-label">Advisory warnings</h3>
+  <ul class="warnings">{warning_html}</ul>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/compliance">
+    <button class="compliance" type="submit">Refresh Compliance Checklist</button>
+    <p class="quiet">Refresh re-runs local deterministic checks only.</p>
+  </form>
+  {review_action}
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -493,6 +556,7 @@ def render_job_detail(
 {export_panel}
 {upload_kit_panel}
 {publisher_preview_panel}
+{compliance_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>

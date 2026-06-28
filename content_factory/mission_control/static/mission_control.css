@@ -63,6 +63,7 @@ button.export { color: var(--cyan); }
 button.score { color: var(--cyan); }
 button.upload-kit { color: var(--cyan); }
 button.preview-cards { color: var(--cyan); }
+button.compliance { color: var(--cyan); }
 .preview-card-links { display: flex; flex-wrap: wrap; gap: 10px; padding: 20px; }
 .preview-link { display: inline-block; padding: 10px 14px; border: 1px solid var(--cyan); border-radius: 5px; color: var(--cyan); text-decoration: none; font-weight: 800; }
 .preview-link:hover { background: rgba(108,229,232,.08); }

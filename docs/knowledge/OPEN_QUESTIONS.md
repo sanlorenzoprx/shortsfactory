@@ -75,6 +75,12 @@ post, upload, authenticate, or call a platform API.
 ## Q013 — What should Phase 4C be?
 
 Current answer:
-Not decided. Do not start compliance automation, analytics/learning ledgers,
-Windows packaging, packaged demo mode, or manual-result tracking without an
-approved bounded handoff.
+Complete: Phase 4C added a final local compliance checklist with deterministic
+machine checks, explicit human review confirmation, and manual-upload-only
+readiness. Do not begin Phase 4D without a bounded handoff.
+
+## Q014 â€” What should Phase 4D be?
+
+Current answer:
+Not decided. Do not start result tracking, Windows packaging, packaged demo
+mode, or manual performance ledgers without an approved bounded handoff.

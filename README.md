@@ -438,6 +438,53 @@ user-controlled text is HTML-escaped; cards contain no remote JavaScript, CSS,
 CDN, tracking, posting action, account connection, upload automation, or live
 publishing capability.
 
+## Phase 4C: final pre-publish compliance checklist
+
+Add the last local human gate after preview cards are ready:
+
+```powershell
+python compliance_check.py --job-id <approved_job_id> --export-root exports
+python compliance_check.py --job-id <approved_job_id> --export-root exports --mark-reviewed
+python compliance_check.py --help
+```
+
+The command writes:
+
+```txt
+exports/upload_kits/<job_id>/compliance/COMPLIANCE_CHECKLIST.json
+exports/upload_kits/<job_id>/compliance/COMPLIANCE_CHECKLIST.md
+```
+
+The checklist refuses to run unless all prerequisites already exist locally:
+approved export bundle, upload kit, preview manifest, final video, receipt, and
+the existing manual-only safety flags. It then records deterministic artifact
+checks, advisory content/risk warnings, and required human review items.
+
+Default status is always `needs_human_review` with
+`ready_for_manual_upload: false`. Nothing becomes ready automatically. Only an
+explicit local confirmation with `--mark-reviewed` changes the checklist to:
+
+```json
+"status": "ready_for_manual_upload",
+"ready_for_manual_upload": true
+```
+
+Mission Control now shows **Generate Compliance Checklist**, **Open Compliance
+Checklist**, and **Mark Reviewed for Manual Upload** on eligible job pages.
+These actions reuse the same local checklist runner as the CLI. No platform API,
+OAuth, account connection, upload automation, browser automation, or live
+publishing is added.
+
+The safety boundary remains explicit in every checklist:
+
+```json
+"manual_upload_only": true,
+"publishing_status": "not_published",
+"live_publishing_enabled": false,
+"api_upload_attempted": false,
+"requires_human_upload": true
+```
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

@@ -378,3 +378,33 @@ Commands/evidence:
 
 Notes:
 Phase 4B ends at static local preview/review. Phase 4C was not started.
+
+## Phase 4C â€” Final Pre-Publish Compliance Checklist
+
+Status: passed
+
+Commit:
+`Add Phase 4C final compliance checklist`
+
+Commands/evidence:
+- Baseline `pytest -q`: 172 passed
+- Focused compliance tests: 13 passed
+- Final `pytest -q`: 185 passed in 94.09s
+- `python compliance_check.py --help`: passed
+- `python compliance_check.py --job-id phase3-audit-original-re054436d34 --export-root exports`: passed
+- `python compliance_check.py --job-id phase3-audit-original-re054436d34 --export-root exports --mark-reviewed`: passed
+- `python preview_cards.py --help`: passed
+- `python shorts_factory_launcher.py --health`: passed with the existing optional `dotenv` warning only
+- `python mission_control.py --help`: passed
+- `python upload_kit.py --help`: passed
+- `python phase3_audit.py --help`: passed
+- Compliance JSON/Markdown are written under `exports/upload_kits/<job_id>/compliance/`
+- Real checklist wrote `needs_human_review`, then changed to `ready_for_manual_upload` only after explicit local review confirmation
+- All five safety flags remain manual-only/not-published
+- Mission Control localhost smoke returned 200/303/200/303/200 through generate/review and showed no forbidden button
+- Scope scan found no platform API, OAuth, browser automation, upload, cloud,
+  scraping, real-user recording, database, or Phase 4D implementation
+
+Notes:
+Phase 4C ends at final local manual-upload readiness review. Phase 4D was not
+started.
