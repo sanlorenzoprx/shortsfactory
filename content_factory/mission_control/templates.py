@@ -197,6 +197,7 @@ def render_job_detail(
     revision_manifest: dict[str, object] | None = None,
     quality_report: dict[str, object] | None = None,
     upload_kit_preview: dict[str, object] | None = None,
+    preview_manifest: dict[str, object] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -420,6 +421,43 @@ def render_job_detail(
     <p class="quiet">Files remain local and require intentional human upload.</p>
   </form>
 </section>"""
+    if upload_kit_preview is None:
+        publisher_preview_panel = ""
+    elif preview_manifest is None:
+        publisher_preview_panel = f"""
+<section class="panel publisher-preview-panel">
+  <div class="manual-only">MANUAL REVIEW ONLY - NOT PUBLISHED</div>
+  <div class="panel-heading"><h2>Publisher preview cards</h2><span>Not generated</span></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/preview-cards">
+    <p>Generate static local HTML and text previews from the approved manual upload kit.</p>
+    <button class="preview-cards" type="submit">Generate Preview Cards</button>
+    <p class="quiet">Preview only. No API, account connection, upload, or publishing occurs.</p>
+  </form>
+</section>"""
+    else:
+        platforms = preview_manifest.get("platforms", {})
+        if not isinstance(platforms, dict):
+            platforms = {}
+        links = []
+        for platform in ("youtube_shorts", "tiktok", "instagram_reels"):
+            details = platforms.get(platform, {})
+            if not isinstance(details, dict):
+                continue
+            filename = str(details.get("preview_html", ""))
+            if filename:
+                label = platform.replace("_", " ").title()
+                links.append(f'<a class="preview-link" href="/previews/{_url_job_id(job.job_id)}/{quote(filename, safe="")}" target="_blank" rel="noopener">Open {label} Preview</a>')
+        links.append(f'<a class="preview-link" href="/previews/{_url_job_id(job.job_id)}/PREVIEW_MANIFEST.json" target="_blank" rel="noopener">Open Preview Manifest</a>')
+        publisher_preview_panel = f"""
+<section class="panel publisher-preview-panel">
+  <div class="manual-only">MANUAL REVIEW ONLY - NOT PUBLISHED</div>
+  <div class="panel-heading"><h2>Publisher preview cards</h2><span>Ready for manual review</span></div>
+  <div class="preview-card-links">{''.join(links)}</div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/preview-cards">
+    <button class="preview-cards" type="submit">Refresh Preview Cards</button>
+    <p class="quiet">Static local previews only. Human upload remains required.</p>
+  </form>
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -454,6 +492,7 @@ def render_job_detail(
 {revision_panel}
 {export_panel}
 {upload_kit_panel}
+{publisher_preview_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>

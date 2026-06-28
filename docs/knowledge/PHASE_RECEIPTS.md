@@ -416,3 +416,39 @@ Evidence:
   `--host 127.0.0.1`
 - No posting, OAuth, account-connect, timer, cloud, platform API, scraping,
   real-user recording, external database, or Phase 4B behavior was added
+
+## Phase 4B — Publisher-Specific Preview Cards
+
+Status: complete
+
+Commit:
+`Add Phase 4B publisher preview cards`
+
+Implemented:
+- `preview_cards.py` local CLI for approved all-platform manual upload kits
+- Strict approved export, final media, upload-kit, per-platform metadata, and
+  five-flag safety validation before rendering
+- Static escaped HTML and copy-friendly text cards for YouTube Shorts, TikTok,
+  and Instagram Reels
+- Offline advisory title/caption/description/hashtag rules labeled
+  `local_advisory_warning`
+- Deterministic preview manifest with source paths, platform files, warnings,
+  manual-review status, and all safety flags
+- Atomic local preview-directory replacement with path containment checks
+- Mission Control preview generation, status/links, allowlisted file serving,
+  nosniff headers, and restrictive local content security policy
+
+Evidence:
+- Baseline `pytest -q`: 163 passed
+- Focused Phase 4B tests: 9 passed
+- Final `pytest -q`: 172 passed in 82.15s
+- Exact first-win command passed for approved job
+  `phase3-audit-original-re054436d34`
+- Seven required preview files were generated and inspected
+- Manifest recorded all three platforms ready and all five safety flags
+- HTML/text scans found no remote script, URL, button, tracker, or posting action
+- Script-tag content was escaped in unit and Mission Control HTTP tests
+- Mission Control showed all platform/manifest links and served preview HTML
+- Unsafe flags, missing kits, and non-approved exports were refused
+- No platform API, OAuth, browser automation, upload, cloud, scraping,
+  real-user recording, external database, paid dependency, or Phase 4C work was added

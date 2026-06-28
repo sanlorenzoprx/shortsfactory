@@ -2,19 +2,20 @@
 
 ## Current status
 
-Phase 4A is complete locally: one terminal launcher exposes the existing local
-operator workflows, performs health checks, and starts Mission Control only on
-localhost. It adds no publishing, platform, cloud, or background capability.
+Phase 4B is complete locally: approved manual-upload kits can produce static,
+escaped, publisher-specific HTML/text review cards from sealed local artifacts.
+Preview generation adds no upload, platform, account, or publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-ca13c8e Add Phase 3G audit report and demo dataset
+c545567 Add Phase 4A local desktop launcher
 ```
 
 ## Last known commit log
 
 ```txt
+c545567 Add Phase 4A local desktop launcher
 ca13c8e Add Phase 3G audit report and demo dataset
 49b012d Fix Mission Control revision route
 8c5bec4 Add Phase 3F local template editor
@@ -37,7 +38,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-163 passed in 96.84s
+172 passed in 82.15s
 ```
 
 ## Known working capabilities
@@ -76,6 +77,9 @@ pytest -q
 - Space-safe local launcher menu and non-interactive operator shortcuts
 - Local health report for dependencies, roots, templates, Git safety, and CLIs
 - Localhost-only Mission Control launch command
+- Static local YouTube Shorts, TikTok, and Instagram Reels preview cards
+- Preview provenance/safety refusal and offline advisory platform checks
+- Mission Control preview generation, links, and allowlisted static serving
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -105,9 +109,11 @@ pytest -q
   lightweight Markdown audit report is committed.
 - The launcher runs child scripts with list arguments, `shell=False`, absolute
   paths, and no timers or hidden background scheduling.
+- Preview cards live under ignored `exports/upload_kits/`; HTML is escaped and
+  contains no remote scripts, styles, tracking, account, upload, or post action.
 
 ## Current risk
 
-Phase 4A adds operator ergonomics only. Do not begin Phase 4B or add packaging,
-browser login automation, upload clients, remote services, or live publisher
-integrations without explicit approval.
+Phase 4B ends at local publisher preview/review. Do not begin Phase 4C or add
+compliance automation, result tracking, packaging, upload clients, remote
+services, or live publisher integrations without explicit approval.

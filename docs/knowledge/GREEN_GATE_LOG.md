@@ -352,3 +352,29 @@ Commands/evidence:
 
 Notes:
 Phase 4A ends at local operator ergonomics. Phase 4B was not started.
+
+## Phase 4B — Publisher-Specific Preview Cards
+
+Status: passed
+
+Commit:
+`Add Phase 4B publisher preview cards`
+
+Commands/evidence:
+- Baseline `pytest -q`: 163 passed
+- Focused preview/Mission Control tests: 9 passed
+- Final `pytest -q`: 172 passed in 82.15s
+- Preview CLI help and exact approved-job command passed
+- Required HTML/text cards and `PREVIEW_MANIFEST.json` were inspected
+- All three platform statuses were ready
+- All five safety flags matched manual-only/not-published policy
+- Offline advisory warnings passed for YouTube #shorts, TikTok hashtags, and
+  Instagram hashtag count
+- Unsafe upload-kit flags and unapproved/missing sources were refused
+- Static HTML escaped injected script tags and contained no remote resources
+- Mission Control generated, linked, and served previews on localhost
+- Scope scan found no posting, platform API, OAuth, browser automation, upload,
+  cloud, scraping, real-user recording, database, or Phase 4C implementation
+
+Notes:
+Phase 4B ends at static local preview/review. Phase 4C was not started.

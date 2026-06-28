@@ -186,3 +186,15 @@ safely.
 Reason:
 The system now has many local commands. A launcher reduces operator error
 without weakening safety gates.
+
+## D017 — Preview before publishing
+
+Status: accepted
+
+Decision:
+Shorts Factory must generate local publisher-specific preview cards before any
+future live publishing work is considered.
+
+Reason:
+Manual visual review reduces mistakes and keeps the platform boundary
+human-controlled.

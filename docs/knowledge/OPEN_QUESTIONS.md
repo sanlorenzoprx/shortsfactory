@@ -68,6 +68,13 @@ operating system without adding publishing or deployment. Do not broaden Phase
 ## Q012 — What should Phase 4B be?
 
 Current answer:
-Not decided. Do not start one-click packaging, publisher preview cards,
-compliance checks, analytics, demo packaging, or deployment work without an
+Complete: Phase 4B added static local publisher-specific preview cards backed by
+approved exports and manual upload kits. Cards remain review-only and cannot
+post, upload, authenticate, or call a platform API.
+
+## Q013 — What should Phase 4C be?
+
+Current answer:
+Not decided. Do not start compliance automation, analytics/learning ledgers,
+Windows packaging, packaged demo mode, or manual-result tracking without an
 approved bounded handoff.

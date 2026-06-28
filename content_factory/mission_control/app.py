@@ -23,6 +23,8 @@ from content_factory.upload_kits.kit_builder import (
     build_upload_kit,
     load_upload_kit_preview,
 )
+from content_factory.previews import PreviewCardError, generate_preview_cards, load_preview_manifest
+from content_factory.previews.preview_store import MANIFEST_NAME as PREVIEW_MANIFEST_NAME, preview_directory
 from content_factory.templates import TemplateRenderError, TemplateStore, TemplateStoreError, render_template, validate_template_json
 
 from .approvals import APPROVAL_STATES, ApprovalStore
@@ -38,6 +40,8 @@ REVISION_TASK_ROUTE = re.compile(r"^/jobs/([^/]+)/revision-task$")
 RUN_REVISION_ROUTE = re.compile(r"^/jobs/([^/]+)/run-revision$")
 QUALITY_ROUTE = re.compile(r"^/jobs/([^/]+)/score$")
 UPLOAD_KIT_ROUTE = re.compile(r"^/jobs/([^/]+)/upload-kit$")
+PREVIEW_CARDS_ROUTE = re.compile(r"^/jobs/([^/]+)/preview-cards$")
+PREVIEW_FILE_ROUTE = re.compile(r"^/previews/([^/]+)/([^/]+)$")
 TEMPLATE_ROUTE = re.compile(r"^/templates/([^/]+)$")
 TEMPLATE_ACTION_ROUTE = re.compile(r"^/templates/([^/]+)/(validate|preview|save|restore)$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
@@ -62,7 +66,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
     template_store = TemplateStore(template_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/3F"
+        server_version = "ShortsFactoryMissionControl/4B"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -119,7 +123,11 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     return
                 try:
                     upload_kit_preview = load_upload_kit_preview(export_root, job.job_id)
+                    preview_manifest = load_preview_manifest(export_root, job.job_id)
                 except UploadKitError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                except PreviewCardError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
                 self._html(
@@ -132,7 +140,15 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         revision_manifest,
                         quality_report,
                         upload_kit_preview,
+                        preview_manifest,
                     ),
+                )
+                return
+            preview_file_match = PREVIEW_FILE_ROUTE.fullmatch(path)
+            if preview_file_match:
+                self._preview_file(
+                    unquote(preview_file_match.group(1)),
+                    unquote(preview_file_match.group(2)),
                 )
                 return
             artifact_match = ARTIFACT_ROUTE.fullmatch(path)
@@ -157,6 +173,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     run_revision_match = RUN_REVISION_ROUTE.fullmatch(path)
                     quality_match = QUALITY_ROUTE.fullmatch(path)
                     upload_kit_match = UPLOAD_KIT_ROUTE.fullmatch(path)
+                    preview_cards_match = PREVIEW_CARDS_ROUTE.fullmatch(path)
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
@@ -165,6 +182,8 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         self._score_job(unquote(quality_match.group(1)))
                     elif upload_kit_match:
                         self._build_upload_kit(unquote(upload_kit_match.group(1)))
+                    elif preview_cards_match:
+                        self._generate_preview_cards(unquote(preview_cards_match.group(1)))
                     else:
                         self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
@@ -253,6 +272,54 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
             self._redirect_to_job(job.job_id)
+
+        def _generate_preview_cards(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                generate_preview_cards(job.job_id, export_root)
+            except (PreviewCardError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _preview_file(self, job_id: str, filename: str) -> None:
+            try:
+                manifest = load_preview_manifest(export_root, job_id)
+                if manifest is None:
+                    raise PreviewCardError("preview manifest is missing")
+                allowed = {PREVIEW_MANIFEST_NAME}
+                platforms = manifest.get("platforms", {})
+                if isinstance(platforms, dict):
+                    for platform in platforms.values():
+                        if isinstance(platform, dict):
+                            allowed.update(
+                                str(platform.get(key, ""))
+                                for key in ("preview_html", "preview_text")
+                            )
+                if filename not in allowed or Path(filename).name != filename:
+                    raise PreviewCardError("preview file is not allowlisted")
+                path = preview_directory(export_root, job_id) / filename
+                if not path.is_file() or not is_within(path, export_root):
+                    raise PreviewCardError("preview file is missing")
+                data = path.read_bytes()
+            except (PreviewCardError, OSError) as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            content_type = "text/html; charset=utf-8" if path.suffix == ".html" else "application/json; charset=utf-8" if path.suffix == ".json" else "text/plain; charset=utf-8"
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'")
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                self.close_connection = True
 
         def _template_action(self, template_id: str, action: str) -> None:
             try:

@@ -410,6 +410,34 @@ The launcher has no publishing, account connection, OAuth, cloud upload,
 background scheduling, or platform-posting action. Manual upload kits remain
 manual and Mission Control remains bound to localhost by default.
 
+## Phase 4B: publisher-specific preview cards
+
+Generate static local previews from an existing approved export/manual upload
+kit:
+
+```powershell
+python preview_cards.py --job-id <approved_job_id> --export-root exports
+python preview_cards.py --help
+```
+
+The command writes one escaped HTML card and one copy-friendly text preview for
+YouTube Shorts, TikTok, and Instagram Reels, plus `PREVIEW_MANIFEST.json`, under:
+
+```txt
+exports/upload_kits/<job_id>/previews/
+```
+
+Each card shows the local video/thumbnail paths, title or caption, description
+when supported, hashtags, checklist, character counts, local advisory warnings,
+and all five manual-only safety flags. Advisory limits are offline constants,
+not claims about current platform API validation.
+
+Mission Control shows **Generate Preview Cards** after an approved manual upload
+kit exists, then exposes local links for each platform card and manifest. All
+user-controlled text is HTML-escaped; cards contain no remote JavaScript, CSS,
+CDN, tracking, posting action, account connection, upload automation, or live
+publishing capability.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
