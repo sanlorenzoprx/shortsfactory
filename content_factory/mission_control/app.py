@@ -12,6 +12,8 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from content_factory.exporting.bundle_exporter import BundleExportError, export_approved_bundle
 from content_factory.exporting.manifest import read_export_manifest
+from content_factory.quality.quality_scorer import QualityScoringError, score_job
+from content_factory.quality.quality_store import QualityStore, QualityStoreError
 from content_factory.revisions.revision_manifest import read_revision_manifest
 from content_factory.revisions.revision_queue import RevisionQueue, RevisionTaskError
 from content_factory.revisions.revision_runner import RevisionRunError, run_revision
@@ -27,6 +29,7 @@ APPROVAL_ROUTE = re.compile(r"^/jobs/([^/]+)/approval$")
 EXPORT_ROUTE = re.compile(r"^/jobs/([^/]+)/export$")
 REVISION_TASK_ROUTE = re.compile(r"^/jobs/([^/]+)/revision-task$")
 RUN_REVISION_ROUTE = re.compile(r"^/jobs/([^/]+)/run-revision$")
+QUALITY_ROUTE = re.compile(r"^/jobs/([^/]+)/score$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
 STATIC_ROOT = Path(__file__).with_name("static").resolve()
 
@@ -34,16 +37,22 @@ STATIC_ROOT = Path(__file__).with_name("static").resolve()
 def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequestHandler]:
     approvals = ApprovalStore(output_root)
     revisions = RevisionQueue(output_root)
+    quality = QualityStore(output_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/3C"
+        server_version = "ShortsFactoryMissionControl/3D"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
             if path == "/":
                 jobs = scan_jobs(output_root)
                 states = {job.job_id: approvals.read(job.job_id) for job in jobs}
-                self._html(HTTPStatus.OK, render_index(jobs, states))
+                try:
+                    reports = {job.job_id: quality.read(job.job_id) for job in jobs}
+                except QualityStoreError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                self._html(HTTPStatus.OK, render_index(jobs, states, reports))
                 return
             if path == "/static/mission_control.css":
                 self._static_css()
@@ -64,6 +73,11 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 revision_manifest = read_revision_manifest(
                     job.artifacts.get("REVISION_MANIFEST.json")
                 )
+                try:
+                    quality_report = quality.read(job.job_id)
+                except QualityStoreError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
                 self._html(
                     HTTPStatus.OK,
                     render_job_detail(
@@ -72,6 +86,7 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                         export_manifest,
                         revision_task,
                         revision_manifest,
+                        quality_report,
                     ),
                 )
                 return
@@ -91,10 +106,13 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 else:
                     revision_task_match = REVISION_TASK_ROUTE.fullmatch(path)
                     run_revision_match = RUN_REVISION_ROUTE.fullmatch(path)
+                    quality_match = QUALITY_ROUTE.fullmatch(path)
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
                         self._run_revision(unquote(run_revision_match.group(1)))
+                    elif quality_match:
+                        self._score_job(unquote(quality_match.group(1)))
                     else:
                         self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
@@ -154,6 +172,18 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
             try:
                 run_revision(job.job_id, output_root)
             except (RevisionRunError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _score_job(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                score_job(job.job_id, output_root)
+            except (QualityScoringError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
             self._redirect_to_job(job.job_id)

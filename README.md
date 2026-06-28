@@ -271,6 +271,31 @@ never carries over: review and approve the revised job separately before using
 the Phase 3B export action. Revision manifests always state that reapproval is
 required, publishing has not occurred, and live publishing is disabled.
 
+## Phase 3D: deterministic local quality scoring
+
+Score any receipt-backed job with local rules only:
+
+```powershell
+python score_job.py --job-id <job_id> --output-root output
+python score_job.py --job-id <job_id> --output-root output --json
+```
+
+The report is written to `output/quality/<job_id>.json`. Mission Control also
+provides **Score Job** and **Re-score Job** actions, shows score/status on the
+job index, and displays nine category scores, issues, suggested fixes,
+recommended action, approval readiness, and export readiness on job detail.
+
+Scores are deterministic and advisory:
+
+- `pass`: score 80 or higher with no error issue
+- `warn`: score 60–79 with no error issue
+- `fail`: score below 60 or any error issue
+
+A quality pass means ready for human consideration—not approved. Scoring never
+changes approval state, creates an export, or publishes anything. Phase 3B
+still requires an explicit approval, and Phase 3C revisions still require
+their own separate approval.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

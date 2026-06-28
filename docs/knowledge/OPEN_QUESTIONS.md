@@ -28,13 +28,19 @@ No by default. Keep generated outputs untracked unless promoted to small fixture
 ## Q006 — What should Phase 3 be?
 
 Current answer:
-Phase 3A through 3C are complete: local Mission Control, approval-gated export
-bundles, and the human revision queue. Do not extend Phase 3 without a bounded
-handoff.
+Phase 3A through 3D are complete: local Mission Control, approval-gated export
+bundles, the human revision queue, and advisory quality scoring. Do not extend
+Phase 3 without a bounded handoff.
 
 ## Q007 — What should Phase 3D be?
 
 Current answer:
-Not decided. Possible directions are quality scoring, local prompt/template
-editing, a manual upload checklist, publisher-specific export formatting, or an
-approved-bundle comparison view. Do not start one without explicit approval.
+Complete: Phase 3D added deterministic local quality scoring and an advisory
+Mission Control dashboard. Scores never approve or export automatically.
+
+## Q008 — What should Phase 3E be?
+
+Current answer:
+Not decided. Possible directions are a local prompt/template editor, manual
+upload checklist, publisher-specific export formatting, approved-bundle
+comparison, or a learning ledger. Do not start one without explicit approval.

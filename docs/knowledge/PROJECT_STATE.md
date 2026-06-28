@@ -2,19 +2,20 @@
 
 ## Current status
 
-Phase 3C is complete locally: jobs can enter a human revision queue, generate a
-deterministic revised job linked to the untouched original, and require a new
-approval before export. No live publishing exists.
+Phase 3D is complete locally: every receipt-backed job can receive a
+deterministic advisory quality report with category scores, issues, fixes, and
+approval/export readiness. Scoring never changes workflow state.
 
 ## Last known remote HEAD
 
 ```txt
-5187209 Add Phase 3B approval-gated export bundles
+47cd02b Add Phase 3C human revision queue
 ```
 
 ## Last known commit log
 
 ```txt
+47cd02b Add Phase 3C human revision queue
 5187209 Add Phase 3B approval-gated export bundles
 866bdf6 Add Phase 3A local mission control dashboard
 d9ac9d7 Clean generated files and ignore runtime artifacts
@@ -31,7 +32,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-87 passed in 48.84s
+103 passed in 46.83s
 ```
 
 ## Known working capabilities
@@ -51,6 +52,9 @@ pytest -q
 - Human revision tasks with queued, complete, and failed local states
 - Deterministic revised jobs with immutable source lineage
 - Mandatory separate approval for every revised job
+- Deterministic nine-category local quality scoring
+- Mission Control score/status, issues, fixes, and readiness dashboard
+- Advisory quality gates that cannot approve or export automatically
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -69,9 +73,10 @@ pytest -q
   are ignored by Git.
 - Revision tasks and revised job outputs remain local under `output/` and are
   ignored by Git.
+- Quality reports remain local under `output/quality/` and are ignored by Git.
 
 ## Current risk
 
-The Phase 3C rules are intentionally narrow and not a creative rewrite engine.
-Do not begin Phase 3D or add automated upload/live publisher integration
-without explicit user approval.
+Quality reports are advisory snapshots and can become stale after a human
+approval change; re-score when workflow state changes. Do not begin Phase 3E
+or add automated upload/live publisher integration without explicit approval.

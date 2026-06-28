@@ -190,3 +190,31 @@ Commands/evidence:
 
 Notes:
 Phase 3C ends at the local human revision and reapproval loop. Phase 3D was not started.
+
+## Phase 3D — Deterministic Local Quality Scoring Dashboard
+
+Status: passed
+
+Commit:
+`Add Phase 3D quality scoring dashboard`
+
+Commands/evidence:
+- Baseline `pytest -q`: 87 passed
+- Quality store tests: 6 passed
+- Quality scorer tests: 8 passed
+- Mission Control quality tests: 2 passed
+- Final `pytest -q`: 103 passed
+- `python score_job.py --help`: passed
+- `python mission_control.py --help`: passed
+- `python export_bundle.py --help`: passed
+- `python revise_job.py --help`: passed
+- Exact scoring command wrote `output/quality/<job_id>.json`
+- Mission Control index/detail and re-score action passed against real artifacts
+- Reports contained all nine categories and both publishing safety fields
+- Advisory score respected needs-revision and separate-approval workflow states
+- Protected job, approval, and export files remained byte-identical
+- Quality reports were ignored by Git
+- Scope scan found no platform, cloud, paid API, LLM, scraping, or database integration
+
+Notes:
+Phase 3D ends at advisory local scoring. Phase 3E was not started.

@@ -13,10 +13,11 @@
 - Phase 3A local Mission Control review dashboard
 - Phase 3B approval-gated local export bundles
 - Phase 3C human revision queue
+- Phase 3D deterministic local quality scoring dashboard
 
 ## Current checkpoint
 
-Phase 3C green gate complete. Stop before Phase 3D.
+Phase 3D green gate complete. Stop before Phase 3E.
 
 ## Recommended next options
 
@@ -49,4 +50,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 3D quality scoring, prompt editing, upload checklists, or bundle comparison
+- Phase 3E prompt editing, upload checklists, publisher formatting, or bundle comparison

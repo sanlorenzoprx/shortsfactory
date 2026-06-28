@@ -43,7 +43,12 @@ def _state_badge(state: str) -> str:
     return f'<span class="state state-{_escape(state)}">{_escape(label)}</span>'
 
 
-def render_index(jobs: list[JobRecord], approvals: dict[str, dict[str, object]]) -> str:
+def render_index(
+    jobs: list[JobRecord],
+    approvals: dict[str, dict[str, object]],
+    quality_reports: dict[str, dict[str, object] | None] | None = None,
+) -> str:
+    quality_reports = quality_reports or {}
     rows = []
     for job in jobs:
         approval = approvals.get(job.job_id, {"state": "pending"})
@@ -53,10 +58,17 @@ def render_index(jobs: list[JobRecord], approvals: dict[str, dict[str, object]])
             if job.warning_count
             else '<span class="quiet">0</span>'
         )
+        quality = quality_reports.get(job.job_id)
+        quality_cell = (
+            f'<span class="quality-badge quality-{_escape(quality.get("status", "warn"))}">{_escape(quality.get("overall_score", "—"))} · {_escape(quality.get("status", "unknown"))}</span>'
+            if quality is not None
+            else '<span class="quiet">Not scored</span>'
+        )
         rows.append(
             f"""<tr>
   <td><a class="job-link" href="/jobs/{_url_job_id(job.job_id)}">{_escape(job.job_id)}</a></td>
   <td>{_state_badge(state)}</td>
+  <td>{quality_cell}</td>
   <td>{_escape(job.status)}</td>
   <td>{_escape(job.locale)}</td>
   <td>{_escape(job.mode)}</td>
@@ -67,7 +79,7 @@ def render_index(jobs: list[JobRecord], approvals: dict[str, dict[str, object]])
     if rows:
         table_body = "\n".join(rows)
     else:
-        table_body = '<tr><td colspan="7" class="empty">No receipt-backed jobs found.</td></tr>'
+        table_body = '<tr><td colspan="8" class="empty">No receipt-backed jobs found.</td></tr>'
     body = f"""
 <section class="hero">
   <p class="eyebrow">Human review gate</p>
@@ -78,7 +90,7 @@ def render_index(jobs: list[JobRecord], approvals: dict[str, dict[str, object]])
   <div class="panel-heading"><h2>Review queue</h2><span>{len(jobs)} jobs</span></div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Job</th><th>Approval</th><th>Status</th><th>Locale</th><th>Mode</th><th>Created</th><th>Warnings</th></tr></thead>
+      <thead><tr><th>Job</th><th>Approval</th><th>Quality</th><th>Status</th><th>Locale</th><th>Mode</th><th>Created</th><th>Warnings</th></tr></thead>
       <tbody>{table_body}</tbody>
     </table>
   </div>
@@ -116,6 +128,7 @@ def render_job_detail(
     export_manifest: dict[str, object] | None = None,
     revision_task: dict[str, object] | None = None,
     revision_manifest: dict[str, object] | None = None,
+    quality_report: dict[str, object] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -233,6 +246,56 @@ def render_job_detail(
   {task_details}
   {run_action}
 </section>"""
+    if quality_report is None:
+        quality_panel = f"""
+<section class="panel quality-panel">
+  <div class="panel-heading"><h2>Quality score</h2><span>Not scored</span></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/score">
+    <p>Run deterministic local checks before approval, revision, or export.</p>
+    <button class="score" type="submit">Score Job</button>
+    <p class="quiet">Scoring is advisory and never changes approval or export state.</p>
+  </form>
+</section>"""
+    else:
+        quality_status = str(quality_report.get("status", "unknown"))
+        overall_score = quality_report.get("overall_score", "—")
+        categories = quality_report.get("category_scores", {})
+        if not isinstance(categories, dict):
+            categories = {}
+        category_rows = "".join(
+            f"<tr><th>{_escape(name.replace('_', ' ').title())}</th><td>{_escape(score)}</td></tr>"
+            for name, score in categories.items()
+        )
+        quality_issues = quality_report.get("issues", [])
+        if not isinstance(quality_issues, list):
+            quality_issues = []
+        issue_rows = []
+        for quality_issue in quality_issues:
+            if not isinstance(quality_issue, dict):
+                continue
+            issue_rows.append(
+                f'<li class="quality-issue issue-{_escape(quality_issue.get("severity", "warning"))}"><strong>{_escape(quality_issue.get("category", "quality"))}: {_escape(quality_issue.get("message", "Issue detected."))}</strong><span>Suggested fix: {_escape(quality_issue.get("suggested_fix", "Inspect this job."))}</span></li>'
+            )
+        issues_html = "".join(issue_rows) or '<li class="quiet">No quality issues detected.</li>'
+        approval_ready = "Yes — ready for human approval" if quality_report.get("approval_ready") is True else "No"
+        export_ready = "Yes — approval gate satisfied" if quality_report.get("export_ready") is True else "No"
+        quality_panel = f"""
+<section class="panel quality-panel">
+  <div class="panel-heading"><h2>Quality score</h2><span class="quality-badge quality-{_escape(quality_status)}">{_escape(overall_score)} · {_escape(quality_status)}</span></div>
+  <div class="quality-summary">
+    <div><span>Approval ready</span><strong>{_escape(approval_ready)}</strong></div>
+    <div><span>Export ready</span><strong>{_escape(export_ready)}</strong></div>
+    <div><span>Recommended action</span><strong>{_escape(quality_report.get("recommended_action", "inspect"))}</strong></div>
+  </div>
+  <div class="quality-grid">
+    <div><h3>Category scores</h3><table><tbody>{category_rows}</tbody></table></div>
+    <div><h3>Issues and suggested fixes</h3><ul class="quality-issues">{issues_html}</ul></div>
+  </div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/score">
+    <button class="score" type="submit">Re-score Job</button>
+    <p class="quiet">Quality pass does not approve or export this job.</p>
+  </form>
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -250,6 +313,7 @@ def render_job_detail(
   <article class="panel media-panel"><div class="panel-heading"><h2>Video</h2><span>{_escape(video_name or "missing")}</span></div>{video}</article>
   <article class="panel media-panel"><div class="panel-heading"><h2>Thumbnail</h2></div>{thumbnail}</article>
 </section>
+{quality_panel}
 <section class="panel approval-panel">
   <div class="panel-heading"><h2>Approval</h2><span>Updated: {updated}</span></div>
   <form method="post" action="/jobs/{_url_job_id(job.job_id)}/approval">

@@ -218,3 +218,35 @@ Evidence:
 - Separate approval allowed export, whose manifest remained not published
 - Revision tasks, revised jobs, and exports were confirmed ignored by Git
 - No LLM, TTS, Playwright, platform API, upload, scraping, or publishing was added
+
+## Phase 3D — Deterministic Local Quality Scoring Dashboard
+
+Status: complete
+
+Commit:
+`Add Phase 3D quality scoring dashboard`
+
+Implemented:
+- `score_job.py` local scoring CLI and optional JSON output
+- Atomic reports under `output/quality/<job_id>.json`
+- Nine deterministic weighted categories: hook, clarity, CTA, captions, media,
+  audio, localization, receipt, and publisher package
+- Pass/warn/fail thresholds with actionable issue and suggested-fix records
+- Approval/export readiness derived without mutating either workflow
+- Mandatory not-published and live-publishing-disabled report fields
+- Mission Control score/re-score POST, index status, category scores, issues,
+  fixes, recommended action, and readiness display
+- Path containment, safe report validation, and HTML escaping
+
+Evidence:
+- Baseline `pytest -q`: 87 passed
+- Focused Phase 3D tests: 16 passed
+- Final `pytest -q`: 103 passed
+- All four required CLI help commands passed
+- Exact score CLI wrote real original and revised quality reports
+- Original job scored 100/pass but respected its needs-revision human state
+- Revised job scored 97/pass and reported export-ready only because separately approved
+- Re-scoring through Mission Control returned 303 and updated the dashboard
+- Approval, export, and job artifact hashes remained unchanged by scoring
+- Generated reports were confirmed ignored by Git
+- No approval, export, revision, platform, cloud, LLM, or publishing action was triggered

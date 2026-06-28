@@ -123,3 +123,15 @@ approval before export.
 Reason:
 A revision can change the actual published message, so the original approval
 cannot safely carry over.
+
+## D012 — Quality score is advisory, not approval
+
+Status: accepted
+
+Decision:
+Quality scoring helps humans review jobs, but it must not approve, export, or
+publish content automatically.
+
+Reason:
+A deterministic score can catch missing artifacts and weak structure, but
+human judgment remains the approval gate.
