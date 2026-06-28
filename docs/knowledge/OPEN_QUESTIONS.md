@@ -61,5 +61,13 @@ ignored demo dataset that prove all nine local workflow steps without publishing
 ## Q011 — What should Phase 4 be?
 
 Current answer:
-Not decided. Do not start desktop packaging, preview cards, compliance checks,
-analytics, cloud planning, or publisher research without explicit approval.
+Phase 4A is complete: the local launcher exposes and verifies the existing
+operating system without adding publishing or deployment. Do not broaden Phase
+4 without explicit approval.
+
+## Q012 — What should Phase 4B be?
+
+Current answer:
+Not decided. Do not start one-click packaging, publisher preview cards,
+compliance checks, analytics, demo packaging, or deployment work without an
+approved bounded handoff.

@@ -2,19 +2,20 @@
 
 ## Current status
 
-Phase 3G is complete locally: one audit command proves and packages the complete
-Phase 3 local operating system as a committed audit report plus an ignored demo
-dataset. The audit adds no product, upload, or publishing capability.
+Phase 4A is complete locally: one terminal launcher exposes the existing local
+operator workflows, performs health checks, and starts Mission Control only on
+localhost. It adds no publishing, platform, cloud, or background capability.
 
 ## Last known remote HEAD
 
 ```txt
-49b012d Fix Mission Control revision route
+ca13c8e Add Phase 3G audit report and demo dataset
 ```
 
 ## Last known commit log
 
 ```txt
+ca13c8e Add Phase 3G audit report and demo dataset
 49b012d Fix Mission Control revision route
 8c5bec4 Add Phase 3F local template editor
 9b938e5 Add Phase 3E manual upload kits
@@ -36,7 +37,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-153 passed in 74.16s
+163 passed in 96.84s
 ```
 
 ## Known working capabilities
@@ -72,6 +73,9 @@ pytest -q
 - One-command Phase 3 local OS audit and demo evidence package
 - Default media manifests without copying large generated media
 - Audit receipt with all nine flow steps and mandatory publishing safety flags
+- Space-safe local launcher menu and non-interactive operator shortcuts
+- Local health report for dependencies, roots, templates, Git safety, and CLIs
+- Localhost-only Mission Control launch command
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -99,9 +103,11 @@ pytest -q
   imports, HTML, network requests, approval, export, or publishing actions.
 - Generated `demo_dataset/` evidence is local and ignored by Git; only the
   lightweight Markdown audit report is committed.
+- The launcher runs child scripts with list arguments, `shell=False`, absolute
+  paths, and no timers or hidden background scheduling.
 
 ## Current risk
 
-Phase 3 is now frozen behind a reproducible audit baseline. Do not begin Phase 4
-or add browser login automation, remote marketplaces, upload clients, or live
-publisher integrations without explicit approval.
+Phase 4A adds operator ergonomics only. Do not begin Phase 4B or add packaging,
+browser login automation, upload clients, remote services, or live publisher
+integrations without explicit approval.

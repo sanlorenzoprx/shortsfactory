@@ -325,3 +325,30 @@ Commands/evidence:
 
 Notes:
 Phase 3G freezes the Phase 3 proof baseline. Phase 4 was not started.
+
+## Phase 4A — Local Desktop Launcher
+
+Status: passed
+
+Commit:
+`Add Phase 4A local desktop launcher`
+
+Commands/evidence:
+- Baseline `pytest -q`: 153 passed
+- Focused launcher tests: 10 passed
+- Final `pytest -q`: 163 passed in 96.84s
+- Launcher help and health commands passed
+- Interactive menu showed all required actions and exited cleanly
+- Launcher-driven Phase 3 audit returned pass
+- Health verified ffmpeg, Pillow, templates, roots, Git ignore safety, all CLI
+  files, and all seven core CLI help commands
+- Missing optional `python-dotenv` was accurately reported as a warning
+- Command tests verified list arguments, `shell=False`, absolute paths, repo
+  working directory, and the space-containing Windows repository path
+- Mission Control command explicitly bound to `127.0.0.1`
+- Menu scan found no publishing, OAuth, account-connect, or auto-post action
+- Scope scan found no platform API, browser automation, upload, cloud, scraping,
+  real-user recording, external database, scheduler, or Phase 4B implementation
+
+Notes:
+Phase 4A ends at local operator ergonomics. Phase 4B was not started.

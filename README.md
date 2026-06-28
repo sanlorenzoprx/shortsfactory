@@ -376,6 +376,40 @@ copies are explicitly wanted. The audit never uploads or publishes anything;
 its receipt always records live publishing disabled, no API upload attempt, and
 manual upload only.
 
+## Phase 4A: local desktop launcher
+
+Open the safe terminal launcher from any working directory:
+
+```powershell
+python shorts_factory_launcher.py
+python shorts_factory_launcher.py --help
+python shorts_factory_launcher.py --health
+```
+
+The menu can start Mission Control on `127.0.0.1`, generate mock/API-mode local
+shorts through the existing pipeline, score the latest receipt-backed job, run
+the Phase 3 audit, print the key knowledge-document paths, print the latest
+approved export/manual upload-kit folders, and run system health checks.
+
+Non-interactive shortcuts are also available:
+
+```powershell
+python shorts_factory_launcher.py --start-mission-control
+python shorts_factory_launcher.py --run-audit
+python shorts_factory_launcher.py --generate-mock
+python shorts_factory_launcher.py --generate-api
+```
+
+Health checks verify Python, ffmpeg, required imports, local roots, templates,
+Git ignore safety, expected CLI files, and every core CLI help command. Optional
+dependencies are reported as warnings. All child commands use argument lists,
+`sys.executable`, absolute script paths, `shell=False`, and the repository as
+their working directory, including on Windows paths containing spaces.
+
+The launcher has no publishing, account connection, OAuth, cloud upload,
+background scheduling, or platform-posting action. Manual upload kits remain
+manual and Mission Control remains bound to localhost by default.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

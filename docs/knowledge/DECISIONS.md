@@ -173,3 +173,16 @@ operating system.
 Reason:
 The project is now complex enough that future work needs a reproducible proof
 baseline.
+
+## D016 — Local launcher before deployment
+
+Status: accepted
+
+Decision:
+Before packaging, deployment, or live publishing, Shorts Factory must have a
+local launcher that starts and verifies the existing local operating system
+safely.
+
+Reason:
+The system now has many local commands. A launcher reduces operator error
+without weakening safety gates.

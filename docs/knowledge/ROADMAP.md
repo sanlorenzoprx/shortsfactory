@@ -17,10 +17,11 @@
 - Phase 3E manual upload checklists and publisher-specific export formatting
 - Phase 3F local prompt/template editor
 - Phase 3G Phase 3 audit report and demo dataset
+- Phase 4A local desktop launcher
 
 ## Current checkpoint
 
-Phase 3G green gate complete. Stop before Phase 4.
+Phase 4A green gate complete. Stop before Phase 4B.
 
 ## Recommended next options
 
@@ -53,4 +54,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 4 work of any kind without a bounded approved handoff
+- Phase 4B packaging, preview, compliance, analytics, or deployment work

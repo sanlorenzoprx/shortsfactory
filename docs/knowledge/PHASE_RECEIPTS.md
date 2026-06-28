@@ -384,3 +384,35 @@ Evidence:
 - `demo_dataset/` was confirmed ignored by Git
 - No live publishing, platform API, OAuth, cloud upload, scraping, real-user
   recording, external database, paid API, LLM dependency, or Phase 4 work was added
+
+## Phase 4A — Local Desktop Launcher
+
+Status: complete
+
+Commit:
+`Add Phase 4A local desktop launcher`
+
+Implemented:
+- `shorts_factory_launcher.py` interactive menu and non-interactive shortcuts
+- Mission Control start command fixed to `127.0.0.1`
+- Existing mock/API generation, latest-job scoring, and Phase 3 audit commands
+- Knowledge-document and latest export/upload-kit path discovery
+- Local health report for Python, ffmpeg, imports, roots, Git ignore status,
+  templates, CLI files, and seven CLI help commands
+- Safe subprocess list arguments using `sys.executable`, absolute script paths,
+  repository working directory, and `shell=False`
+- Clean EOF, Ctrl+C, missing-job, process-error, and nonzero-exit handling
+
+Evidence:
+- Baseline `pytest -q`: 153 passed
+- Focused Phase 4A tests: 10 passed
+- Final `pytest -q`: 163 passed in 96.84s
+- `python shorts_factory_launcher.py --help`: passed
+- `python shorts_factory_launcher.py --health`: passed with only an optional
+  `python-dotenv` warning
+- Interactive menu rendered all nine required options and exited cleanly
+- Launcher-driven Phase 3 audit passed with all publishing safety flags intact
+- Mission Control command used an absolute path containing spaces and explicit
+  `--host 127.0.0.1`
+- No posting, OAuth, account-connect, timer, cloud, platform API, scraping,
+  real-user recording, external database, or Phase 4B behavior was added
