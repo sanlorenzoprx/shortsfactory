@@ -183,3 +183,38 @@ Evidence:
 - Manifest recorded not published and live publishing disabled
 - Generated export was confirmed ignored by Git
 - No platform API, OAuth, cloud upload, scraping, or live publishing was added
+
+## Phase 3C — Human Revision Queue
+
+Status: complete
+
+Commit:
+`Add Phase 3C human revision queue`
+
+Implemented:
+- Separate local revision tasks under `output/revisions/<job_id>.json`
+- Queued, complete, and failed revision states with attempts and warnings
+- Deterministic hook, CTA, shortening, locale-preservation, and fallback rules
+- New normal revised jobs under `output/jobs/<revised_job_id>/`
+- Regenerated script, captions, thumbnail, and basic local MP4
+- Revision receipt lineage and `REVISION_MANIFEST.json`
+- Mandatory reapproval, not-published, and live-publishing-disabled flags
+- Original artifact preservation and deterministic revised job IDs
+- Minimal Mission Control task/run/status/revised-link/lineage controls
+- Phase 3B export refusal until the revised job is separately approved
+
+Evidence:
+- Baseline `pytest -q`: 74 passed
+- Focused Phase 3C and regression groups: 43 passed
+- Final `pytest -q`: 87 passed
+- All three required CLI help commands passed
+- Mission Control created a real revision task for job `2b600930dc05`
+- Exact revision CLI created `2b600930dc05-r90e9c5450d`
+- All six required revised-job artifacts were present
+- Hash comparison confirmed every original job file was unchanged
+- Revised approval file was absent and read as pending
+- Export refused the revised job before separate approval
+- Mission Control displayed the original-job link and Requires reapproval state
+- Separate approval allowed export, whose manifest remained not published
+- Revision tasks, revised jobs, and exports were confirmed ignored by Git
+- No LLM, TTS, Playwright, platform API, upload, scraping, or publishing was added

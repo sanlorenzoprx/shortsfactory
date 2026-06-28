@@ -53,6 +53,7 @@ button.approve { color: var(--acid); } button.reject { color: var(--red); } butt
 button.export { color: var(--cyan); }
 button:hover { background: currentColor; box-shadow: inset 0 0 0 99px rgba(0,0,0,.78); }
 .export-content { padding: 18px 20px; }.export-content p { margin: 0 0 8px; }.export-content code { color: var(--cyan); word-break: break-all; }
+.revision-content { padding: 18px 20px; }.revision-content p { margin: 0 0 8px; }.revision-warning { color: var(--amber); font-weight: 800; }.reapproval-badge { color: var(--amber) !important; }.subheading { border-top: 1px solid var(--line); }.subheading h3 { margin: 0; font: 700 15px/1.2 system-ui, sans-serif; }
 .warnings { margin: 0; padding: 20px 40px; }.warnings li { margin: 5px 0; color: var(--amber); }
 pre { max-height: 520px; overflow: auto; margin: 0; padding: 20px; white-space: pre-wrap; word-break: break-word; color: #dce6df; background: rgba(4,6,7,.45); }
 .dry-run { display: inline-block; margin: 20px 20px 0; background: var(--amber); }

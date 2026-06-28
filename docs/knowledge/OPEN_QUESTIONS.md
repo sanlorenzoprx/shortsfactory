@@ -28,8 +28,13 @@ No by default. Keep generated outputs untracked unless promoted to small fixture
 ## Q006 — What should Phase 3 be?
 
 Current answer:
-Not decided. Best candidates are:
-- dashboard / mission control
-- publisher approval workflow
-- vertical content templates
-- production packaging
+Phase 3A through 3C are complete: local Mission Control, approval-gated export
+bundles, and the human revision queue. Do not extend Phase 3 without a bounded
+handoff.
+
+## Q007 — What should Phase 3D be?
+
+Current answer:
+Not decided. Possible directions are quality scoring, local prompt/template
+editing, a manual upload checklist, publisher-specific export formatting, or an
+approved-bundle comparison view. Do not start one without explicit approval.

@@ -12,10 +12,11 @@
 - Phase 2G dry-run publisher packages
 - Phase 3A local Mission Control review dashboard
 - Phase 3B approval-gated local export bundles
+- Phase 3C human revision queue
 
 ## Current checkpoint
 
-Phase 3B green gate complete. Stop before Phase 3C.
+Phase 3C green gate complete. Stop before Phase 3D.
 
 ## Recommended next options
 
@@ -48,4 +49,4 @@ Make installation, setup, and one-command local running easier.
 - platform API posting
 - monetization/payment workflow
 - public multi-user SaaS
-- Phase 3C revision queues, scoring, prompt editing, or upload formatting
+- Phase 3D quality scoring, prompt editing, upload checklists, or bundle comparison

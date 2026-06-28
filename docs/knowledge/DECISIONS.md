@@ -111,3 +111,15 @@ any live publisher integrations.
 Reason:
 A human must approve the generated content and inspect the export bundle before
 anything can be uploaded manually or published later.
+
+## D011 — Revisions require reapproval
+
+Status: accepted
+
+Decision:
+Any revised job must be treated as a new review object and must require
+approval before export.
+
+Reason:
+A revision can change the actual published message, so the original approval
+cannot safely carry over.

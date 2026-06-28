@@ -162,3 +162,31 @@ Commands/evidence:
 
 Notes:
 Phase 3B ends at approval-gated local packaging. Phase 3C was not started.
+
+## Phase 3C — Human Revision Queue
+
+Status: passed
+
+Commit:
+`Add Phase 3C human revision queue`
+
+Commands/evidence:
+- Baseline `pytest -q`: 74 passed
+- Revision queue tests: 7 passed
+- Revision runner tests: 6 passed
+- Mission Control/export regression group: 30 passed
+- Final `pytest -q`: 87 passed
+- `python revise_job.py --help`: passed
+- `python mission_control.py --help`: passed
+- `python export_bundle.py --help`: passed
+- Real task creation and exact revision CLI completed
+- Original job hash set remained byte-identical
+- Revised job receipt and manifest linked to the original
+- Revised job began pending with no approval record
+- Preapproval export refusal and post-approval export success were verified
+- Both revision and export manifests explicitly remained not published
+- Generated revision and export artifacts were ignored by Git
+- Scope scan found no platform, cloud, scraping, or external database integration
+
+Notes:
+Phase 3C ends at the local human revision and reapproval loop. Phase 3D was not started.

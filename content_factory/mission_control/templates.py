@@ -114,6 +114,8 @@ def render_job_detail(
     job: JobRecord,
     approval: dict[str, object],
     export_manifest: dict[str, object] | None = None,
+    revision_task: dict[str, object] | None = None,
+    revision_manifest: dict[str, object] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -182,6 +184,55 @@ def render_job_detail(
     <p class="quiet">Local replacement only. Live publishing remains disabled.</p>
   </form>
 </section>"""
+    if revision_manifest is not None:
+        original_id = str(revision_manifest.get("original_job_id", "unknown"))
+        revision_json = _escape(
+            json.dumps(revision_manifest, indent=2, ensure_ascii=False)
+        )
+        revision_panel = f"""
+<section class="panel revision-panel">
+  <div class="panel-heading"><h2>Revision lineage</h2><span class="reapproval-badge">Requires reapproval</span></div>
+  <div class="revision-content"><p>Original job: <a href="/jobs/{_url_job_id(original_id)}">{_escape(original_id)}</a></p><p>This revised job has its own approval state. Original approval does not carry over.</p></div>
+  <pre>{revision_json}</pre>
+</section>"""
+    else:
+        task_note = (
+            str(revision_task.get("revision_note", ""))
+            if revision_task is not None
+            else str(approval.get("notes", ""))
+        )
+        warning = (
+            '<p class="revision-warning">This job is already approved. Creating a revision will require reapproval.</p>'
+            if state == "approved"
+            else ""
+        )
+        task_details = ""
+        run_action = ""
+        if revision_task is not None:
+            task_state = str(revision_task.get("state", "unknown"))
+            task_json = _escape(json.dumps(revision_task, indent=2, ensure_ascii=False))
+            task_details = f'<div class="panel-heading subheading"><h3>Revision task</h3><span>{_escape(task_state)}</span></div><pre>{task_json}</pre>'
+            if task_state in {"revision_queued", "revision_failed"}:
+                run_action = f"""
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/run-revision">
+    <button class="revise" type="submit">Run Local Revision</button>
+    <p class="quiet">Creates a new pending job. The original stays untouched.</p>
+  </form>"""
+            elif task_state == "revision_complete" and revision_task.get("revised_job_id"):
+                revised_id = str(revision_task["revised_job_id"])
+                run_action = f'<div class="revision-content"><p>Revised job: <a href="/jobs/{_url_job_id(revised_id)}">{_escape(revised_id)}</a></p></div>'
+        revision_panel = f"""
+<section class="panel revision-panel">
+  <div class="panel-heading"><h2>Human revision</h2><span>Deterministic local rules</span></div>
+  <div class="revision-content">{warning}<p>Describe the specific change. Creating a task marks this job Needs Revision.</p></div>
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/revision-task">
+    <label for="revision-note">Revision note</label>
+    <textarea id="revision-note" name="revision_note" rows="4" required placeholder="Example: tighten hook and make CTA clearer">{_escape(task_note)}</textarea>
+    <button class="revise" type="submit">Create Revision Task</button>
+  </form>
+  {task_details}
+  {run_action}
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -207,11 +258,12 @@ def render_job_detail(
     <div class="actions">
       <button class="approve" name="state" value="approved">Approve</button>
       <button class="reject" name="state" value="rejected">Reject</button>
-      <button class="revise" name="state" value="needs_revision">Needs Revision</button>
+      <button class="revise" name="state" value="needs_revision">Mark Needs Revision</button>
       <button class="reset" name="state" value="pending">Reset to Pending</button>
     </div>
   </form>
 </section>
+{revision_panel}
 {export_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">

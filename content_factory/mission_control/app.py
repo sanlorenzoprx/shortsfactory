@@ -12,6 +12,9 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from content_factory.exporting.bundle_exporter import BundleExportError, export_approved_bundle
 from content_factory.exporting.manifest import read_export_manifest
+from content_factory.revisions.revision_manifest import read_revision_manifest
+from content_factory.revisions.revision_queue import RevisionQueue, RevisionTaskError
+from content_factory.revisions.revision_runner import RevisionRunError, run_revision
 
 from .approvals import APPROVAL_STATES, ApprovalStore
 from .job_index import find_job, is_within, scan_jobs
@@ -22,15 +25,18 @@ MAX_FORM_BYTES = 64 * 1024
 JOB_ROUTE = re.compile(r"^/jobs/([^/]+)$")
 APPROVAL_ROUTE = re.compile(r"^/jobs/([^/]+)/approval$")
 EXPORT_ROUTE = re.compile(r"^/jobs/([^/]+)/export$")
+REVISION_TASK_ROUTE = re.compile(r"^/jobs/([^/]+)/revision-task$")
+RUN_REVISION_ROUTE = re.compile(r"^/jobs/([^/]+)/run-revision$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
 STATIC_ROOT = Path(__file__).with_name("static").resolve()
 
 
 def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequestHandler]:
     approvals = ApprovalStore(output_root)
+    revisions = RevisionQueue(output_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/3B"
+        server_version = "ShortsFactoryMissionControl/3C"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -50,9 +56,23 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                     self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
                     return
                 export_manifest = read_export_manifest(export_root, job.job_id)
+                try:
+                    revision_task = revisions.read(job.job_id)
+                except RevisionTaskError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                revision_manifest = read_revision_manifest(
+                    job.artifacts.get("REVISION_MANIFEST.json")
+                )
                 self._html(
                     HTTPStatus.OK,
-                    render_job_detail(job, approvals.read(job.job_id), export_manifest),
+                    render_job_detail(
+                        job,
+                        approvals.read(job.job_id),
+                        export_manifest,
+                        revision_task,
+                        revision_manifest,
+                    ),
                 )
                 return
             artifact_match = ARTIFACT_ROUTE.fullmatch(path)
@@ -69,31 +89,30 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 if export_match:
                     self._export(unquote(export_match.group(1)))
                 else:
-                    self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
+                    revision_task_match = REVISION_TASK_ROUTE.fullmatch(path)
+                    run_revision_match = RUN_REVISION_ROUTE.fullmatch(path)
+                    if revision_task_match:
+                        self._create_revision_task(unquote(revision_task_match.group(1)))
+                    elif run_revision_match:
+                        self._run_revision(unquote(run_revision_match.group(1)))
+                    else:
+                        self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
             job_id = unquote(match.group(1))
             job = find_job(output_root, job_id)
             if job is None:
                 self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
                 return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                length = -1
-            if length < 0 or length > MAX_FORM_BYTES:
-                self._html(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, render_error(413, "Review form is too large"))
+            form = self._read_form()
+            if form is None:
                 return
-            form = parse_qs(self.rfile.read(length).decode("utf-8"), keep_blank_values=True)
             state = form.get("state", [""])[0]
             notes = form.get("notes", [""])[0]
             if state not in APPROVAL_STATES:
                 self._html(HTTPStatus.BAD_REQUEST, render_error(400, "Invalid approval state"))
                 return
             approvals.write(job.job_id, state, notes)
-            self.send_response(HTTPStatus.SEE_OTHER)
-            self.send_header("Location", f"/jobs/{job_match_id(job.job_id)}")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
+            self._redirect_to_job(job.job_id)
 
         def _export(self, job_id: str) -> None:
             job = find_job(output_root, job_id)
@@ -107,6 +126,59 @@ def _handler_class(output_root: Path, export_root: Path) -> type[BaseHTTPRequest
                 return
             self.send_response(HTTPStatus.SEE_OTHER)
             self.send_header("Location", f"/jobs/{job_match_id(job.job_id)}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def _create_revision_task(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            form = self._read_form()
+            if form is None:
+                return
+            note = form.get("revision_note", [""])[0]
+            try:
+                revisions.create(job.job_id, note)
+                approvals.write(job.job_id, "needs_revision", note)
+            except (RevisionTaskError, ValueError, OSError) as exc:
+                self._html(HTTPStatus.BAD_REQUEST, render_error(400, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _run_revision(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            try:
+                run_revision(job.job_id, output_root)
+            except (RevisionRunError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
+        def _read_form(self) -> dict[str, list[str]] | None:
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError:
+                length = -1
+            if length < 0 or length > MAX_FORM_BYTES:
+                self._html(
+                    HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                    render_error(413, "Review form is too large"),
+                )
+                return None
+            try:
+                body = self.rfile.read(length).decode("utf-8")
+            except UnicodeDecodeError:
+                self._html(HTTPStatus.BAD_REQUEST, render_error(400, "Invalid form encoding"))
+                return None
+            return parse_qs(body, keep_blank_values=True)
+
+        def _redirect_to_job(self, job_id: str) -> None:
+            self.send_response(HTTPStatus.SEE_OTHER)
+            self.send_header("Location", f"/jobs/{job_match_id(job_id)}")
             self.send_header("Content-Length", "0")
             self.end_headers()
 

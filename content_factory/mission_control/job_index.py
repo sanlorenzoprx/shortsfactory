@@ -23,6 +23,7 @@ ARTIFACT_CANDIDATES: dict[str, tuple[Path, ...]] = {
     "lit_api_response.json": (Path("lit_api_response.json"),),
     "app_recording.mp4": (Path("app_recording.mp4"),),
     "app_recording_final.png": (Path("app_recording_final.png"),),
+    "REVISION_MANIFEST.json": (Path("REVISION_MANIFEST.json"),),
     "publisher_package.json": (
         Path("publisher_package.json"),
         Path("publish") / "publisher_package.json",

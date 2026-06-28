@@ -243,6 +243,34 @@ The manifest always records `publishing_status: not_published` and
 prepared only for human inspection or manual upload; no platform API, OAuth,
 cloud upload, or live publishing is involved.
 
+## Phase 3C: human revision queue
+
+Mission Control can turn a specific human note into a local revision task.
+Open a job, enter the requested change under **Human revision**, and select
+**Create Revision Task**. This marks the source job Needs Revision. Run the task
+from Mission Control or with:
+
+```powershell
+python revise_job.py --job-id <job_id> --output-root output
+```
+
+The CLI can also create or update a task for a job already marked
+`needs_revision`:
+
+```powershell
+python revise_job.py --job-id <job_id> --output-root output --note "tighten hook and make CTA clearer"
+```
+
+Phase 3C applies small deterministic local rules, regenerates the script,
+captions, thumbnail, and basic video, and writes a new normal job under
+`output/jobs/<revised_job_id>/`. Its receipt and `REVISION_MANIFEST.json` link
+back to the untouched original job.
+
+Every revised job starts with its own pending approval. The original approval
+never carries over: review and approve the revised job separately before using
+the Phase 3B export action. Revision manifests always state that reapproval is
+required, publishing has not occurred, and live publishing is disabled.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
