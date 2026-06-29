@@ -2,20 +2,21 @@
 
 ## Current status
 
-Phase 4C is complete locally: approved manual-upload kits can produce a final
-deterministic compliance checklist after preview cards exist, and a human can
-explicitly mark that checklist ready for manual upload without adding any live
-publishing capability.
+Phase 4D is complete locally: ready-for-manual-upload jobs can now record
+manual post-upload results into a local ledger, update local notes and metrics,
+and roll them into a markdown summary without adding any platform integration,
+metric fetching, or live publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-d648e4b Add Phase 4B publisher preview cards
+15235dd Add Phase 4C final compliance checklist
 ```
 
 ## Last known commit log
 
 ```txt
+15235dd Add Phase 4C final compliance checklist
 d648e4b Add Phase 4B publisher preview cards
 c545567 Add Phase 4A local desktop launcher
 ca13c8e Add Phase 3G audit report and demo dataset
@@ -40,7 +41,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-185 passed in 94.09s
+195 passed in 96.74s
 ```
 
 ## Known working capabilities
@@ -87,6 +88,10 @@ pytest -q
 - Explicit local human confirmation gate before manual upload readiness
 - Mission Control compliance generation, open links, readiness status, and
   mark-reviewed action
+- Local manual results ledger entries, ledger index, and markdown summary
+- Deterministic ready-for-manual-upload prerequisite checks before results entry
+- Manual URL, metric, note, template, quality, and compliance context capture
+- Mission Control local results record/update section and summary link
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -120,9 +125,11 @@ pytest -q
   contains no remote scripts, styles, tracking, account, upload, or post action.
 - Compliance checklists live under ignored `exports/upload_kits/<job_id>/compliance/`;
   they remain local Markdown/JSON only and cannot publish or upload.
+- Manual results live under ignored `results_ledger/`; entries and summaries are
+  local operator records only and cannot fetch metrics, upload, or publish.
 
 ## Current risk
 
-Phase 4C ends at final local manual-upload readiness review. Do not begin Phase
-4D or add result tracking, deployment packaging, upload clients, remote
+Phase 4D ends at local manual-results tracking. Do not begin Phase 4E or add
+automatic analytics sync, deployment packaging, upload clients, remote
 services, or live publisher integrations without explicit approval.

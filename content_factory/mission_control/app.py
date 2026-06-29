@@ -34,6 +34,7 @@ from content_factory.upload_kits.kit_builder import (
 )
 from content_factory.previews import PreviewCardError, generate_preview_cards, load_preview_manifest
 from content_factory.previews.preview_store import MANIFEST_NAME as PREVIEW_MANIFEST_NAME, preview_directory
+from content_factory.results import ResultsLedgerError, ResultsLedgerStore
 from content_factory.templates import TemplateRenderError, TemplateStore, TemplateStoreError, render_template, validate_template_json
 
 from .approvals import APPROVAL_STATES, ApprovalStore
@@ -54,6 +55,9 @@ PREVIEW_FILE_ROUTE = re.compile(r"^/previews/([^/]+)/([^/]+)$")
 COMPLIANCE_ROUTE = re.compile(r"^/jobs/([^/]+)/compliance$")
 COMPLIANCE_REVIEW_ROUTE = re.compile(r"^/jobs/([^/]+)/compliance/review$")
 COMPLIANCE_FILE_ROUTE = re.compile(r"^/compliance/([^/]+)/([^/]+)$")
+RESULTS_ROUTE = re.compile(r"^/jobs/([^/]+)/results$")
+RESULTS_SUMMARY_ROUTE = re.compile(r"^/results/summary$")
+RESULTS_ENTRY_ROUTE = re.compile(r"^/results/entries/([^/]+)$")
 TEMPLATE_ROUTE = re.compile(r"^/templates/([^/]+)$")
 TEMPLATE_ACTION_ROUTE = re.compile(r"^/templates/([^/]+)/(validate|preview|save|restore)$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
@@ -71,14 +75,15 @@ TEMPLATE_SAMPLE_CONTEXT = {
 }
 
 
-def _handler_class(output_root: Path, export_root: Path, template_root: Path) -> type[BaseHTTPRequestHandler]:
+def _handler_class(output_root: Path, export_root: Path, template_root: Path, results_root: Path) -> type[BaseHTTPRequestHandler]:
     approvals = ApprovalStore(output_root)
     revisions = RevisionQueue(output_root)
     quality = QualityStore(output_root)
     template_store = TemplateStore(template_root)
+    results = ResultsLedgerStore(results_root, export_root=export_root, output_root=output_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/4C"
+        server_version = "ShortsFactoryMissionControl/4D"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -137,6 +142,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     upload_kit_preview = load_upload_kit_preview(export_root, job.job_id)
                     preview_manifest = load_preview_manifest(export_root, job.job_id)
                     compliance_checklist = load_compliance_checklist(export_root, job.job_id)
+                    results_entries = results.entries_for_job(job.job_id)
                 except UploadKitError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
@@ -144,6 +150,9 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
                 except ComplianceChecklistError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                except ResultsLedgerError as exc:
                     self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                     return
                 self._html(
@@ -158,6 +167,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         upload_kit_preview,
                         preview_manifest,
                         compliance_checklist,
+                        results_entries,
                     ),
                 )
                 return
@@ -174,6 +184,13 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     unquote(compliance_file_match.group(1)),
                     unquote(compliance_file_match.group(2)),
                 )
+                return
+            if RESULTS_SUMMARY_ROUTE.fullmatch(path):
+                self._results_summary()
+                return
+            results_entry_match = RESULTS_ENTRY_ROUTE.fullmatch(path)
+            if results_entry_match:
+                self._results_entry(unquote(results_entry_match.group(1)))
                 return
             artifact_match = ARTIFACT_ROUTE.fullmatch(path)
             if artifact_match:
@@ -200,6 +217,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                     preview_cards_match = PREVIEW_CARDS_ROUTE.fullmatch(path)
                     compliance_match = COMPLIANCE_ROUTE.fullmatch(path)
                     compliance_review_match = COMPLIANCE_REVIEW_ROUTE.fullmatch(path)
+                    results_match = RESULTS_ROUTE.fullmatch(path)
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
@@ -214,6 +232,8 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                         self._generate_compliance_checklist(unquote(compliance_match.group(1)))
                     elif compliance_review_match:
                         self._mark_compliance_reviewed(unquote(compliance_review_match.group(1)))
+                    elif results_match:
+                        self._record_manual_result(unquote(results_match.group(1)))
                     else:
                         self._html(HTTPStatus.NOT_FOUND, render_error(404, "Page not found"))
                 return
@@ -339,6 +359,36 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
                 return
             self._redirect_to_job(job.job_id)
 
+        def _record_manual_result(self, job_id: str) -> None:
+            job = find_job(output_root, job_id)
+            if job is None:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, "Job not found"))
+                return
+            form = self._read_form()
+            if form is None:
+                return
+            metrics = {
+                field: form.get(field, ["0"])[0]
+                for field in ("views", "likes", "comments", "shares", "saves", "leads")
+            }
+            notes = form.get("notes", [""])[0]
+            entry_id = form.get("entry_id", [""])[0].strip()
+            try:
+                if entry_id:
+                    results.update_result(entry_id, metrics=metrics, notes=notes)
+                else:
+                    results.record_result(
+                        job_id=job.job_id,
+                        platform=form.get("platform", [""])[0],
+                        manual_upload_url=form.get("url", [""])[0],
+                        metrics=metrics,
+                        notes=notes,
+                    )
+            except (ResultsLedgerError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self._redirect_to_job(job.job_id)
+
         def _preview_file(self, job_id: str, filename: str) -> None:
             try:
                 manifest = load_preview_manifest(export_root, job_id)
@@ -397,6 +447,49 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path) ->
             )
             self.send_response(HTTPStatus.OK)
             self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+            )
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                self.close_connection = True
+
+        def _results_summary(self) -> None:
+            try:
+                data = results.summary_text().encode("utf-8")
+            except (ResultsLedgerError, OSError) as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header(
+                "Content-Security-Policy",
+                "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+            )
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                self.close_connection = True
+
+        def _results_entry(self, entry_id: str) -> None:
+            try:
+                entry = results.read_entry(entry_id)
+            except (ResultsLedgerError, OSError) as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            data = (json.dumps(entry, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Content-Disposition", "inline")
             self.send_header("X-Content-Type-Options", "nosniff")
@@ -558,12 +651,14 @@ def create_server(
     port: int = 8765,
     export_root: str | Path = "exports",
     template_root: str | Path = "templates",
+    results_root: str | Path = "results_ledger",
 ) -> ThreadingHTTPServer:
     root = Path(output_root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     exports = Path(export_root).expanduser().resolve()
     templates = Path(template_root).expanduser().resolve()
-    return ThreadingHTTPServer((host, port), _handler_class(root, exports, templates))
+    results = Path(results_root).expanduser().resolve()
+    return ThreadingHTTPServer((host, port), _handler_class(root, exports, templates, results))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -575,13 +670,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8765, help="Bind port (default: 8765)")
     parser.add_argument("--export-root", default="exports", help="Local export root (default: exports)")
     parser.add_argument("--template-root", default="templates", help="Local template root (default: templates)")
+    parser.add_argument("--results-root", default="results_ledger", help="Local results ledger root (default: results_ledger)")
     parser.add_argument("--open", action="store_true", help="Open the local dashboard in a browser")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    server = create_server(args.output_root, args.host, args.port, args.export_root, args.template_root)
+    server = create_server(args.output_root, args.host, args.port, args.export_root, args.template_root, args.results_root)
     url = f"http://{args.host}:{server.server_port}"
     print(f"Mission Control running at {url}", flush=True)
     print("Local review only. Live publishing is disabled.", flush=True)

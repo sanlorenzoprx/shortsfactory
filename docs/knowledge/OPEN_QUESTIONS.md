@@ -82,5 +82,13 @@ readiness. Do not begin Phase 4D without a bounded handoff.
 ## Q014 â€” What should Phase 4D be?
 
 Current answer:
-Not decided. Do not start result tracking, Windows packaging, packaged demo
-mode, or manual performance ledgers without an approved bounded handoff.
+Complete: Phase 4D added a local manual results ledger with prerequisite
+validation, manual metric entry, local summaries, and Mission Control result
+record/update controls. Do not begin Phase 4E without a bounded handoff.
+
+## Q015 â€” What should Phase 4E be?
+
+Current answer:
+Not decided. Do not start richer local review dashboards, Windows packaging,
+packaged demo mode, or manual performance-planning boards without an approved
+bounded handoff.

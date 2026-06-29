@@ -408,3 +408,33 @@ Commands/evidence:
 Notes:
 Phase 4C ends at final local manual-upload readiness review. Phase 4D was not
 started.
+
+## Phase 4D â€” Manual Results Ledger
+
+Status: passed
+
+Commit:
+`Add Phase 4D manual results ledger`
+
+Commands/evidence:
+- Baseline `pytest -q`: 185 passed
+- Focused results suite: 10 passed
+- Final `pytest -q`: 195 passed in 96.74s
+- `python results_ledger.py --help`: passed
+- `python results_ledger.py --list`: passed
+- `python results_ledger.py --summary`: passed
+- `python results_ledger.py --job-id phase3-audit-original-re054436d34 --platform youtube_shorts --url "https://example.com/manual-upload" --views 100 --likes 10 --notes "Manual upload test"`: passed
+- `python shorts_factory_launcher.py --health`: passed with the existing optional `dotenv` warning only
+- `python compliance_check.py --help`: passed
+- `python preview_cards.py --help`: passed
+- `python mission_control.py --help`: passed
+- `results_ledger/ledger.json`, `entries/`, and `reports/RESULTS_SUMMARY.md` are written locally
+- Every entry preserves manual-only/no-fetch/no-upload/no-scraping/live-disabled safety flags
+- Real entry captured quality score 97, compliance ready status, and script/caption/thumbnail template provenance
+- Mission Control localhost smoke returned 200/303/200/200 on the real ready job, updated the result to 250 views / 25 likes, refreshed the summary, and showed no forbidden button
+- Scope scan found no platform API, OAuth, metric auto-fetching, scraping,
+  auto-upload, browser automation, cloud upload, database, or Phase 4E work
+
+Notes:
+Phase 4D ends at local manual results entry and summary generation. Phase 4E
+was not started.

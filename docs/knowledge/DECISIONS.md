@@ -210,3 +210,15 @@ marked ready for manual upload.
 Reason:
 Preview cards show how content will look. Compliance checks verify the content
 is complete, safe, and human-reviewed before manual upload.
+
+## D019 â€” Manual results before platform integrations
+
+Status: accepted
+
+Decision:
+Shorts Factory records post-upload performance through manual local entries
+before any platform API or analytics integration is considered.
+
+Reason:
+The business loop needs learning, but safety requires keeping publishing and
+analytics human-controlled until the manual workflow proves useful.

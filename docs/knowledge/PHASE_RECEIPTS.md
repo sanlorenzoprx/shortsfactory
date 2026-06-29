@@ -499,3 +499,51 @@ Evidence:
   button or automatic upload path
 - No platform API, OAuth, browser automation, upload, cloud, scraping,
   external database, paid dependency, or Phase 4D work was added
+
+## Phase 4D â€” Manual Results Ledger
+
+Status: complete
+
+Commit:
+`Add Phase 4D manual results ledger`
+
+Implemented:
+- `results_ledger.py` local CLI for manual result creation, list, show, update,
+  and summary output
+- `content_factory.results` validation/store/report stack for local ledger JSON,
+  per-entry JSON, and markdown summary generation
+- Strict approved-export, upload-kit, preview-manifest, and compliance-ready
+  prerequisite checks before recording any result
+- HTTPS-only manual URL validation with no online fetch, crawl, or scraping
+- Non-negative integer metrics for views, likes, comments, shares, saves, and leads
+- Context capture for quality score/status, compliance status, and template
+  provenance when those artifacts exist locally
+- Mission Control results section, create/update form, entry display, and
+  summary/entry links with safe local error rendering
+- `results_ledger/` ignored by Git
+
+Evidence:
+- Baseline `pytest -q`: 185 passed
+- Focused Phase 4D tests: 10 passed
+- Final `pytest -q`: 195 passed in 96.74s
+- `python results_ledger.py --help`: passed
+- `python results_ledger.py --list`: passed before and after creating a real entry
+- `python results_ledger.py --summary`: passed before and after creating a real entry
+- `python results_ledger.py --job-id phase3-audit-original-re054436d34 --platform youtube_shorts --url "https://example.com/manual-upload" --views 100 --likes 10 --notes "Manual upload test"`: passed
+- `python shorts_factory_launcher.py --health`: passed with the existing optional
+  `dotenv` warning only
+- `python compliance_check.py --help`: passed
+- `python preview_cards.py --help`: passed
+- `python mission_control.py --help`: passed
+- Result entries require compliance `ready_for_manual_upload: true`
+- Ledger output preserves all five manual-only/no-fetch/no-upload/no-scraping/live-disabled flags
+- Real local outputs were inspected under `results_ledger/ledger.json`,
+  `results_ledger/entries/`, and `results_ledger/reports/RESULTS_SUMMARY.md`
+- Real entry captured quality score 97, compliance `ready_for_manual_upload`,
+  and script/caption/thumbnail template IDs and hashes
+- Mission Control localhost smoke updated the real entry to 250 views / 25 likes
+  and refreshed the summary without any forbidden Fetch/Sync/Publish/OAuth button
+- Mission Control showed results controls only for compliant jobs and no
+  Fetch/Sync/Publish/OAuth path
+- No platform API, OAuth, browser automation, upload, cloud, scraping,
+  external database, paid dependency, or Phase 4E work was added

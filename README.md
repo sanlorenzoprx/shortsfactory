@@ -485,6 +485,54 @@ The safety boundary remains explicit in every checklist:
 "requires_human_upload": true
 ```
 
+## Phase 4D: manual results ledger
+
+Record post-upload performance manually after a job is already marked ready for
+manual upload:
+
+```powershell
+python results_ledger.py --job-id <ready_job_id> --platform youtube_shorts --url "https://example.com/manual-upload" --views 100 --likes 10 --notes "Manual upload test"
+python results_ledger.py --list
+python results_ledger.py --show <entry_id>
+python results_ledger.py --summary
+python results_ledger.py --update <entry_id> --views 250 --likes 25 --notes "Updated after 24 hours"
+python results_ledger.py --help
+```
+
+The command writes local-only files under:
+
+```txt
+results_ledger/
+  ledger.json
+  entries/<entry_id>.json
+  reports/RESULTS_SUMMARY.md
+```
+
+Entries are refused unless the job already has an approved export bundle,
+manual upload kit, preview manifest, compliance checklist, and
+`ready_for_manual_upload: true`. If compliance is still pending, run
+`compliance_check.py` and mark the job reviewed first.
+
+Each entry preserves these fixed safety fields:
+
+```json
+"manual_upload_only": true,
+"api_fetch_attempted": false,
+"api_upload_attempted": false,
+"scraping_attempted": false,
+"live_publishing_enabled": false
+```
+
+The URL is manually pasted and stored as plain local metadata only. Shorts
+Factory does not open it, fetch it, scrape it, or validate it online. Metrics
+are also manual local integers only: views, likes, comments, shares, saves, and
+leads.
+
+Mission Control now shows a **Results ledger** section on jobs whose compliance
+status is already **Ready for Manual Upload**. From there you can **Record
+Manual Result**, **Update Manual Result**, and **Open Results Summary**. No
+Fetch/Sync/OAuth/account-connect/upload/publish behavior is added.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

@@ -205,6 +205,7 @@ def render_job_detail(
     upload_kit_preview: dict[str, object] | None = None,
     preview_manifest: dict[str, object] | None = None,
     compliance_checklist: dict[str, object] | None = None,
+    results_entries: list[dict[str, object]] | None = None,
 ) -> str:
     state = str(approval.get("state", "pending"))
     video_name = next(
@@ -521,6 +522,76 @@ def render_job_detail(
   </form>
   {review_action}
 </section>"""
+    if compliance_checklist is None or compliance_checklist.get("ready_for_manual_upload") is not True:
+        results_panel = """
+<section class="panel results-panel">
+  <div class="manual-only">MANUAL ENTRY ONLY</div>
+  <div class="panel-heading"><h2>Results ledger</h2><span>Unavailable</span></div>
+  <div class="upload-kit-content"><p>Results Ledger unavailable until compliance is Ready for Manual Upload.</p></div>
+</section>"""
+    else:
+        entries = results_entries or []
+        rows = []
+        latest = entries[0] if entries else None
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            metrics = entry.get("metrics", {})
+            if not isinstance(metrics, dict):
+                metrics = {}
+            rows.append(
+                f"<tr><td>{_escape(entry.get('platform', ''))}</td><td><a href=\"{_escape(entry.get('manual_upload_url', ''))}\" target=\"_blank\" rel=\"noopener\">{_escape(entry.get('manual_upload_url', ''))}</a></td><td>{_escape(metrics.get('views', 0))}</td><td>{_escape(metrics.get('likes', 0))}</td><td>{_escape(metrics.get('comments', 0))}</td><td>{_escape(metrics.get('shares', 0))}</td><td>{_escape(metrics.get('saves', 0))}</td><td>{_escape(metrics.get('leads', 0))}</td><td>{_escape(entry.get('notes', ''))}</td></tr>"
+            )
+        entries_table = (
+            f"""<div class="table-wrap"><table><thead><tr><th>Platform</th><th>Manual URL</th><th>Views</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Saves</th><th>Leads</th><th>Notes</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div>"""
+            if rows
+            else '<div class="upload-kit-content"><p class="quiet">No manual results recorded yet.</p></div>'
+        )
+        form_label = "Update Manual Result" if latest is not None else "Record Manual Result"
+        latest_metrics = latest.get("metrics", {}) if isinstance(latest, dict) else {}
+        if not isinstance(latest_metrics, dict):
+            latest_metrics = {}
+        entry_id_input = (
+            f'<input type="hidden" name="entry_id" value="{_escape(latest.get("entry_id", ""))}">'
+            if isinstance(latest, dict)
+            else ""
+        )
+        platform_value = _escape(latest.get("platform", "youtube_shorts")) if isinstance(latest, dict) else "youtube_shorts"
+        url_value = _escape(latest.get("manual_upload_url", "")) if isinstance(latest, dict) else ""
+        notes_value = _escape(latest.get("notes", "")) if isinstance(latest, dict) else ""
+        results_panel = f"""
+<section class="panel results-panel">
+  <div class="manual-only">MANUAL ENTRY ONLY</div>
+  <div class="panel-heading"><h2>Results ledger</h2><span>{_escape(str(len(rows)))} entries</span></div>
+  <div class="preview-card-links">
+    <a class="preview-link" href="/results/summary" target="_blank" rel="noopener">Open Results Summary</a>
+  </div>
+  {entries_table}
+  <form method="post" action="/jobs/{_url_job_id(job.job_id)}/results">
+    {entry_id_input}
+    <label for="results-platform">Platform</label>
+    <select id="results-platform" name="platform">
+      <option value="youtube_shorts"{' selected' if platform_value == 'youtube_shorts' else ''}>youtube_shorts</option>
+      <option value="tiktok"{' selected' if platform_value == 'tiktok' else ''}>tiktok</option>
+      <option value="instagram_reels"{' selected' if platform_value == 'instagram_reels' else ''}>instagram_reels</option>
+      <option value="other"{' selected' if platform_value == 'other' else ''}>other</option>
+    </select>
+    <label for="results-url">Manual URL</label>
+    <input id="results-url" name="url" type="url" value="{url_value}" placeholder="https://example.com/manual-upload" required>
+    <div class="results-grid">
+      <label>Views<input name="views" type="number" min="0" value="{_escape(latest_metrics.get('views', 0))}"></label>
+      <label>Likes<input name="likes" type="number" min="0" value="{_escape(latest_metrics.get('likes', 0))}"></label>
+      <label>Comments<input name="comments" type="number" min="0" value="{_escape(latest_metrics.get('comments', 0))}"></label>
+      <label>Shares<input name="shares" type="number" min="0" value="{_escape(latest_metrics.get('shares', 0))}"></label>
+      <label>Saves<input name="saves" type="number" min="0" value="{_escape(latest_metrics.get('saves', 0))}"></label>
+      <label>Leads<input name="leads" type="number" min="0" value="{_escape(latest_metrics.get('leads', 0))}"></label>
+    </div>
+    <label for="results-notes">Notes</label>
+    <textarea id="results-notes" name="notes" rows="3" placeholder="Manual upload notes">{notes_value}</textarea>
+    <button class="results" type="submit">{form_label}</button>
+    <p class="quiet">Manual entry only. No metric fetching, sync, scraping, upload, or publishing occurs.</p>
+  </form>
+</section>"""
     body = f"""
 <nav class="breadcrumb"><a href="/">← All jobs</a></nav>
 <section class="job-title">
@@ -557,6 +628,7 @@ def render_job_detail(
 {upload_kit_panel}
 {publisher_preview_panel}
 {compliance_panel}
+{results_panel}
 <section class="panel"><div class="panel-heading"><h2>Warnings</h2><span>{job.warning_count}</span></div><ul class="warnings">{warnings}</ul></section>
 <section class="text-grid">
   <article class="panel"><div class="panel-heading"><h2>Script</h2></div><pre>{script}</pre></article>
