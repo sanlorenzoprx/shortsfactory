@@ -63,7 +63,7 @@ def _hashes(directory: Path) -> dict[str, str]:
     }
 
 
-def _post(server, path: str) -> tuple[int, str | None, str]:
+def _post(server, path: str) -> tuple[int, str | None, str | None, str]:
     connection = http.client.HTTPConnection(
         "127.0.0.1", server.server_port, timeout=30
     )
@@ -73,6 +73,7 @@ def _post(server, path: str) -> tuple[int, str | None, str]:
         return (
             response.status,
             response.getheader("Location"),
+            response.getheader("Connection"),
             response.read().decode("utf-8"),
         )
     finally:
@@ -98,13 +99,17 @@ def test_run_revision_route_supports_space_paths_and_redirects_to_revised_job(
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        status, location, _ = _post(server, "/jobs/route-job/run-revision")
+        status, location, connection_header, body = _post(
+            server, "/jobs/route-job/run-revision"
+        )
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
 
     assert status == 303
+    assert connection_header == "close"
+    assert body == ""
     assert location is not None and location.startswith("/jobs/route-job-r")
     revised_job_id = location.removeprefix("/jobs/")
     revised_dir = output_root / "jobs" / revised_job_id
@@ -123,7 +128,7 @@ def test_run_revision_route_returns_safe_error_page(tmp_path: Path):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        status, location, body = _post(server, "/jobs/not-ready/run-revision")
+        status, location, _, body = _post(server, "/jobs/not-ready/run-revision")
     finally:
         server.shutdown()
         server.server_close()

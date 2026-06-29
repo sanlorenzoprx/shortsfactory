@@ -247,7 +247,7 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
                     if revision_task_match:
                         self._create_revision_task(unquote(revision_task_match.group(1)))
                     elif run_revision_match:
-                        self._run_revision(unquote(run_revision_match.group(1)))
+                        return self._run_revision(unquote(run_revision_match.group(1)))
                     elif quality_match:
                         self._score_job(unquote(quality_match.group(1)))
                     elif upload_kit_match:
@@ -323,7 +323,10 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
             except (RevisionRunError, OSError) as exc:
                 self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
                 return
-            self._redirect_to_job(result.revised_job_id)
+            return self._redirect(
+                f"/jobs/{job_match_id(result.revised_job_id)}",
+                HTTPStatus.SEE_OTHER,
+            )
 
         def _score_job(self, job_id: str) -> None:
             job = find_job(output_root, job_id)
@@ -633,6 +636,18 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
             self.send_header("Location", f"/jobs/{job_match_id(job_id)}")
             self.send_header("Content-Length", "0")
             self.end_headers()
+
+        def _redirect(
+            self,
+            location: str,
+            status: int | HTTPStatus = HTTPStatus.SEE_OTHER,
+        ) -> None:
+            self.send_response(status)
+            self.send_header("Location", location)
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.close_connection = True
 
         def _artifact(self, job_id: str, artifact_name: str) -> None:
             job = find_job(output_root, job_id)
