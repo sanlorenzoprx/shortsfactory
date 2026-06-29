@@ -89,6 +89,13 @@ record/update controls. Do not begin Phase 4E without a bounded handoff.
 ## Q015 â€” What should Phase 4E be?
 
 Current answer:
-Not decided. Do not start richer local review dashboards, Windows packaging,
-packaged demo mode, or manual performance-planning boards without an approved
-bounded handoff.
+Complete: Phase 4E added deterministic local performance-review Markdown, JSON,
+CSV, and Mission Control views based only on manually entered ledger results.
+Do not begin Phase 4F without a bounded handoff.
+
+## Q016 — What should Phase 4F be?
+
+Current answer:
+Not decided. Do not start automated analytics, template/result comparison,
+manual campaign planning, Windows packaging, packaged demo mode, or experiment
+backlogs without an approved bounded handoff.

@@ -222,3 +222,15 @@ before any platform API or analytics integration is considered.
 Reason:
 The business loop needs learning, but safety requires keeping publishing and
 analytics human-controlled until the manual workflow proves useful.
+
+## D020 — Local performance review before automation
+
+Status: accepted
+
+Decision:
+Shorts Factory reviews manual results locally before any automated analytics,
+scraping, or platform integration is considered.
+
+Reason:
+Manual performance data is enough to guide early experiments while preserving
+the no-API, no-publishing safety boundary.

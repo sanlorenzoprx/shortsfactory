@@ -547,3 +547,42 @@ Evidence:
   Fetch/Sync/Publish/OAuth path
 - No platform API, OAuth, browser automation, upload, cloud, scraping,
   external database, paid dependency, or Phase 4E work was added
+
+## Phase 4E — Local Performance Review Dashboard
+
+Status: complete
+
+Commit:
+`Add Phase 4E local performance review`
+
+Implemented:
+- `performance_review.py` local CLI for deterministic review generation
+- `content_factory.performance` loader, metrics, ranker, report, and atomic
+  local store stack
+- Missing/empty-ledger handling that still writes all five required reports
+- Totals and zero-safe view-based like/comment/share/save/lead rates
+- Deterministic leads/views/likes/oldest-first job ranking
+- Platform, template-provenance, quality-score, and notes/lessons signals
+- One deterministic next manual experiment labeled as a local, non-statistical signal
+- Markdown, JSON, platform CSV, template CSV, and complete job CSV output
+- Mission Control `/performance` status, totals, tables, recommendation,
+  regeneration control, results-summary link, and allowlisted Markdown serving
+- `performance_reports/` ignored by Git
+
+Evidence:
+- Baseline `pytest -q`: 195 passed in 92.50s
+- Focused Phase 4E tests: 10 passed
+- Final `pytest -q`: 205 passed in 87.27s
+- `python performance_review.py --help`: passed
+- Exact first-win command generated all five required files from the real ledger
+- Real review captured one entry, YouTube Shorts/platform/template signals,
+  quality score 97, and the manual note context
+- Missing-ledger fixture produced the required empty-state wording
+- Zero views returned zero rates without division errors
+- Ranking and recommendations were deterministic under explicit tie tests
+- JSON and Markdown retained all five required performance safety flags
+- Mission Control localhost smoke returned 200/303/200 and served the report
+  without forbidden fetch/sync/publish/OAuth controls
+- No platform API, OAuth, metric auto-fetching, scraping, browser automation,
+  auto-upload, cloud upload, external database, paid dependency, or Phase 4F
+  work was added

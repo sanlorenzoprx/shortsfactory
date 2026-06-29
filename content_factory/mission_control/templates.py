@@ -37,7 +37,7 @@ def _page(title: str, body: str) -> str:
 <body>
   <header class="site-header">
     <a class="brand" href="/">SHORTS FACTORY <span>MISSION CONTROL</span></a>
-    <nav class="site-nav"><a href="/">Jobs</a><a href="/templates">Templates</a><span class="local-badge">LOCAL ONLY</span></nav>
+    <nav class="site-nav"><a href="/">Jobs</a><a href="/templates">Templates</a><a href="/performance">Performance</a><span class="local-badge">LOCAL ONLY</span></nav>
   </header>
   <main>{body}</main>
 </body>
@@ -647,3 +647,97 @@ def render_job_detail(
 def render_error(status: int, message: str) -> str:
     body = f"""<section class="hero error-page"><p class="eyebrow">Error {status}</p><h1>{_escape(message)}</h1><p><a href="/">Return to Mission Control</a></p></section>"""
     return _page(f"Error {status}", body)
+
+
+def render_performance_review(
+    review: dict[str, object],
+    *,
+    report_exists: bool,
+    report_path: Path,
+) -> str:
+    totals = review.get("totals", {})
+    rates = review.get("rates", {})
+    top_jobs = review.get("top_jobs", [])
+    platforms = review.get("platform_summary", {})
+    templates = review.get("template_summary", {})
+    recommendations = review.get("recommendations", [])
+    if not isinstance(totals, dict):
+        totals = {}
+    if not isinstance(rates, dict):
+        rates = {}
+    if not isinstance(top_jobs, list):
+        top_jobs = []
+    if not isinstance(platforms, dict):
+        platforms = {}
+    if not isinstance(templates, dict):
+        templates = {}
+    if not isinstance(recommendations, list):
+        recommendations = []
+    job_rows = []
+    for index, row in enumerate(top_jobs, 1):
+        if not isinstance(row, dict):
+            continue
+        job_rows.append(
+            f"<tr><td>{index}</td><td>{_escape(row.get('job_id', ''))}</td><td>{_escape(row.get('platform', ''))}</td><td>{_escape(row.get('views', 0))}</td><td>{_escape(row.get('likes', 0))}</td><td>{_escape(row.get('leads', 0))}</td><td>{_escape(row.get('quality_score', 'Not available'))}</td></tr>"
+        )
+    if not job_rows:
+        job_rows.append('<tr><td colspan="7" class="empty">No manual results recorded yet.</td></tr>')
+    platform_rows = []
+    for platform, row in platforms.items():
+        if not isinstance(row, dict):
+            continue
+        like_rate = f"{float(row.get('like_rate', 0)):.2%}"
+        platform_rows.append(
+            f"<tr><td>{_escape(platform)}</td><td>{_escape(row.get('entries', 0))}</td><td>{_escape(row.get('views', 0))}</td><td>{_escape(row.get('likes', 0))}</td><td>{_escape(row.get('leads', 0))}</td><td>{_escape(like_rate)}</td></tr>"
+        )
+    if not platform_rows:
+        platform_rows.append('<tr><td colspan="6" class="empty">No platform signals yet.</td></tr>')
+    template_rows = []
+    for template, row in templates.items():
+        if not isinstance(row, dict):
+            continue
+        template_rows.append(
+            f"<tr><td>{_escape(template)}</td><td>{_escape(row.get('entries', 0))}</td><td>{_escape(row.get('views', 0))}</td><td>{_escape(row.get('likes', 0))}</td><td>{_escape(row.get('leads', 0))}</td></tr>"
+        )
+    if not template_rows:
+        template_rows.append('<tr><td colspan="5" class="empty">No template signals yet.</td></tr>')
+    recommendation = "Record at least one manual result before choosing the next experiment."
+    if recommendations and isinstance(recommendations[0], dict):
+        recommendation = str(recommendations[0].get("message", recommendation))
+    status = str(review.get("status", "empty"))
+    empty = ""
+    if status == "empty":
+        empty = '<div class="upload-kit-content"><p>No manual results recorded yet.<br>Record a result with results_ledger.py before reviewing performance.</p></div>'
+    total_like_rate = f"{float(rates.get('like_rate', 0)):.2%}"
+    report_link = (
+        '<a class="preview-link" href="/performance/report" target="_blank" rel="noopener">Open Performance Report</a>'
+        if report_exists
+        else '<span class="quiet">Generate the report to open the Markdown file.</span>'
+    )
+    body = f"""
+<section class="hero">
+  <p class="eyebrow">Manual local signals</p>
+  <h1>Performance Review</h1>
+  <p>Decision support from manually entered local results. No network collection or publishing occurs.</p>
+</section>
+<section class="panel performance-overview">
+  <div class="manual-only">MANUAL RESULTS ONLY</div>
+  <div class="panel-heading"><h2>Status</h2><span class="state state-{_escape(status)}">{_escape(status.title())}</span></div>
+  {empty}
+  <div class="quality-summary">
+    <div><span>Entries</span><strong>{_escape(totals.get('entries', 0))}</strong></div>
+    <div><span>Platforms</span><strong>{_escape(totals.get('platforms', 0))}</strong></div>
+    <div><span>Views</span><strong>{_escape(totals.get('views', 0))}</strong></div>
+    <div><span>Likes</span><strong>{_escape(totals.get('likes', 0))}</strong></div>
+    <div><span>Leads</span><strong>{_escape(totals.get('leads', 0))}</strong></div>
+    <div><span>Like rate</span><strong>{_escape(total_like_rate)}</strong></div>
+  </div>
+  <div class="preview-card-links">{report_link}<a class="preview-link" href="/results/summary" target="_blank" rel="noopener">View Manual Results Summary</a></div>
+  <p class="quiet">Report path: {_escape(report_path)}</p>
+  <form method="post" action="/performance"><button class="performance" type="submit">Generate Performance Review</button></form>
+</section>
+<section class="panel"><div class="panel-heading"><h2>Best jobs</h2><span>Local ranking</span></div><div class="table-wrap"><table><thead><tr><th>Rank</th><th>Job</th><th>Platform</th><th>Views</th><th>Likes</th><th>Leads</th><th>Quality</th></tr></thead><tbody>{''.join(job_rows)}</tbody></table></div></section>
+<section class="panel"><div class="panel-heading"><h2>Platform summary</h2></div><div class="table-wrap"><table><thead><tr><th>Platform</th><th>Entries</th><th>Views</th><th>Likes</th><th>Leads</th><th>Like rate</th></tr></thead><tbody>{''.join(platform_rows)}</tbody></table></div></section>
+<section class="panel"><div class="panel-heading"><h2>Template signals</h2></div><div class="table-wrap"><table><thead><tr><th>Template</th><th>Entries</th><th>Views</th><th>Likes</th><th>Leads</th></tr></thead><tbody>{''.join(template_rows)}</tbody></table></div></section>
+<section class="panel recommendation-panel"><div class="panel-heading"><h2>Recommended next manual experiment</h2></div><div class="upload-kit-content"><p>{_escape(recommendation)}</p></div></section>"""
+    return _page("Performance Review", body)

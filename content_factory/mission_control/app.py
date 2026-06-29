@@ -34,12 +34,13 @@ from content_factory.upload_kits.kit_builder import (
 )
 from content_factory.previews import PreviewCardError, generate_preview_cards, load_preview_manifest
 from content_factory.previews.preview_store import MANIFEST_NAME as PREVIEW_MANIFEST_NAME, preview_directory
+from content_factory.performance import PerformanceReviewError, PerformanceReviewStore
 from content_factory.results import ResultsLedgerError, ResultsLedgerStore
 from content_factory.templates import TemplateRenderError, TemplateStore, TemplateStoreError, render_template, validate_template_json
 
 from .approvals import APPROVAL_STATES, ApprovalStore
 from .job_index import find_job, is_within, scan_jobs
-from .templates import render_error, render_index, render_job_detail, render_template_detail, render_template_index
+from .templates import render_error, render_index, render_job_detail, render_performance_review, render_template_detail, render_template_index
 
 
 MAX_FORM_BYTES = 64 * 1024
@@ -58,6 +59,8 @@ COMPLIANCE_FILE_ROUTE = re.compile(r"^/compliance/([^/]+)/([^/]+)$")
 RESULTS_ROUTE = re.compile(r"^/jobs/([^/]+)/results$")
 RESULTS_SUMMARY_ROUTE = re.compile(r"^/results/summary$")
 RESULTS_ENTRY_ROUTE = re.compile(r"^/results/entries/([^/]+)$")
+PERFORMANCE_ROUTE = re.compile(r"^/performance$")
+PERFORMANCE_REPORT_ROUTE = re.compile(r"^/performance/report$")
 TEMPLATE_ROUTE = re.compile(r"^/templates/([^/]+)$")
 TEMPLATE_ACTION_ROUTE = re.compile(r"^/templates/([^/]+)/(validate|preview|save|restore)$")
 ARTIFACT_ROUTE = re.compile(r"^/artifacts/([^/]+)/([^/]+)$")
@@ -75,15 +78,16 @@ TEMPLATE_SAMPLE_CONTEXT = {
 }
 
 
-def _handler_class(output_root: Path, export_root: Path, template_root: Path, results_root: Path) -> type[BaseHTTPRequestHandler]:
+def _handler_class(output_root: Path, export_root: Path, template_root: Path, results_root: Path, performance_root: Path) -> type[BaseHTTPRequestHandler]:
     approvals = ApprovalStore(output_root)
     revisions = RevisionQueue(output_root)
     quality = QualityStore(output_root)
     template_store = TemplateStore(template_root)
     results = ResultsLedgerStore(results_root, export_root=export_root, output_root=output_root)
+    performance = PerformanceReviewStore(results_root, performance_root)
 
     class MissionControlHandler(BaseHTTPRequestHandler):
-        server_version = "ShortsFactoryMissionControl/4D"
+        server_version = "ShortsFactoryMissionControl/4E"
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -102,6 +106,25 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
                 return
             if path == "/templates":
                 self._html(HTTPStatus.OK, render_template_index(template_store.list()))
+                return
+            if PERFORMANCE_ROUTE.fullmatch(path):
+                try:
+                    review = performance.preview()
+                    report_exists = performance.report_exists()
+                except PerformanceReviewError as exc:
+                    self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                    return
+                self._html(
+                    HTTPStatus.OK,
+                    render_performance_review(
+                        review,
+                        report_exists=report_exists,
+                        report_path=performance.path("PERFORMANCE_REVIEW.md"),
+                    ),
+                )
+                return
+            if PERFORMANCE_REPORT_ROUTE.fullmatch(path):
+                self._performance_report()
                 return
             template_match = TEMPLATE_ROUTE.fullmatch(path)
             if template_match:
@@ -200,6 +223,9 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
 
         def do_POST(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
+            if PERFORMANCE_ROUTE.fullmatch(path):
+                self._generate_performance_review()
+                return
             template_action = TEMPLATE_ACTION_ROUTE.fullmatch(path)
             if template_action:
                 self._template_action(unquote(template_action.group(1)), template_action.group(2))
@@ -503,6 +529,35 @@ def _handler_class(output_root: Path, export_root: Path, template_root: Path, re
             except (BrokenPipeError, ConnectionError):
                 self.close_connection = True
 
+        def _generate_performance_review(self) -> None:
+            try:
+                performance.generate()
+            except (PerformanceReviewError, OSError) as exc:
+                self._html(HTTPStatus.CONFLICT, render_error(409, str(exc)))
+                return
+            self.send_response(HTTPStatus.SEE_OTHER)
+            self.send_header("Location", "/performance")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def _performance_report(self) -> None:
+            try:
+                data = performance.read_markdown().encode("utf-8")
+            except (PerformanceReviewError, OSError) as exc:
+                self._html(HTTPStatus.NOT_FOUND, render_error(404, str(exc)))
+                return
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Disposition", "inline")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+            self.end_headers()
+            try:
+                self.wfile.write(data)
+            except (BrokenPipeError, ConnectionError):
+                self.close_connection = True
+
         def _template_action(self, template_id: str, action: str) -> None:
             try:
                 current = template_store.get(template_id)
@@ -652,13 +707,15 @@ def create_server(
     export_root: str | Path = "exports",
     template_root: str | Path = "templates",
     results_root: str | Path = "results_ledger",
+    performance_root: str | Path = "performance_reports",
 ) -> ThreadingHTTPServer:
     root = Path(output_root).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     exports = Path(export_root).expanduser().resolve()
     templates = Path(template_root).expanduser().resolve()
     results = Path(results_root).expanduser().resolve()
-    return ThreadingHTTPServer((host, port), _handler_class(root, exports, templates, results))
+    performance = Path(performance_root).expanduser().resolve()
+    return ThreadingHTTPServer((host, port), _handler_class(root, exports, templates, results, performance))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -671,13 +728,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--export-root", default="exports", help="Local export root (default: exports)")
     parser.add_argument("--template-root", default="templates", help="Local template root (default: templates)")
     parser.add_argument("--results-root", default="results_ledger", help="Local results ledger root (default: results_ledger)")
+    parser.add_argument("--performance-root", default="performance_reports", help="Local performance report root (default: performance_reports)")
     parser.add_argument("--open", action="store_true", help="Open the local dashboard in a browser")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    server = create_server(args.output_root, args.host, args.port, args.export_root, args.template_root, args.results_root)
+    server = create_server(args.output_root, args.host, args.port, args.export_root, args.template_root, args.results_root, args.performance_root)
     url = f"http://{args.host}:{server.server_port}"
     print(f"Mission Control running at {url}", flush=True)
     print("Local review only. Live publishing is disabled.", flush=True)

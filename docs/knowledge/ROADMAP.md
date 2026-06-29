@@ -21,10 +21,11 @@
 - Phase 4B publisher-specific preview cards
 - Phase 4C final pre-publish compliance checklist
 - Phase 4D manual results ledger
+- Phase 4E local performance review dashboard
 
 ## Current checkpoint
 
-Phase 4D green gate complete. Stop before Phase 4E.
+Phase 4E green gate complete. Stop before Phase 4F.
 
 ## Recommended next options
 
@@ -58,5 +59,6 @@ Make installation, setup, and one-command local running easier.
 - monetization/payment workflow
 - public multi-user SaaS
 - packaging/demo-mode work
-- richer local performance-review dashboards
-- Phase 4D or later work
+- automated analytics or metric synchronization
+- local experiment planning/backlog automation
+- Phase 4F or later work

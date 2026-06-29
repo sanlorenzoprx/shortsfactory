@@ -533,6 +533,45 @@ status is already **Ready for Manual Upload**. From there you can **Record
 Manual Result**, **Update Manual Result**, and **Open Results Summary**. No
 Fetch/Sync/OAuth/account-connect/upload/publish behavior is added.
 
+## Phase 4E: local performance review
+
+Turn the manually entered results ledger into deterministic local decision
+support:
+
+```powershell
+python performance_review.py --results-root results_ledger --output-root performance_reports
+python performance_review.py --help
+```
+
+The command writes:
+
+```txt
+performance_reports/
+  PERFORMANCE_REVIEW.md
+  PERFORMANCE_REVIEW.json
+  platform_summary.csv
+  template_summary.csv
+  job_summary.csv
+```
+
+The review computes totals and view-based like, comment, share, save, and lead
+rates; ranks jobs deterministically by leads, views, likes, and oldest creation
+time; summarizes platform and template signals; compares captured quality
+scores; carries forward manual notes/lessons; and proposes one deterministic
+next manual experiment. Zero-view entries produce zero rates. An absent or
+empty ledger produces a complete empty-state report instead of failing.
+
+Mission Control exposes the same local analysis at `/performance`, including
+the current status, totals, best jobs, platform/template signals, recommendation,
+Markdown path, and **Generate Performance Review** control.
+
+Only local entries created by `results_ledger.py` are analyzed. The command does
+not open stored URLs or use platform APIs, OAuth, automatic metric collection,
+scraping, uploads, cloud services, or live publishing. JSON and Markdown reports
+retain the explicit manual-only/no-fetch/no-upload/no-scraping/live-disabled
+safety boundary. Generated `performance_reports/` remain local and ignored by
+Git.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

@@ -438,3 +438,29 @@ Commands/evidence:
 Notes:
 Phase 4D ends at local manual results entry and summary generation. Phase 4E
 was not started.
+
+## Phase 4E — Local Performance Review Dashboard
+
+Status: passed
+
+Commit:
+`Add Phase 4E local performance review`
+
+Commands/evidence:
+- Baseline `pytest -q`: 195 passed in 92.50s
+- Focused performance-review suite: 10 passed
+- Final `pytest -q`: 205 passed in 87.27s
+- `python performance_review.py --help`: passed
+- Exact first-win performance-review command passed against the real local ledger
+- Markdown, JSON, platform CSV, template CSV, and job CSV were written and inspected
+- Empty/missing ledger generated a clear empty-state report and all five files
+- Totals, rates, zero-view handling, quality signals, and deterministic ranking passed
+- Recommendation uses only local manual signals and explicitly avoids statistical claims
+- JSON/Markdown safety evidence records manual-only/no-fetch/no-upload/no-scraping/live-disabled
+- Mission Control `/performance` generated and served the local report safely
+- Scope scan found no platform API, OAuth, metric auto-fetching, scraping,
+  auto-upload, browser automation, cloud upload, database, or Phase 4F work
+
+Notes:
+Phase 4E ends at deterministic local analysis of manual ledger entries. Phase
+4F was not started.

@@ -2,20 +2,21 @@
 
 ## Current status
 
-Phase 4D is complete locally: ready-for-manual-upload jobs can now record
-manual post-upload results into a local ledger, update local notes and metrics,
-and roll them into a markdown summary without adding any platform integration,
-metric fetching, or live publishing capability.
+Phase 4E is complete locally: manually entered local results can now be turned
+into deterministic Markdown, JSON, and CSV performance reviews, inspected in
+Mission Control, and used to choose one next manual experiment without adding
+metric fetching, scraping, platform integration, or live publishing capability.
 
 ## Last known remote HEAD
 
 ```txt
-15235dd Add Phase 4C final compliance checklist
+34cfb6e Add Phase 4D manual results ledger
 ```
 
 ## Last known commit log
 
 ```txt
+34cfb6e Add Phase 4D manual results ledger
 15235dd Add Phase 4C final compliance checklist
 d648e4b Add Phase 4B publisher preview cards
 c545567 Add Phase 4A local desktop launcher
@@ -41,7 +42,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-195 passed in 96.74s
+205 passed in 87.27s
 ```
 
 ## Known working capabilities
@@ -92,6 +93,13 @@ pytest -q
 - Deterministic ready-for-manual-upload prerequisite checks before results entry
 - Manual URL, metric, note, template, quality, and compliance context capture
 - Mission Control local results record/update section and summary link
+- Deterministic manual-results performance totals and zero-safe rates
+- Leads/views/likes/oldest-first job ranking and platform/template summaries
+- Captured quality-score signals plus local notes and lessons review
+- Deterministic next-manual-experiment recommendation without an LLM
+- Local Markdown, JSON, and three CSV performance reports
+- Mission Control performance status, tables, recommendation, regeneration,
+  and allowlisted Markdown report view
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -127,9 +135,12 @@ pytest -q
   they remain local Markdown/JSON only and cannot publish or upload.
 - Manual results live under ignored `results_ledger/`; entries and summaries are
   local operator records only and cannot fetch metrics, upload, or publish.
+- Performance reviews live under ignored `performance_reports/`; they are local
+  derived reports only and cannot fetch URLs or metrics, scrape, upload, or publish.
 
 ## Current risk
 
-Phase 4D ends at local manual-results tracking. Do not begin Phase 4E or add
-automatic analytics sync, deployment packaging, upload clients, remote
-services, or live publisher integrations without explicit approval.
+Phase 4E ends at deterministic local review of manual results. Do not begin
+Phase 4F or add automatic analytics sync, experiment automation, deployment
+packaging, upload clients, remote services, or live publisher integrations
+without explicit approval.
