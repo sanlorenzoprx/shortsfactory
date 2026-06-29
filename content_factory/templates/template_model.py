@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 ALLOWED_TEMPLATE_TYPES = frozenset({"script", "caption", "thumbnail", "publisher_metadata", "upload_checklist", "revision", "quality_message"})
-ALLOWED_PLACEHOLDERS = frozenset({"idea", "hook", "verdict_headline", "lit_score", "risk_level", "top_reason", "next_step", "source", "locale", "cta", "created_at", "job_id", "platform", "hashtags", "title", "caption", "description", "revision_note", "original_job_id", "quality_score", "quality_status", "recommended_action"})
+ALLOWED_PLACEHOLDERS = frozenset({"idea", "hook", "verdict_headline", "lit_score", "risk_level", "top_reason", "next_step", "source", "locale", "cta", "created_at", "job_id", "platform", "hashtags", "title", "caption", "description", "revision_note", "original_job_id", "quality_score", "quality_status", "recommended_action", "ghost_town_risk", "buyer_pain_clarity", "willingness_to_pay_signal", "distribution_difficulty", "unfair_advantage_check", "business_model_weakness", "why_it_might_work", "why_it_might_fail", "killer_question", "mvp_test"})
 FORBIDDEN_PLACEHOLDERS = frozenset({"system", "env", "open_file", "exec", "eval", "import", "__class__"})
 TEMPLATE_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*\.[a-z0-9][a-z0-9_-]*$")
 PLACEHOLDER_PATTERN = re.compile(r"{([A-Za-z_][A-Za-z0-9_]*)}")

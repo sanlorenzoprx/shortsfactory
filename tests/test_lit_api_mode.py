@@ -22,6 +22,32 @@ CAMEL_CASE_VERDICT = {
     "topReason": "The buyer is clear but demand still needs proof.",
     "nextStep": "Pre-sell the smallest useful version.",
 }
+RICH_VERDICT = {
+    "verdict_headline": "Promising, but distribution is the real test.",
+    "lit_score": 78,
+    "risk_level": "medium",
+    "ghost_town_risk": "high",
+    "top_reason": "The pain is clear but the buyer path still needs proof.",
+    "buyer_pain_clarity": "strong",
+    "willingness_to_pay_signal": "weak",
+    "distribution_difficulty": "high",
+    "unfair_advantage_check": "No durable advantage is established yet.",
+    "business_model_weakness": "The offer may be valued as advice rather than software.",
+    "why_it_might_work": "Builders can test the costly decision before writing code.",
+    "why_it_might_fail": "Interested builders may not pay for the evaluation.",
+    "killer_question": "Who needs this urgently enough to pay before building?",
+    "mvp_test": "Sell 10 manual evaluations before building software.",
+    "next_step": "Offer a paid teardown to 20 targeted builders.",
+    "warnings": [],
+    "provenance": {
+        "source": "ai_verdict_engine",
+        "provider": "mock",
+        "model": "mock-lit-verdict-v1",
+        "generated_at": "2026-01-01T00:00:00.000Z",
+        "validated": True,
+    },
+    "source": "lit_api",
+}
 
 
 @pytest.mark.parametrize(
@@ -75,6 +101,38 @@ def test_api_mode_falls_back_to_complete_verdict_on_request_failure(monkeypatch)
     assert outcome.verdict.source == "api_fallback"
     assert outcome.raw_response is None
     assert "test timeout" in outcome.warning
+
+
+def test_api_mode_consumes_valid_rich_verdict_and_provenance(monkeypatch):
+    tester = AppTester(Config(mode="api", lit_api_url="https://lit.example/api/verdict"))
+    monkeypatch.setattr(tester.client, "test_idea", lambda idea, locale="en-US": RICH_VERDICT)
+
+    outcome = tester.run_test_with_details(IDEA)
+
+    assert outcome.verdict.killer_question == RICH_VERDICT["killer_question"]
+    assert outcome.verdict.mvp_test == RICH_VERDICT["mvp_test"]
+    assert outcome.verdict.why_it_might_work == RICH_VERDICT["why_it_might_work"]
+    assert outcome.verdict.provenance == {
+        **RICH_VERDICT["provenance"],
+        "rich_verdict": True,
+    }
+    assert outcome.verdict.warnings == ()
+
+
+def test_invalid_rich_fields_use_valid_legacy_contract_with_warning(monkeypatch):
+    tester = AppTester(Config(mode="api", lit_api_url="https://lit.example/api/verdict"))
+    payload = {**RICH_VERDICT, "ghost_town_risk": "certain"}
+    monkeypatch.setattr(tester.client, "test_idea", lambda idea, locale="en-US": payload)
+
+    outcome = tester.run_test_with_details(IDEA)
+
+    assert outcome.verdict.source == "lit_api"
+    assert outcome.verdict.killer_question == ""
+    assert outcome.verdict.provenance == {
+        "source": "legacy_lit_api",
+        "rich_verdict": False,
+    }
+    assert outcome.verdict.warnings[0].startswith("rich_verdict_invalid:")
 
 
 @pytest.mark.parametrize(
@@ -145,6 +203,11 @@ def test_successful_api_run_writes_raw_response_and_no_warning(tmp_path, monkeyp
 
     assert receipt["verdict"]["source"] == "lit_api"
     assert receipt["warnings"] == []
+    assert receipt["verdict_provenance"] == {
+        "source": "legacy_lit_api",
+        "rich_verdict": False,
+    }
+    assert receipt["verdict_warnings"] == ["rich_verdict_fields_missing"]
     assert raw_path.name == "lit_api_response.json"
     assert json.loads(raw_path.read_text(encoding="utf-8")) == payload
     for output_name in (
@@ -180,6 +243,32 @@ def test_api_fallback_writes_warning_and_no_raw_response(tmp_path, monkeypatch):
     assert "lit_api_response_json" not in receipt["outputs"]
     assert not (receipt_path.parent / "lit_api_response.json").exists()
     assert receipt["voiceover"] == {"status": "disabled"}
+    assert receipt["verdict_provenance"]["source"] == "deterministic_fallback"
+    assert receipt["verdict_warnings"] == ["rich_verdict_fields_missing"]
+
+
+def test_rich_api_receipt_records_validated_provenance(tmp_path, monkeypatch):
+    config = Config(
+        mode="api",
+        lit_api_url="https://lit.example/api/verdict",
+        output_dir=tmp_path / "output",
+    )
+    orchestrator = _fast_orchestrator(config, monkeypatch)
+    monkeypatch.setattr(
+        orchestrator.tester.client,
+        "test_idea",
+        lambda idea, locale="en-US": RICH_VERDICT,
+    )
+
+    receipt_path = orchestrator.run_batch(batch=1)[0]
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+
+    assert receipt["verdict_provenance"] == {
+        **RICH_VERDICT["provenance"],
+        "rich_verdict": True,
+    }
+    assert receipt["verdict_warnings"] == []
+    assert receipt["verdict"]["killer_question"] == RICH_VERDICT["killer_question"]
 
 
 def test_orchestrator_passes_requested_locale_to_lit(monkeypatch, tmp_path):

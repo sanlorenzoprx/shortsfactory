@@ -572,6 +572,38 @@ retain the explicit manual-only/no-fetch/no-upload/no-scraping/live-disabled
 safety boundary. Generated `performance_reports/` remain local and ignored by
 Git.
 
+## Phase 4F: rich LIT verdict integration
+
+LIT-GhostTown owns idea evaluation; Shorts Factory only validates and formats
+the returned verdict. API-mode jobs can now consume the rich Phase 4F fields:
+
+```txt
+ghost_town_risk
+buyer_pain_clarity
+willingness_to_pay_signal
+distribution_difficulty
+unfair_advantage_check
+business_model_weakness
+why_it_might_work
+why_it_might_fail
+killer_question
+mvp_test
+```
+
+Validated rich responses write `verdict_provenance` and `verdict_warnings` to
+`receipt.json`. The same fields are stored in `verdict.json` and exposed as
+text-only template placeholders. Existing templates remain valid.
+
+Backward compatibility is deliberate: a complete legacy LIT verdict continues
+with `rich_verdict: false` and an explicit warning. An invalid legacy verdict
+still uses the existing deterministic `api_fallback` path. Mock mode remains
+offline-safe. No paid AI key is required for tests.
+
+The contract is documented in
+`docs/contracts/LIT_VERDICT_CONTRACT.md`. This phase adds no publishing,
+platform API, OAuth, scraping, metric collection, upload, or engagement
+automation.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

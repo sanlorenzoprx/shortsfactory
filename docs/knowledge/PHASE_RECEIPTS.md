@@ -586,3 +586,40 @@ Evidence:
 - No platform API, OAuth, metric auto-fetching, scraping, browser automation,
   auto-upload, cloud upload, external database, paid dependency, or Phase 4F
   work was added
+
+## Phase 4F — LIT-GhostTown AI Verdict Engine Integration
+
+Status: complete
+
+Commits:
+- LIT-GhostTown: `dcc364c Add AI verdict engine contract`
+- Shorts Factory: `Add Phase 4F rich LIT verdict integration`
+
+Implemented:
+- LIT `VerdictProvider` interface and deterministic no-key mock provider
+- Strict rich-verdict TypeScript schema and fail-closed validator/engine
+- Backward-compatible `/api/verdict` response with ten rich evaluation fields,
+  warnings, legacy source, and validated provenance
+- Validator refusal for missing/extra fields, invalid scores/enums, generic
+  advice, fake certainty, unsupported market claims, and malformed provenance
+- Shorts Factory normalization and local validation of complete rich responses
+- Explicit legacy downgrade for missing/invalid rich fields without inventing data
+- Unchanged deterministic fallback when required legacy fields are invalid
+- `verdict_provenance` and `verdict_warnings` in job receipts
+- Inert text-only rich template placeholders and deterministic script context
+- Shared `docs/contracts/LIT_VERDICT_CONTRACT.md`
+- README and knowledge-base documentation
+
+Evidence:
+- LIT baseline: 20 tests; final: 25 tests, TypeScript, build, Worker dry-run
+- Shorts baseline: 205 tests; final: 209 passed in 91.87s
+- Focused LIT tests: 12 passed
+- Focused Shorts tests: 33 passed
+- Local Worker response included killer question, MVP test, work/fail reasons,
+  rich risk/signals, and `provenance.validated: true`
+- Real API job `e5ba29ca311e` recorded `ai_verdict_engine`, provider `mock`,
+  model `mock-lit-verdict-v1`, `rich_verdict: true`, and no warnings
+- Real mock job `4a626d1b9060` preserved offline deterministic behavior
+- Contract tests require no network, paid AI key, or live provider
+- No unrelated UI, publishing, platform API, OAuth, auto-comment, auto-DM,
+  scraping, metric fetch, cloud upload, external database, or Phase 4G work

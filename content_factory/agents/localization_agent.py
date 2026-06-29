@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from content_factory.locales.catalog import resolve_locale, translate_to_spanish
 from content_factory.schemas import Idea, LitVerdict, ShortScript
@@ -61,16 +61,15 @@ class LocalizationAgent:
             market=verdict.idea.market,
         )
         return (
-            LitVerdict(
+            replace(
+                verdict,
                 idea=idea,
                 verdict_headline=translated(
                     verdict.verdict_headline, "verdict.verdict_headline"
                 ),
-                lit_score=verdict.lit_score,
                 risk_level=translated(verdict.risk_level, "verdict.risk_level"),
                 top_reason=translated(verdict.top_reason, "verdict.top_reason"),
                 next_step=translated(verdict.next_step, "verdict.next_step"),
-                source=verdict.source,
             ),
             warnings,
         )

@@ -2,20 +2,23 @@
 
 ## Current status
 
-Phase 4E is complete locally: manually entered local results can now be turned
-into deterministic Markdown, JSON, and CSV performance reviews, inspected in
-Mission Control, and used to choose one next manual experiment without adding
-metric fetching, scraping, platform integration, or live publishing capability.
+Phase 4F is complete locally: LIT-GhostTown now returns a strict validated rich
+idea verdict through a provider boundary, and Shorts Factory consumes that
+verdict with receipt provenance while preserving legacy and deterministic
+fallback behavior. No publishing, platform, scraping, or engagement boundary
+changed.
 
 ## Last known remote HEAD
 
 ```txt
-34cfb6e Add Phase 4D manual results ledger
+6f33f4e Fix Mission Control revision redirect timeout
 ```
 
 ## Last known commit log
 
 ```txt
+6f33f4e Fix Mission Control revision redirect timeout
+c75a58f Add Phase 4E local performance review
 34cfb6e Add Phase 4D manual results ledger
 15235dd Add Phase 4C final compliance checklist
 d648e4b Add Phase 4B publisher preview cards
@@ -42,7 +45,7 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-205 passed in 87.27s
+209 passed in 91.87s
 ```
 
 ## Known working capabilities
@@ -100,6 +103,14 @@ pytest -q
 - Local Markdown, JSON, and three CSV performance reports
 - Mission Control performance status, tables, recommendation, regeneration,
   and allowlisted Markdown report view
+- Cross-repo LIT rich-verdict contract with legacy fields preserved
+- Deterministic no-key mock verdict provider behind a provider interface
+- Strict LIT rich schema validation for fields, enums, specificity, certainty,
+  unsupported claims, warnings, and provenance
+- Rich Ghost Town, buyer, distribution, business-model, killer-question, and
+  MVP-test fields available to Shorts Factory templates as inert text
+- Receipt-level `verdict_provenance` and `verdict_warnings`
+- Legacy-rich downgrade warnings and unchanged invalid-legacy `api_fallback`
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -137,10 +148,13 @@ pytest -q
   local operator records only and cannot fetch metrics, upload, or publish.
 - Performance reviews live under ignored `performance_reports/`; they are local
   derived reports only and cannot fetch URLs or metrics, scrape, upload, or publish.
+- Phase 4F provider output is evaluated and validated in LIT-GhostTown. Shorts
+  Factory never invents missing business conclusions and only formats validated
+  rich or backward-compatible legacy fields.
 
 ## Current risk
 
-Phase 4E ends at deterministic local review of manual results. Do not begin
-Phase 4F or add automatic analytics sync, experiment automation, deployment
-packaging, upload clients, remote services, or live publisher integrations
+Phase 4F ends at rich verdict generation/validation and safe local consumption.
+Do not begin Phase 4G or add live AI providers, automatic analytics, engagement
+automation, upload clients, remote services, or live publisher integrations
 without explicit approval.

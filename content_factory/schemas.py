@@ -28,6 +28,18 @@ class LitVerdict:
     top_reason: str
     next_step: str
     source: str = "mock"
+    ghost_town_risk: str = ""
+    buyer_pain_clarity: str = ""
+    willingness_to_pay_signal: str = ""
+    distribution_difficulty: str = ""
+    unfair_advantage_check: str = ""
+    business_model_weakness: str = ""
+    why_it_might_work: str = ""
+    why_it_might_fail: str = ""
+    killer_question: str = ""
+    mvp_test: str = ""
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -66,6 +78,8 @@ class ShortJobReceipt:
     scheduler: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
     publisher: Dict[str, Any] = field(default_factory=lambda: {"status": "disabled"})
     templates: Dict[str, Any] = field(default_factory=dict)
+    verdict_provenance: Dict[str, Any] = field(default_factory=dict)
+    verdict_warnings: List[str] = field(default_factory=list)
 
     def to_json_dict(self) -> Dict[str, Any]:
         return asdict(self)

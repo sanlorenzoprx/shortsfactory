@@ -464,3 +464,31 @@ Commands/evidence:
 Notes:
 Phase 4E ends at deterministic local analysis of manual ledger entries. Phase
 4F was not started.
+
+## Phase 4F — LIT-GhostTown AI Verdict Engine Integration
+
+Status: passed
+
+Commits:
+- LIT-GhostTown: `dcc364c Add AI verdict engine contract`
+- Shorts Factory: `Add Phase 4F rich LIT verdict integration`
+
+Commands/evidence:
+- Shorts Factory baseline: 205 passed in 99.63s
+- LIT-GhostTown baseline: 20 tests plus type-check, build, and Worker dry-run
+- Focused LIT provider/schema/API tests: 12 passed
+- Focused Shorts normalization/receipt/template/localization tests: 33 passed
+- Final LIT `npm run check`: 25 tests plus type-check, build, and Worker dry-run
+- Final Shorts Factory `pytest -q`: 209 passed in 91.87s
+- Local `/api/verdict` smoke returned all rich fields and validated mock provenance
+- Real API-mode receipt recorded `rich_verdict: true`, provider/model, killer
+  question, MVP test, and no warnings
+- Real mock-mode receipt remained deterministic and rich-disabled
+- Legacy payload tests recorded `rich_verdict_fields_missing` without fallback
+- Invalid legacy responses retained the existing deterministic `api_fallback`
+- Scope review found no UI, publishing, platform API, OAuth, scraping,
+  auto-comment, auto-DM, metric collection, upload, database, or Phase 4G work
+
+Notes:
+LIT-GhostTown evaluates; Shorts Factory validates and packages. Phase 4G was
+not started.

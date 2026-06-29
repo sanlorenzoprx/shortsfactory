@@ -234,3 +234,16 @@ scraping, or platform integration is considered.
 Reason:
 Manual performance data is enough to guide early experiments while preserving
 the no-API, no-publishing safety boundary.
+
+## D021 — LIT evaluates, Shorts Factory packages
+
+Status: accepted
+
+Decision:
+The idea evaluation belongs in LIT-GhostTown. Shorts Factory consumes only
+validated structured verdicts and packages them into content.
+
+Reason:
+The quality of the content depends on the quality of the verdict. Keeping
+evaluation separate prevents Shorts Factory from hallucinating strategy or
+inventing unsupported business claims.

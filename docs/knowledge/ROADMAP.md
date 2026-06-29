@@ -22,10 +22,11 @@
 - Phase 4C final pre-publish compliance checklist
 - Phase 4D manual results ledger
 - Phase 4E local performance review dashboard
+- Phase 4F LIT-GhostTown AI verdict engine contract and rich verdict integration
 
 ## Current checkpoint
 
-Phase 4E green gate complete. Stop before Phase 4F.
+Phase 4F green gate complete. Stop before Phase 4G.
 
 ## Recommended next options
 
@@ -61,4 +62,5 @@ Make installation, setup, and one-command local running easier.
 - packaging/demo-mode work
 - automated analytics or metric synchronization
 - local experiment planning/backlog automation
-- Phase 4F or later work
+- live/paid AI verdict provider activation
+- Phase 4G or later work

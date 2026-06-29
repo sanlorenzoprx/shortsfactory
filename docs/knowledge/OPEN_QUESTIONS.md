@@ -96,6 +96,13 @@ Do not begin Phase 4F without a bounded handoff.
 ## Q016 — What should Phase 4F be?
 
 Current answer:
-Not decided. Do not start automated analytics, template/result comparison,
-manual campaign planning, Windows packaging, packaged demo mode, or experiment
-backlogs without an approved bounded handoff.
+Complete: Phase 4F added the LIT-GhostTown rich verdict provider/schema/validator
+contract plus Shorts Factory provenance, template context, legacy downgrade,
+and deterministic fallback behavior. No live AI provider was activated.
+
+## Q017 — What should Phase 4G be?
+
+Current answer:
+Not decided. Do not start results import, template/result comparison, verdict
+quality dashboards, packaged demo mode, Windows packaging, live AI providers,
+or publishing integrations without an approved bounded handoff.

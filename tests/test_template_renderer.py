@@ -58,6 +58,43 @@ def test_script_writer_uses_local_template_and_falls_back_when_invalid(tmp_path:
     assert "fallback used" in writer.last_template_warning
 
 
+def test_script_template_can_use_rich_lit_verdict_fields(tmp_path: Path):
+    root = tmp_path / "templates"
+    store = TemplateStore(root)
+    template = store.get("script.default")
+    template["content"] = [
+        "{hook}",
+        "Why it might work: {why_it_might_work}",
+        "Killer question: {killer_question}",
+        "MVP test: {mvp_test}",
+        "Verdict: {verdict_headline}",
+        "{cta}",
+    ]
+    template["required_placeholders"] = [
+        "hook", "why_it_might_work", "killer_question", "mvp_test",
+        "verdict_headline", "cta",
+    ]
+    store.save("script.default", template)
+    rich = LitVerdict(
+        Idea("Rich idea", "Description"),
+        "Test distribution",
+        78,
+        "medium",
+        "Buyer path needs proof",
+        "Sell a manual pilot",
+        "lit_api",
+        why_it_might_work="The buyer problem is specific and testable.",
+        killer_question="Who will pay before the product exists?",
+        mvp_test="Sell three manual pilots this week.",
+    )
+
+    script = ScriptWriter(root).generate_script(rich)
+
+    assert "Why it might work: The buyer problem is specific" in script.as_text()
+    assert "Killer question: Who will pay" in script.as_text()
+    assert "MVP test: Sell three manual pilots" in script.as_text()
+
+
 def test_revision_runner_uses_local_revision_template(tmp_path: Path):
     store = TemplateStore(tmp_path)
     template = store.get("revision.default")

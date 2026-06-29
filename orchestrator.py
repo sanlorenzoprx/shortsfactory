@@ -71,6 +71,8 @@ class ContentFactoryOrchestrator:
             if self.writer.last_template_warning:
                 receipt.warnings.append(self.writer.last_template_warning)
             receipt.idea = asdict(verdict.idea)
+            receipt.verdict_provenance = dict(verdict.provenance)
+            receipt.verdict_warnings = list(verdict.warnings)
             receipt.localization = {
                 "status": localization.status,
                 "requested_locale": localization.requested_locale,

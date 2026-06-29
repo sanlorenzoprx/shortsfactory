@@ -39,6 +39,18 @@ class AppTester:
                     top_reason=normalized["top_reason"],
                     next_step=normalized["next_step"],
                     source=normalized["source"],
+                    ghost_town_risk=normalized["ghost_town_risk"],
+                    buyer_pain_clarity=normalized["buyer_pain_clarity"],
+                    willingness_to_pay_signal=normalized["willingness_to_pay_signal"],
+                    distribution_difficulty=normalized["distribution_difficulty"],
+                    unfair_advantage_check=normalized["unfair_advantage_check"],
+                    business_model_weakness=normalized["business_model_weakness"],
+                    why_it_might_work=normalized["why_it_might_work"],
+                    why_it_might_fail=normalized["why_it_might_fail"],
+                    killer_question=normalized["killer_question"],
+                    mvp_test=normalized["mvp_test"],
+                    provenance=normalized["verdict_provenance"],
+                    warnings=tuple(normalized["verdict_warnings"]),
                 )
                 return AppTestOutcome(verdict=verdict, raw_response=raw_response)
             except Exception as exc:
@@ -67,6 +79,9 @@ class AppTester:
             risk = "high"
             reason = "The idea sounds attractive, but demand proof is weak."
             next_step = "Run interviews and collect willingness-to-pay signals first."
+        provenance_source = (
+            "deterministic_fallback" if source == "api_fallback" else "deterministic_mock"
+        )
         return LitVerdict(
             idea=idea,
             verdict_headline=headline,
@@ -75,6 +90,12 @@ class AppTester:
             top_reason=reason,
             next_step=next_step,
             source=source,
+            provenance={
+                "source": provenance_source,
+                "rich_verdict": False,
+                "validated": True,
+            },
+            warnings=("rich_verdict_fields_missing",) if source == "api_fallback" else (),
         )
 
     @staticmethod
