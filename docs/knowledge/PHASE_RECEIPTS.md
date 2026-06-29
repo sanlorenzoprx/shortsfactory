@@ -699,3 +699,43 @@ Evidence:
 Notes:
 No real YouTube credentials or upload were used. TikTok, Instagram, OAuth login
 UX, refresh-token storage, analytics, and Phase 5C were not started.
+
+## Phase 5B.1 — YouTube Credential Bootstrap + Preflight
+
+Status: complete
+
+Commit:
+`Add Phase 5B.1 YouTube credential preflight`
+
+Implemented:
+- Optional Google dependency manifest for API, auth, OAuth, and HTTP support
+- `youtube_credentials.py` bootstrap/preflight/paths/dependencies CLI
+- Installed-app browser OAuth requesting only YouTube upload scope and offline access
+- Atomic token storage under ignored `.local/youtube/`
+- Client-secret, token, authorized-user type, scope, validity/refresh, and
+  Git-ignore checks
+- Explicit service-account and web-client refusal
+- Authenticated `channels.list(mine=true)` identity check
+- Redacted durable credential/quota/policy readiness receipt
+- Explicit quota-console and policy-readiness confirmations
+- Environment-driven adapter policy requiring the passed confirmed receipt
+- Full and supervised autopilot gates unchanged and closed
+
+Evidence:
+- Baseline Phase 5A focused suite: 18 passed
+- Phase 5B.1 combined focused suite: 38 passed
+- Final `pytest -q`: 247 passed in 102.53s
+- Python compile check passed
+- CLI help, paths, and dependency status commands passed
+- Default preflight refused missing OAuth library/client/token and wrote a
+  durable blocked receipt with no secret data
+- Git confirmed `.local/youtube/client_secret.json`, token JSON, `.env`, and
+  `.env.local` are ignored
+- Real one-job Phase 5A dry run completed with 3 simulated attempts, live
+  disabled, credentials unused, and 0 credential artifacts
+- No upload request or `videos.insert` call occurred
+
+Notes:
+The local machine still needs `google-auth-oauthlib` plus a real Desktop-app
+client before bootstrap. No real consent, channel call, or upload was performed.
+First supervised upload approval, TikTok, Instagram, and Phase 5C were not started.

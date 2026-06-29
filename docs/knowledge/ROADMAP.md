@@ -25,12 +25,13 @@
 - Phase 4F LIT-GhostTown AI verdict engine contract and rich verdict integration
 - Phase 5A full autopilot dry-run pipeline
 - Phase 5B YouTube official publisher adapter boundary
+- Phase 5B.1 YouTube credential bootstrap and preflight
 
 ## Current checkpoint
 
-Phase 5B boundary green gate complete. Dry-run remains the default; the YouTube
-adapter is credential-gated and has not performed a real upload. Stop before
-TikTok, Instagram, or real credential activation.
+Phase 5B.1 green gate complete. Dry-run remains the default; local OAuth and
+channel preflight cannot upload or enable live modes. Stop before the first
+supervised YouTube upload, TikTok, or Instagram.
 
 ## Recommended next options
 
@@ -67,6 +68,6 @@ Make installation, setup, and one-command local running easier.
 - automated analytics or metric synchronization
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
-- YouTube OAuth login UX, token refresh/storage, and production account setup
+- first supervised YouTube upload approval and production credential smoke
 - official analytics connectors
 - Phase 5C or later work

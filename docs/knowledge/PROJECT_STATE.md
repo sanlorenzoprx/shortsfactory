@@ -2,11 +2,12 @@
 
 ## Current status
 
-Phase 5B is complete locally as a fail-closed YouTube official publisher
-boundary. Phase 5A `dry_run` remains the default and never reads YouTube
-credentials. The new adapter performs OAuth/scope/expiry, two-key enablement,
-quota, policy, metadata, approval, media, and schedule preflight before its
-optional official transport can run. No real account or upload was used.
+Phase 5B.1 is complete locally as a safe YouTube installed-app OAuth bootstrap
+and credential preflight layer. It stores client/token JSON only under ignored
+local paths, refreshes/validates authorized-user tokens, verifies the upload
+scope and authenticated channel, and writes a redacted readiness receipt. It
+does not upload or enable supervised/full autopilot. Phase 5A `dry_run` never
+reads the credential files.
 
 ## Last known remote HEAD
 
@@ -17,6 +18,7 @@ bd9b55d Add Phase 5A full autopilot dry-run pipeline
 ## Last known commit log
 
 ```txt
+5855322 Add Phase 5B YouTube publisher adapter boundary
 bd9b55d Add Phase 5A full autopilot dry-run pipeline
 4b47c4f Add Phase 4F rich LIT verdict integration
 6f33f4e Fix Mission Control revision redirect timeout
@@ -53,6 +55,9 @@ Final `pytest -q`: 227 passed in 97.85s
 Phase 5B focused suite: 25 passed
 Phase 5B final `pytest -q`: 234 passed in 96.74s
 Phase 5B dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads
+Phase 5B.1 focused suite: 38 passed
+Phase 5B.1 final `pytest -q`: 247 passed in 102.53s
+Phase 5B.1 dry-run smoke: 1 job, 3 simulated attempts, 0 credential artifacts
 ```
 
 ## Known working capabilities
@@ -131,6 +136,13 @@ Phase 5B dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads
 - Existing publisher metadata to validated `videos.insert` payload conversion
 - Future private scheduled-publish payload support
 - Redacted durable per-attempt YouTube publish receipts
+- Optional Google dependency manifest and lazy installed-app OAuth imports
+- Local browser OAuth bootstrap requesting only YouTube upload scope
+- Git-ignored client-secret and authorized-user token paths
+- Refreshable/valid token and stored-scope preflight
+- Authenticated channel title/id verification with no upload call
+- Durable redacted credential, quota, and policy readiness receipt
+- Environment live policy requiring a passed, explicitly confirmed receipt
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -178,9 +190,14 @@ Phase 5B dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads
 - Real YouTube setup still requires an approved Google Cloud project, enabled
   YouTube Data API, OAuth consent/client configuration, token lifecycle,
   available upload quota, policy review, and optional Google client packages.
+- Local YouTube secrets default to `.local/youtube/client_secret.json` and
+  `.local/youtube/token.json`; `.local/youtube/` is ignored by Git.
+- The credential preflight receipt cannot enable either supervised or full
+  autopilot. It only records readiness evidence for a later approved phase.
 
 ## Current risk
 
-Phase 5B has not been exercised with real YouTube credentials. Do not activate
-live publishing or add TikTok, Instagram, live analytics, or remote trend
-connectors without a separately approved and credentialed phase.
+Phase 5B.1 has not been exercised with real YouTube credentials. The local
+environment is also missing `google-auth-oauthlib` until optional dependencies
+are installed. Do not activate a first upload or add TikTok, Instagram, live
+analytics, or remote trend connectors without a separately approved phase.

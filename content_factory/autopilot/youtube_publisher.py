@@ -51,14 +51,35 @@ class YouTubeCredentials:
 
     @classmethod
     def from_env(cls) -> "YouTubeCredentials":
+        access_token = os.getenv("YOUTUBE_OAUTH_ACCESS_TOKEN", "").strip()
         scopes = tuple(
             scope for scope in os.getenv("YOUTUBE_OAUTH_SCOPES", "").replace(",", " ").split()
             if scope
         )
+        expires_at = os.getenv("YOUTUBE_OAUTH_TOKEN_EXPIRES_AT") or None
+        token_file = os.getenv("YOUTUBE_TOKEN_FILE", "").strip()
+        if not access_token and token_file:
+            path = Path(token_file).expanduser().resolve()
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+                raise YouTubePublisherError("configured YouTube token file is missing or invalid") from exc
+            if (
+                not isinstance(value, dict)
+                or value.get("type") == "service_account"
+                or "private_key" in value
+                or "client_email" in value
+            ):
+                raise YouTubePublisherError("YouTube token file must contain installed-app authorized-user credentials")
+            access_token = str(value.get("token", "")).strip()
+            raw_scopes = value.get("scopes", [])
+            if isinstance(raw_scopes, list):
+                scopes = tuple(str(scope) for scope in raw_scopes if scope)
+            expires_at = str(value.get("expiry")) if value.get("expiry") else None
         return cls(
-            access_token=os.getenv("YOUTUBE_OAUTH_ACCESS_TOKEN", "").strip(),
+            access_token=access_token,
             scopes=scopes,
-            expires_at=os.getenv("YOUTUBE_OAUTH_TOKEN_EXPIRES_AT") or None,
+            expires_at=expires_at,
         )
 
     def checks(self, now: datetime) -> list[dict[str, Any]]:
@@ -82,6 +103,7 @@ class YouTubeLivePolicy:
     quota_remaining: int = 0
     policy_acknowledged: bool = False
     emergency_stop: bool = False
+    credential_preflight_ready: bool = False
 
     @classmethod
     def from_env(cls) -> "YouTubeLivePolicy":
@@ -90,12 +112,32 @@ class YouTubeLivePolicy:
             quota = int(raw_quota)
         except ValueError:
             quota = 0
+        preflight_ready = False
+        receipt_value = os.getenv(
+            "YOUTUBE_PREFLIGHT_RECEIPT",
+            "output/youtube/credential_preflight/YOUTUBE_CREDENTIAL_PREFLIGHT.json",
+        ).strip()
+        if receipt_value:
+            try:
+                receipt = json.loads(Path(receipt_value).expanduser().resolve().read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                receipt = {}
+            readiness = receipt.get("readiness", {}) if isinstance(receipt, dict) else {}
+            channel = receipt.get("channel", {}) if isinstance(receipt, dict) else {}
+            preflight_ready = (
+                receipt.get("status") == "passed"
+                and isinstance(readiness, dict)
+                and readiness.get("ready_for_future_supervised_upload") is True
+                and isinstance(channel, dict)
+                and channel.get("status") == "verified"
+            )
         return cls(
             live_publishing_enabled=_env_bool("LIVE_PUBLISHING_ENABLED"),
             youtube_publishing_enabled=_env_bool("YOUTUBE_PUBLISHING_ENABLED"),
             quota_remaining=max(0, quota),
             policy_acknowledged=_env_bool("YOUTUBE_POLICY_ACKNOWLEDGED"),
             emergency_stop=_env_bool("AUTOPILOT_EMERGENCY_STOP"),
+            credential_preflight_ready=preflight_ready,
         )
 
 
@@ -443,6 +485,7 @@ class YouTubePublisherAdapter:
             {"name": "youtube_publishing_enabled", "passed": policy.youtube_publishing_enabled},
             {"name": "youtube_upload_quota_available", "passed": policy.quota_remaining >= 1},
             {"name": "youtube_policy_acknowledged", "passed": policy.policy_acknowledged},
+            {"name": "youtube_credential_preflight_ready", "passed": policy.credential_preflight_ready},
             *credentials.checks(self.now().astimezone(timezone.utc)),
         ]
         failed = [check["name"] for check in checks if check["passed"] is not True]

@@ -276,3 +276,18 @@ Reason:
 Separating payload/preflight/transport makes the official integration testable
 without credentials or uploads, while preventing an incomplete configuration
 from silently becoming a publish action.
+
+## D024 — Installed-app OAuth evidence before first YouTube upload
+
+Status: accepted
+
+Decision:
+YouTube credentials must be created through the local installed-app user OAuth
+flow with least-privilege upload scope and stored only under ignored local
+paths. Service accounts are refused. A redacted channel/quota/policy preflight
+receipt is mandatory but cannot itself enable supervised or full autopilot.
+
+Reason:
+Separating credential bootstrap from upload approval proves identity and token
+readiness without turning setup into an accidental publish event or exposing
+secrets to Git.

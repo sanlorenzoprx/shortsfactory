@@ -1,6 +1,8 @@
 ﻿__pycache__/
 *.py[cod]
 .pytest_cache/
+.env
+.env.local
 output/
 exports/
 templates/history/
@@ -8,3 +10,4 @@ templates/local/
 demo_dataset/
 results_ledger/
 performance_reports/
+.local/youtube/

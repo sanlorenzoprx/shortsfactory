@@ -122,3 +122,11 @@ transport, and receipts are complete. Real setup still needs a Google project,
 API enablement/audit status, OAuth consent/client and token lifecycle, quota,
 policy approval, optional Google client installation, and a separately approved
 live credential smoke. TikTok and Instagram remain out of scope.
+
+## Q020 — What remains after YouTube credential preflight?
+
+Current answer:
+Install the optional OAuth library, create a real Desktop-app OAuth client,
+complete local consent, verify the intended channel, and review Cloud Console
+quota plus Google/YouTube policy status. A later bounded phase must add explicit
+first-upload approval. Phase 5B.1 does not upload or enable either live mode.

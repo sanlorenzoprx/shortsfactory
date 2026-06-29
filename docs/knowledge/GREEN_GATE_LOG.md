@@ -544,3 +544,27 @@ The optional official transport remains unreachable without full mode, both
 live switches, valid OAuth scope/expiry, quota, policy acknowledgement,
 approval, and valid metadata. No TikTok, Instagram, analytics, scraping, or
 Phase 5C work was added.
+
+## Phase 5B.1 — YouTube Credential Bootstrap + Preflight
+
+Status: passed
+
+Commit:
+`Add Phase 5B.1 YouTube credential preflight`
+
+Commands/evidence:
+- `pytest tests/test_youtube_credentials.py tests/test_youtube_publisher_adapter.py tests/test_autopilot_phase5a.py tests/test_autopilot_cli.py -q`: 38 passed
+- Final `pytest -q`: 247 passed in 102.53s
+- `python -m compileall -q content_factory/autopilot youtube_credentials.py`: passed
+- `python youtube_credentials.py --help`: passed
+- `python youtube_credentials.py paths`: both default secret paths ignored
+- `python youtube_credentials.py dependencies`: three installed, `google-auth-oauthlib` clearly missing
+- `python youtube_credentials.py preflight`: safely blocked and wrote the local receipt
+- `python autopilot.py --output-root .tmp_phase5b1_dry_run run --mode dry_run --batch-size 1 --locale en-US`: passed
+- Dry-run inspection: all 3 attempts simulated, live false, credentials unused,
+  and no token/client/preflight artifact created inside the batch
+
+Notes:
+Tests use fake OAuth/channel backends only. No consent flow, channel API request,
+upload, service account, live-mode enablement, TikTok, Instagram, or Phase 5C
+work occurred.

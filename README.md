@@ -689,6 +689,57 @@ path but do not publish a video or contact YouTube. TikTok, Instagram, OAuth
 login UX, token refresh/storage, analytics, and production credential setup
 remain out of scope.
 
+## Phase 5B.1: YouTube credential bootstrap and preflight
+
+Phase 5B.1 adds local installed-app OAuth setup without enabling uploads. Start
+by installing the optional Google libraries:
+
+```powershell
+python -m pip install -r requirements-youtube.txt
+python youtube_credentials.py dependencies
+python youtube_credentials.py paths
+```
+
+In Google Cloud Console, enable the YouTube Data API and create an OAuth client
+of type **Desktop app**. Download its JSON to the ignored local path shown by
+`paths` (the default is `.local/youtube/client_secret.json`). Web-client and
+service-account JSON are refused. Google documents that ordinary YouTube Data
+API access uses user OAuth and that service accounts are not supported for this
+upload use case: [YouTube OAuth guidance](https://developers.google.com/youtube/v3/guides/authentication).
+
+Run the browser-based installed-app flow:
+
+```powershell
+python youtube_credentials.py bootstrap
+```
+
+The command requests only
+`https://www.googleapis.com/auth/youtube.upload`, requests offline access, and
+saves the authorized-user token to `.local/youtube/token.json`. Both local
+credential paths are covered by `.gitignore`; neither secret is printed or
+written to a receipt.
+
+Then validate the token and authenticated channel without uploading:
+
+```powershell
+python youtube_credentials.py preflight
+python youtube_credentials.py preflight --confirm-quota-ready --confirm-policy-ready
+```
+
+Preflight refreshes an expired refreshable token, verifies the stored upload
+scope, reads channel title/id with `channels.list(mine=true)`, and writes:
+
+```txt
+output/youtube/credential_preflight/YOUTUBE_CREDENTIAL_PREFLIGHT.json
+```
+
+The confirmation flags record that the operator checked Google Cloud quota and
+app/API policy readiness. They do not enable publishing. The receipt always
+states `videos_insert_called: false`; `full_autopilot` and
+`supervised_autopilot` remain closed. The environment-driven YouTube adapter
+also requires this passed, confirmed receipt in addition to its existing live
+gates.
+
 ## Rules
 
 Do not activate live publishing or add TikTok, Instagram, real trend scraping,

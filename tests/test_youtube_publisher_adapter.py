@@ -96,6 +96,7 @@ def _policy() -> YouTubeLivePolicy:
         youtube_publishing_enabled=True,
         quota_remaining=1,
         policy_acknowledged=True,
+        credential_preflight_ready=True,
     )
 
 
