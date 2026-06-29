@@ -15,6 +15,11 @@ from .autopilot_models import PublishAttempt
 
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+YOUTUBE_REQUIRED_SCOPES = (
+    YOUTUBE_UPLOAD_SCOPE,
+    YOUTUBE_READONLY_SCOPE,
+)
 RECEIPT_VERSION = "phase5b.youtube.v1"
 
 
@@ -92,6 +97,7 @@ class YouTubeCredentials:
         return [
             {"name": "oauth_access_token", "passed": bool(self.access_token)},
             {"name": "youtube_upload_scope", "passed": YOUTUBE_UPLOAD_SCOPE in self.scopes},
+            {"name": "youtube_readonly_scope", "passed": YOUTUBE_READONLY_SCOPE in self.scopes},
             {"name": "oauth_token_not_expired", "passed": expiry_valid},
         ]
 
@@ -124,12 +130,16 @@ class YouTubeLivePolicy:
                 receipt = {}
             readiness = receipt.get("readiness", {}) if isinstance(receipt, dict) else {}
             channel = receipt.get("channel", {}) if isinstance(receipt, dict) else {}
+            token = receipt.get("token", {}) if isinstance(receipt, dict) else {}
             preflight_ready = (
                 receipt.get("status") == "passed"
                 and isinstance(readiness, dict)
                 and readiness.get("ready_for_future_supervised_upload") is True
                 and isinstance(channel, dict)
                 and channel.get("status") == "verified"
+                and isinstance(token, dict)
+                and token.get("youtube_upload_scope") is True
+                and token.get("youtube_readonly_scope") is True
             )
         return cls(
             live_publishing_enabled=_env_bool("LIVE_PUBLISHING_ENABLED"),
@@ -184,7 +194,7 @@ class GoogleApiYouTubeUploadTransport:
                 "The optional google-api-python-client and google-auth packages are required for a real YouTube upload."
             ) from exc
 
-        credentials = Credentials(token=access_token, scopes=[YOUTUBE_UPLOAD_SCOPE])
+        credentials = Credentials(token=access_token, scopes=list(YOUTUBE_REQUIRED_SCOPES))
         service = build("youtube", "v3", credentials=credentials, cache_discovery=False)
         request = service.videos().insert(
             part=",".join(payload.parts),

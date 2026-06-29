@@ -8,7 +8,7 @@ from content_factory.autopilot.autopilot_config import AutopilotConfig
 from content_factory.autopilot.autopilot_models import PublishAttempt
 from content_factory.autopilot.publisher_adapters import SimulatedPublisherAdapter
 from content_factory.autopilot.youtube_publisher import (
-    YOUTUBE_UPLOAD_SCOPE,
+    YOUTUBE_REQUIRED_SCOPES,
     YouTubeCredentials,
     YouTubeLivePolicy,
     YouTubePublisherAdapter,
@@ -85,7 +85,7 @@ def _publisher_files(tmp_path: Path, **updates) -> Path:
 def _credentials() -> YouTubeCredentials:
     return YouTubeCredentials(
         access_token="test-token-not-real",
-        scopes=(YOUTUBE_UPLOAD_SCOPE,),
+        scopes=YOUTUBE_REQUIRED_SCOPES,
         expires_at="2026-06-30T12:00:00Z",
     )
 

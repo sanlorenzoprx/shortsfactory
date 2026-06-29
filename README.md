@@ -661,8 +661,9 @@ Live preflight requires all of the following before the transport can run:
 - `LIVE_PUBLISHING_ENABLED=true`
 - `YOUTUBE_PUBLISHING_ENABLED=true`
 - `AUTOPILOT_EMERGENCY_STOP=false`
-- a non-expired OAuth access token with the
-  `https://www.googleapis.com/auth/youtube.upload` scope
+- a non-expired OAuth access token with both
+  `https://www.googleapis.com/auth/youtube.upload` and
+  `https://www.googleapis.com/auth/youtube.readonly`
 - `YOUTUBE_UPLOAD_QUOTA_REMAINING` of at least one
 - `YOUTUBE_POLICY_ACKNOWLEDGED=true`
 - top-level and YouTube metadata live opt-ins and approval
@@ -713,11 +714,15 @@ Run the browser-based installed-app flow:
 python youtube_credentials.py bootstrap
 ```
 
-The command requests only
-`https://www.googleapis.com/auth/youtube.upload`, requests offline access, and
-saves the authorized-user token to `.local/youtube/token.json`. Both local
-credential paths are covered by `.gitignore`; neither secret is printed or
-written to a receipt.
+The command requests exactly the two capabilities used by the current boundary:
+
+- `https://www.googleapis.com/auth/youtube.upload` for the future upload adapter
+- `https://www.googleapis.com/auth/youtube.readonly` for the preflight-only
+  `channels.list(mine=true)` identity check
+
+It requests offline access and saves the authorized-user token to
+`.local/youtube/token.json`. Both local credential paths are covered by
+`.gitignore`; neither secret is printed or written to a receipt.
 
 Then validate the token and authenticated channel without uploading:
 
@@ -726,8 +731,8 @@ python youtube_credentials.py preflight
 python youtube_credentials.py preflight --confirm-quota-ready --confirm-policy-ready
 ```
 
-Preflight refreshes an expired refreshable token, verifies the stored upload
-scope, reads channel title/id with `channels.list(mine=true)`, and writes:
+Preflight refreshes an expired refreshable token, verifies both stored scopes,
+reads channel title/id with `channels.list(mine=true)`, and writes:
 
 ```txt
 output/youtube/credential_preflight/YOUTUBE_CREDENTIAL_PREFLIGHT.json
@@ -739,6 +744,17 @@ states `videos_insert_called: false`; `full_autopilot` and
 `supervised_autopilot` remain closed. The environment-driven YouTube adapter
 also requires this passed, confirmed receipt in addition to its existing live
 gates.
+
+Tokens created before the readonly-scope correction must be recreated:
+
+```powershell
+Remove-Item ".local\youtube\token.json"
+python youtube_credentials.py bootstrap
+python youtube_credentials.py preflight
+```
+
+The bootstrap prompt will request upload plus readonly access. Preflight still
+does not upload or call `videos.insert`.
 
 ## Rules
 

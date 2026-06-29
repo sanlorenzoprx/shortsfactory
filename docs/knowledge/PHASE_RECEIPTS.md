@@ -710,9 +710,9 @@ Commit:
 Implemented:
 - Optional Google dependency manifest for API, auth, OAuth, and HTTP support
 - `youtube_credentials.py` bootstrap/preflight/paths/dependencies CLI
-- Installed-app browser OAuth requesting only YouTube upload scope and offline access
+- Installed-app browser OAuth requesting YouTube upload plus readonly scopes and offline access
 - Atomic token storage under ignored `.local/youtube/`
-- Client-secret, token, authorized-user type, scope, validity/refresh, and
+- Client-secret, token, authorized-user type, both scopes, validity/refresh, and
   Git-ignore checks
 - Explicit service-account and web-client refusal
 - Authenticated `channels.list(mine=true)` identity check
@@ -739,3 +739,36 @@ Notes:
 The local machine still needs `google-auth-oauthlib` plus a real Desktop-app
 client before bootstrap. No real consent, channel call, or upload was performed.
 First supervised upload approval, TikTok, Instagram, and Phase 5C were not started.
+
+## Phase 5B.1 Corrective — YouTube Channel Identity Scope
+
+Status: complete
+
+Commit:
+`Fix YouTube preflight channel identity scope`
+
+Implemented:
+- `YOUTUBE_READONLY_SCOPE` and ordered `YOUTUBE_REQUIRED_SCOPES`
+- Installed-app bootstrap request for upload plus readonly scopes
+- Separate upload and readonly checks in token summaries and receipts
+- Channel identity lookup only when the valid token contains both scopes
+- Environment readiness refusal for legacy upload-only receipts
+- Official transport credential construction with both required scopes
+- Safe `HttpError` detail limited to HTTP status and API reason
+- Explicit old-token deletion and re-bootstrap documentation
+
+Evidence:
+- Credential/publisher focused suite: 22 passed
+- Phase 5A/CLI regression suite: 18 passed
+- Final `pytest -q`: 249 passed in 114.91s
+- Python compile check passed
+- Upload-only token test failed `youtube_readonly_scope` and made zero channel calls
+- Two-scope token test passed both gates and used only the fake channel backend
+- HTTP error receipt test retained `status=403 reason=insufficientPermissions`
+  without token, client-secret, auth-code, headers, or URL detail
+- Existing dry-run credential-file guard and service-account refusal passed
+- No real OAuth, channel API, or upload network call occurred
+
+Notes:
+Existing upload-only `.local/youtube/token.json` must be deleted and recreated.
+Supervised/full autopilot remain disabled; no upload capability was enabled.

@@ -29,9 +29,10 @@
 
 ## Current checkpoint
 
-Phase 5B.1 green gate complete. Dry-run remains the default; local OAuth and
-channel preflight cannot upload or enable live modes. Stop before the first
-supervised YouTube upload, TikTok, or Instagram.
+Phase 5B.1 scope correction complete. OAuth requests upload plus readonly, and
+channel identity is gated on both. Dry-run remains the default; preflight cannot
+upload or enable live modes. Stop before the first supervised YouTube upload,
+TikTok, or Instagram.
 
 ## Recommended next options
 

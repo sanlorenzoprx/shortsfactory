@@ -70,3 +70,8 @@ Generated outputs such as `output/jobs/...` should remain untracked unless inten
 ## Publisher rule
 
 Publisher packages are dry-run only until the user explicitly approves live publishing.
+
+YouTube credential preflight requires both `youtube.upload` and
+`youtube.readonly`; readonly is used only for authenticated channel identity.
+An upload-only token must not trigger `channels.list` and cannot produce a
+ready receipt. Credential preflight never calls `videos.insert`.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from content_factory.autopilot.autopilot_config import AutopilotConfig
 from content_factory.autopilot.youtube_credentials import (
@@ -11,6 +12,8 @@ from content_factory.autopilot.youtube_credentials import (
     main,
 )
 from content_factory.autopilot.youtube_publisher import (
+    YOUTUBE_READONLY_SCOPE,
+    YOUTUBE_REQUIRED_SCOPES,
     YOUTUBE_UPLOAD_SCOPE,
     YouTubeLivePolicy,
     YouTubePublisherAdapter,
@@ -40,7 +43,10 @@ class FakeBackend:
     def bootstrap(self, *, client_secret_path, token_path, open_browser):
         self.bootstrap_calls += 1
         token_path.parent.mkdir(parents=True, exist_ok=True)
-        token_path.write_text(json.dumps({"token": "secret-token", "scopes": [YOUTUBE_UPLOAD_SCOPE]}), encoding="utf-8")
+        token_path.write_text(
+            json.dumps({"token": "secret-token", "scopes": list(YOUTUBE_REQUIRED_SCOPES)}),
+            encoding="utf-8",
+        )
         return self._state()
 
     def inspect_token(self, *, token_path):
@@ -58,7 +64,7 @@ class FakeBackend:
             valid=True,
             refreshable=True,
             refreshed=False,
-            scopes=(YOUTUBE_UPLOAD_SCOPE,),
+            scopes=YOUTUBE_REQUIRED_SCOPES,
             expires_at="2026-06-30T12:00:00+00:00",
         )
 
@@ -71,7 +77,7 @@ class InvalidRefreshableBackend(FakeBackend):
             valid=False,
             refreshable=True,
             refreshed=False,
-            scopes=(YOUTUBE_UPLOAD_SCOPE,),
+            scopes=YOUTUBE_REQUIRED_SCOPES,
             expires_at=None,
         )
 
@@ -87,6 +93,34 @@ class MissingScopeBackend(FakeBackend):
             scopes=(),
             expires_at="2026-06-30T12:00:00+00:00",
         )
+
+
+class UploadOnlyBackend(FakeBackend):
+    def inspect_token(self, *, token_path):
+        self.inspect_calls += 1
+        return TokenInspection(
+            credentials=object(),
+            valid=True,
+            refreshable=True,
+            refreshed=False,
+            scopes=(YOUTUBE_UPLOAD_SCOPE,),
+            expires_at="2026-06-30T12:00:00+00:00",
+        )
+
+
+class ChannelHttpErrorBackend(FakeBackend):
+    def channel_identity(self, *, credentials):
+        self.channel_calls += 1
+        error_type = type("HttpError", (Exception,), {})
+        error = error_type("secret-token must never enter the receipt")
+        error.resp = SimpleNamespace(status=403)
+        error.content = json.dumps({
+            "error": {
+                "errors": [{"reason": "insufficientPermissions"}],
+                "message": "secret-token client-secret auth-code",
+            }
+        }).encode("utf-8")
+        raise error
 
 
 def _installed_client() -> dict:
@@ -201,6 +235,9 @@ def test_preflight_receipt_is_durable_redacted_and_records_channel(tmp_path):
     assert result["readiness"]["full_autopilot_enabled"] is False
     assert result["readiness"]["supervised_autopilot_enabled"] is False
     assert backend.channel_calls == 1
+    checks = {row["name"]: row["passed"] for row in result["checks"]}
+    assert checks["youtube_upload_scope"] is True
+    assert checks["youtube_readonly_scope"] is True
     persisted = Path(result["receipt_path"]).read_text(encoding="utf-8")
     assert "secret-token" not in persisted
     assert "local-secret" not in persisted
@@ -242,14 +279,43 @@ def test_missing_upload_scope_blocks_before_channel_lookup(tmp_path):
     assert backend.channel_calls == 0
 
 
-def test_bootstrap_uses_installed_app_backend_and_upload_scope(tmp_path):
+def test_upload_only_token_fails_readonly_scope_gate_without_channel_lookup(tmp_path):
+    backend = UploadOnlyBackend()
+    manager = _manager(tmp_path, backend)
+    manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
+    manager.token_path.write_text("{}", encoding="utf-8")
+    result = manager.preflight(confirm_quota_ready=True, confirm_policy_ready=True)
+    checks = {row["name"]: row for row in result["checks"]}
+    assert checks["youtube_upload_scope"]["passed"] is True
+    assert checks["youtube_readonly_scope"]["passed"] is False
+    assert checks["channel_identity"]["passed"] is False
+    assert "upload and readonly scopes" in checks["channel_identity"]["detail"]
+    assert result["status"] == "blocked"
+    assert backend.channel_calls == 0
+
+
+def test_channel_http_error_receipt_keeps_only_safe_status_and_reason(tmp_path):
+    backend = ChannelHttpErrorBackend()
+    manager = _manager(tmp_path, backend)
+    manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
+    manager.token_path.write_text(json.dumps({"token": "secret-token"}), encoding="utf-8")
+    result = manager.preflight()
+    channel_check = next(row for row in result["checks"] if row["name"] == "channel_identity")
+    assert channel_check["detail"] == "HttpError: status=403 reason=insufficientPermissions"
+    persisted = Path(result["receipt_path"]).read_text(encoding="utf-8")
+    assert "secret-token" not in persisted
+    assert "client-secret" not in persisted
+    assert "auth-code" not in persisted
+
+
+def test_bootstrap_uses_installed_app_backend_and_required_scopes(tmp_path):
     backend = FakeBackend()
     manager = _manager(tmp_path, backend)
     manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
     result = manager.bootstrap(open_browser=True)
     assert backend.bootstrap_calls == 1
     assert result["status"] == "token_saved"
-    assert result["scope"] == YOUTUBE_UPLOAD_SCOPE
+    assert result["scopes"] == [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READONLY_SCOPE]
     assert result["upload_attempted"] is False
 
 
@@ -260,8 +326,13 @@ def test_environment_live_policy_requires_passed_confirmed_preflight_receipt(tmp
     receipt.write_text(json.dumps({
         "status": "passed",
         "channel": {"status": "verified", "id": "UC-test", "title": "Test"},
+        "token": {"youtube_upload_scope": True, "youtube_readonly_scope": False},
         "readiness": {"ready_for_future_supervised_upload": True},
     }), encoding="utf-8")
+    assert YouTubeLivePolicy.from_env().credential_preflight_ready is False
+    value = json.loads(receipt.read_text(encoding="utf-8"))
+    value["token"]["youtube_readonly_scope"] = True
+    receipt.write_text(json.dumps(value), encoding="utf-8")
     assert YouTubeLivePolicy.from_env().credential_preflight_ready is True
 
 

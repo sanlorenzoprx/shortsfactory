@@ -127,6 +127,7 @@ live credential smoke. TikTok and Instagram remain out of scope.
 
 Current answer:
 Install the optional OAuth library, create a real Desktop-app OAuth client,
-complete local consent, verify the intended channel, and review Cloud Console
-quota plus Google/YouTube policy status. A later bounded phase must add explicit
-first-upload approval. Phase 5B.1 does not upload or enable either live mode.
+delete any upload-only token, complete consent for upload plus readonly, verify
+the intended channel, and review Cloud Console quota plus Google/YouTube policy
+status. A later bounded phase must add explicit first-upload approval. Phase
+5B.1 does not upload or enable either live mode.

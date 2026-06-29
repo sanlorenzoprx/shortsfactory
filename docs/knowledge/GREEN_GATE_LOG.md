@@ -568,3 +568,21 @@ Notes:
 Tests use fake OAuth/channel backends only. No consent flow, channel API request,
 upload, service account, live-mode enablement, TikTok, Instagram, or Phase 5C
 work occurred.
+
+## Phase 5B.1 Corrective — YouTube Channel Identity Scope
+
+Status: passed
+
+Commit:
+`Fix YouTube preflight channel identity scope`
+
+Commands/evidence:
+- `python -m compileall -q content_factory/autopilot youtube_credentials.py`: passed
+- `pytest tests/test_youtube_credentials.py tests/test_youtube_publisher_adapter.py -q`: 22 passed
+- `pytest tests/test_autopilot_phase5a.py tests/test_autopilot_cli.py -q`: 18 passed
+- Final `pytest -q`: 249 passed in 114.91s
+- Scope scan found both constants and both explicit receipt checks
+- Upload-only credentials made no channel identity call
+- Two-scope credentials passed through the injected local identity backend
+- Safe fake `HttpError` persisted status/reason only
+- No real network, OAuth, upload, TikTok, Instagram, or live-mode change

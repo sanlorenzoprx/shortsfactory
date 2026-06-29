@@ -14,7 +14,11 @@ from typing import Any, Callable, Protocol, Sequence
 
 from content_factory.mission_control.job_index import is_within
 
-from .youtube_publisher import YOUTUBE_UPLOAD_SCOPE
+from .youtube_publisher import (
+    YOUTUBE_READONLY_SCOPE,
+    YOUTUBE_REQUIRED_SCOPES,
+    YOUTUBE_UPLOAD_SCOPE,
+)
 
 
 PREFLIGHT_VERSION = "phase5b.1.youtube-credentials.v1"
@@ -106,14 +110,16 @@ class GoogleYouTubeOAuthBackend:
 
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
-            scopes=[YOUTUBE_UPLOAD_SCOPE],
+            scopes=list(YOUTUBE_REQUIRED_SCOPES),
         )
         credentials = flow.run_local_server(
             port=0,
             open_browser=open_browser,
             access_type="offline",
             prompt="consent",
-            authorization_prompt_message="Open this URL to authorize YouTube upload access:\n{url}",
+            authorization_prompt_message=(
+                "Open this URL to authorize YouTube upload and channel identity access:\n{url}"
+            ),
             success_message="YouTube credential bootstrap complete. You may close this browser window.",
         )
         self._write_credentials(token_path, credentials)
@@ -230,12 +236,15 @@ class YouTubeCredentialManager:
         )
         if not self.token_path.is_file():
             raise YouTubeCredentialError("OAuth flow completed without writing the local token file")
-        if YOUTUBE_UPLOAD_SCOPE not in state.scopes:
-            raise YouTubeCredentialError("OAuth flow did not grant the YouTube upload scope")
+        missing_scopes = [scope for scope in YOUTUBE_REQUIRED_SCOPES if scope not in state.scopes]
+        if missing_scopes:
+            raise YouTubeCredentialError(
+                "OAuth flow did not grant required YouTube scopes: " + ", ".join(missing_scopes)
+            )
         return {
             "status": "token_saved",
             "token_path": str(self.token_path),
-            "scope": YOUTUBE_UPLOAD_SCOPE,
+            "scopes": list(YOUTUBE_REQUIRED_SCOPES),
             "valid": state.valid,
             "refreshable": state.refreshable,
             "secrets_printed": False,
@@ -254,6 +263,7 @@ class YouTubeCredentialManager:
             "refreshable": False,
             "refreshed": False,
             "youtube_upload_scope": False,
+            "youtube_readonly_scope": False,
             "expires_at": None,
         }
         channel: dict[str, Any] = {"status": "not_checked", "id": None, "title": None}
@@ -293,6 +303,7 @@ class YouTubeCredentialManager:
                     "refreshable": state.refreshable,
                     "refreshed": state.refreshed,
                     "youtube_upload_scope": YOUTUBE_UPLOAD_SCOPE in state.scopes,
+                    "youtube_readonly_scope": YOUTUBE_READONLY_SCOPE in state.scopes,
                     "expires_at": state.expires_at,
                 }
                 add(
@@ -305,7 +316,13 @@ class YouTubeCredentialManager:
                     YOUTUBE_UPLOAD_SCOPE in state.scopes,
                     "least-privilege YouTube upload scope is granted",
                 )
-                if state.valid and YOUTUBE_UPLOAD_SCOPE in state.scopes:
+                add(
+                    "youtube_readonly_scope",
+                    YOUTUBE_READONLY_SCOPE in state.scopes,
+                    "YouTube readonly scope is granted for channel identity preflight",
+                )
+                has_required_scopes = all(scope in state.scopes for scope in YOUTUBE_REQUIRED_SCOPES)
+                if state.valid and has_required_scopes:
                     try:
                         identity = self.backend.channel_identity(credentials=state.credentials)
                     except Exception as exc:
@@ -315,7 +332,11 @@ class YouTubeCredentialManager:
                         channel = {"status": "verified", "id": identity["id"], "title": identity["title"]}
                         add("channel_identity", True, "authenticated channel identity verified")
                 else:
-                    add("channel_identity", False, "token must be valid with YouTube upload scope before channel lookup")
+                    add(
+                        "channel_identity",
+                        False,
+                        "token must be valid with YouTube upload and readonly scopes before channel lookup",
+                    )
 
         credential_checks = {
             "optional_dependencies",
@@ -327,6 +348,7 @@ class YouTubeCredentialManager:
             "authorized_user_token",
             "token_valid_or_refreshable",
             "youtube_upload_scope",
+            "youtube_readonly_scope",
             "channel_identity",
         }
         relevant = [check for check in checks if check["name"] in credential_checks]
@@ -431,6 +453,27 @@ class YouTubeCredentialManager:
 
     @staticmethod
     def _safe_error(exc: Exception) -> str:
+        if type(exc).__name__ == "HttpError":
+            status = getattr(getattr(exc, "resp", None), "status", None)
+            reason = None
+            content = getattr(exc, "content", None)
+            if isinstance(content, bytes):
+                try:
+                    content = content.decode("utf-8")
+                except UnicodeError:
+                    content = None
+            if isinstance(content, str):
+                try:
+                    payload = json.loads(content)
+                except json.JSONDecodeError:
+                    payload = {}
+                error = payload.get("error", {}) if isinstance(payload, dict) else {}
+                errors = error.get("errors", []) if isinstance(error, dict) else []
+                if errors and isinstance(errors[0], dict) and isinstance(errors[0].get("reason"), str):
+                    reason = errors[0]["reason"]
+                elif isinstance(error.get("status"), str):
+                    reason = error["status"]
+            return f"HttpError: status={status if status is not None else 'unknown'} reason={reason or 'unknown'}"
         if isinstance(exc, YouTubeCredentialError):
             return f"{type(exc).__name__}: {' '.join(str(exc).split())[:240]}"
         return f"{type(exc).__name__}: credential or channel validation failed; no secret details were recorded"

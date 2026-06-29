@@ -2,12 +2,12 @@
 
 ## Current status
 
-Phase 5B.1 is complete locally as a safe YouTube installed-app OAuth bootstrap
-and credential preflight layer. It stores client/token JSON only under ignored
-local paths, refreshes/validates authorized-user tokens, verifies the upload
-scope and authenticated channel, and writes a redacted readiness receipt. It
-does not upload or enable supervised/full autopilot. Phase 5A `dry_run` never
-reads the credential files.
+Phase 5B.1 includes the channel-identity scope correction: installed-app OAuth
+requests `youtube.upload` plus `youtube.readonly`; preflight requires both
+before `channels.list(mine=true)`. Upload-only tokens fail without attempting
+channel identity and must be recreated. HTTP failures retain only status/reason
+in redacted receipts. No upload or live mode is enabled, and Phase 5A `dry_run`
+never reads credential files.
 
 ## Last known remote HEAD
 
@@ -58,6 +58,8 @@ Phase 5B dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads
 Phase 5B.1 focused suite: 38 passed
 Phase 5B.1 final `pytest -q`: 247 passed in 102.53s
 Phase 5B.1 dry-run smoke: 1 job, 3 simulated attempts, 0 credential artifacts
+YouTube scope corrective focused suites: 22 passed and 18 passed
+YouTube scope corrective final `pytest -q`: 249 passed in 114.91s
 ```
 
 ## Known working capabilities
@@ -137,12 +139,13 @@ Phase 5B.1 dry-run smoke: 1 job, 3 simulated attempts, 0 credential artifacts
 - Future private scheduled-publish payload support
 - Redacted durable per-attempt YouTube publish receipts
 - Optional Google dependency manifest and lazy installed-app OAuth imports
-- Local browser OAuth bootstrap requesting only YouTube upload scope
+- Local browser OAuth bootstrap requesting upload plus readonly scopes
 - Git-ignored client-secret and authorized-user token paths
-- Refreshable/valid token and stored-scope preflight
+- Refreshable/valid token with explicit upload and readonly scope preflight
 - Authenticated channel title/id verification with no upload call
 - Durable redacted credential, quota, and policy readiness receipt
 - Environment live policy requiring a passed, explicitly confirmed receipt
+- Safe channel `HttpError` status/reason receipt detail without request secrets
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 

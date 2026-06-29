@@ -283,9 +283,10 @@ Status: accepted
 
 Decision:
 YouTube credentials must be created through the local installed-app user OAuth
-flow with least-privilege upload scope and stored only under ignored local
-paths. Service accounts are refused. A redacted channel/quota/policy preflight
-receipt is mandatory but cannot itself enable supervised or full autopilot.
+flow with upload scope plus readonly scope for authenticated channel identity,
+and stored only under ignored local paths. Service accounts are refused. A
+redacted channel/quota/policy preflight receipt is mandatory but cannot itself
+enable supervised or full autopilot.
 
 Reason:
 Separating credential bootstrap from upload approval proves identity and token
