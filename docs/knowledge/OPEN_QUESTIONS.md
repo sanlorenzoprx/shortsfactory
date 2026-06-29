@@ -106,3 +106,10 @@ Current answer:
 Not decided. Do not start results import, template/result comparison, verdict
 quality dashboards, packaged demo mode, Windows packaging, live AI providers,
 or publishing integrations without an approved bounded handoff.
+
+## Q018 — What follows Phase 5A?
+
+Current answer:
+Phase 5A is complete as a deterministic dry-run machine path. Future official
+publisher/analytics and trend-source connectors must be separately bounded as
+Phase 5B/5C/5D/5E work. No live platform or credential path is approved yet.

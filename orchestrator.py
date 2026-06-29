@@ -19,7 +19,7 @@ from content_factory.agents.voiceover_agent import VoiceoverAgent
 from content_factory.config import Config
 from content_factory.integrations.playwright_recorder import record_lit_app_flow
 from content_factory.local_queue import LocalQueue, LocalScheduler
-from content_factory.schemas import ShortJobReceipt
+from content_factory.schemas import AppTestOutcome, Idea, LitVerdict, ShortJobReceipt
 from content_factory.utils.files import write_json, write_text
 
 
@@ -39,13 +39,22 @@ class ContentFactoryOrchestrator:
         self.publisher = PublisherAgent()
 
     def run_batch(
-        self, batch: int = 1, locale: str = "en-US", job_id: str | None = None
+        self,
+        batch: int = 1,
+        locale: str = "en-US",
+        job_id: str | None = None,
+        ideas: List[Idea] | None = None,
+        verdicts: List[LitVerdict] | None = None,
     ) -> List[Path]:
-        if job_id is not None and batch != 1:
+        selected_ideas = list(ideas) if ideas is not None else self.researcher.get_trending_ideas(batch)
+        if not selected_ideas:
+            raise ValueError("at least one idea is required")
+        if verdicts is not None and len(verdicts) != len(selected_ideas):
+            raise ValueError("verdicts must match supplied ideas")
+        if job_id is not None and len(selected_ideas) != 1:
             raise ValueError("job_id can only be supplied when batch=1")
-        ideas = self.researcher.get_trending_ideas(batch)
         receipts: List[Path] = []
-        for idea in ideas:
+        for index, idea in enumerate(selected_ideas):
             receipt = ShortJobReceipt(
                 locale=locale, mode=self.config.mode, idea=asdict(idea)
             )
@@ -54,7 +63,11 @@ class ContentFactoryOrchestrator:
             job_dir = self.config.output_dir / "jobs" / receipt.job_id
             job_dir.mkdir(parents=True, exist_ok=True)
 
-            test_outcome = self.tester.run_test_with_details(idea, locale=locale)
+            test_outcome = (
+                AppTestOutcome(verdict=verdicts[index])
+                if verdicts is not None
+                else self.tester.run_test_with_details(idea, locale=locale)
+            )
             localization = self.localizer.resolve(locale)
             verdict, localization_warnings = self.localizer.localize_verdict(
                 test_outcome.verdict, localization

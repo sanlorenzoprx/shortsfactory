@@ -247,3 +247,17 @@ Reason:
 The quality of the content depends on the quality of the verdict. Keeping
 evaluation separate prevents Shorts Factory from hallucinating strategy or
 inventing unsupported business claims.
+
+## D022 — Receipts are the autopilot state machine
+
+Status: accepted
+
+Decision:
+Phase 5A automation advances only after each machine stage has atomically
+written its local JSON artifact. Resume reuses completed artifacts instead of
+regenerating content or replaying simulated publish attempts.
+
+Reason:
+Durable stage receipts make the automated loop inspectable, deterministic, and
+safe to resume after interruption. Provider boundaries keep future trend,
+publisher, and analytics integrations separate from the dry-run engine.

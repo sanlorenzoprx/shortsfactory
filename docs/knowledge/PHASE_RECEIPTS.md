@@ -623,3 +623,41 @@ Evidence:
 - Contract tests require no network, paid AI key, or live provider
 - No unrelated UI, publishing, platform API, OAuth, auto-comment, auto-DM,
   scraping, metric fetch, cloud upload, external database, or Phase 4G work
+
+## Phase 5A — Full Autopilot Dry-Run Pipeline
+
+Status: complete
+
+Commit:
+`Add Phase 5A full autopilot dry-run pipeline`
+
+Implemented:
+- JSON-serializable trend, idea, verdict decision, gate, publish, analytics,
+  and learning-loop contracts
+- Deterministic mock and local-file trend providers
+- Deterministic trend-to-business-idea generation and batched existing LIT
+  verdict evaluation with weak/generic/unsupported verdict rejection
+- Existing Shorts Factory generation behind a batch runner
+- Existing deterministic quality scorer plus autopilot-safe compliance gates
+- Simulated publisher and analytics providers plus an explicit refusing live
+  publisher adapter
+- Durable atomic artifacts for every machine stage and receipt-based resume
+- Simulated-results performance review and deterministic next-batch plan
+- `autopilot.py` run/list/status/show/resume/next-plan CLI
+
+Evidence:
+- Focused Phase 5A suite: 18 passed
+- Final `pytest -q`: 227 passed in 97.85s
+- Existing mock orchestrator command: passed
+- Exact three-job dry-run command: completed
+- Real run: 3 trends, 3 ideas, 3 accepted ideas, and 3 generated shorts
+- Real run: all 3 quality gates and all 3 compliance gates passed
+- Real run: 9 simulated publish successes and 9 simulated analytics snapshots
+- List, status, show, resume, and next-plan commands passed on the real batch
+- Final receipt recorded no live publishing/attempt, platform API call,
+  scraping, browser posting, credential use, or live analytics
+- Runtime artifacts remained ignored under `output/`
+
+Notes:
+Phase 5A ends at the local simulated machine path. `supervised_autopilot` and
+`full_autopilot` are refusing placeholders. No Phase 5B connector was started.

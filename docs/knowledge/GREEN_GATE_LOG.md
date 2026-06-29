@@ -492,3 +492,30 @@ Commands/evidence:
 Notes:
 LIT-GhostTown evaluates; Shorts Factory validates and packages. Phase 4G was
 not started.
+
+## Phase 5A — Full Autopilot Dry-Run Pipeline
+
+Status: passed
+
+Commit:
+`Add Phase 5A full autopilot dry-run pipeline`
+
+Commands/evidence:
+- `pytest tests/test_autopilot_phase5a.py tests/test_autopilot_cli.py -q`: 18 passed
+- Final `pytest -q`: 227 passed in 97.85s
+- `python orchestrator.py --batch 1 --locale en-US --mode mock --publish-dry-run`: passed
+- `python autopilot.py run --mode dry_run --trend-query "hottest searched business ideas" --batch-size 3 --locale en-US`: passed
+- `python autopilot.py list`: passed
+- `python autopilot.py status --batch-id ap_2026_06_29_112100_e09053`: passed
+- `python autopilot.py show --batch-id ap_2026_06_29_112100_e09053`: passed
+- `python autopilot.py resume --batch-id ap_2026_06_29_112100_e09053`: passed without replay
+- `python autopilot.py next-plan --batch-id ap_2026_06_29_112100_e09053`: passed
+- Receipt inspection: 3 jobs, 3 quality passes, 3 compliance passes, 9
+  simulated publishes, and 9 simulated snapshots
+- Safety inspection: live publishing, live attempts, platform API attempts,
+  scraping, browser posting, and credential use were all false
+
+Notes:
+The Phase 5A provider boundaries are local/simulated only. No live publishing,
+platform connector, OAuth, scraping, browser posting, paid key, or Phase 5B
+work was added.

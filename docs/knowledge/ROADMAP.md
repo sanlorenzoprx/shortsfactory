@@ -23,10 +23,12 @@
 - Phase 4D manual results ledger
 - Phase 4E local performance review dashboard
 - Phase 4F LIT-GhostTown AI verdict engine contract and rich verdict integration
+- Phase 5A full autopilot dry-run pipeline
 
 ## Current checkpoint
 
-Phase 4F green gate complete. Stop before Phase 4G.
+Phase 5A green gate complete. The machine path is durable and resumable but all
+publishing and analytics remain simulated. Stop before Phase 5B.
 
 ## Recommended next options
 
@@ -63,4 +65,6 @@ Make installation, setup, and one-command local running easier.
 - automated analytics or metric synchronization
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
-- Phase 4G or later work
+- official publisher or analytics connectors
+- credential storage or live platform preflight
+- Phase 5B or later work

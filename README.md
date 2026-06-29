@@ -604,6 +604,43 @@ The contract is documented in
 platform API, OAuth, scraping, metric collection, upload, or engagement
 automation.
 
+## Phase 5A: full autopilot dry-run pipeline
+
+Run the automated machine path without credentials or live platform access:
+
+```powershell
+python autopilot.py run --mode dry_run --trend-query "hottest searched business ideas" --batch-size 3 --locale en-US
+python autopilot.py list
+python autopilot.py status --batch-id <batch_id>
+python autopilot.py show --batch-id <batch_id>
+python autopilot.py resume --batch-id <batch_id>
+python autopilot.py next-plan --batch-id <batch_id>
+```
+
+The runner discovers deterministic mock or local-file trends, generates
+business ideas, runs the existing LIT verdict boundary, rejects weak verdicts,
+generates shorts, applies quality and compliance gates, simulates publishing
+and analytics, reviews the simulated results, and writes the next batch
+experiment. Every completed stage is written before the next begins under
+`output/autopilot/batches/<batch_id>/`.
+
+That directory includes the plan, selected trends, ideas, LIT verdicts,
+accept/reject decisions, generated-job index, gate results, simulated publish
+queue and attempts, simulated analytics, performance review,
+`next_batch_plan.json`, and `AUTOPILOT_RECEIPT.json`. `resume` reuses those
+receipts and continues from the first missing stage.
+
+Provider contracts isolate trend intake, publisher adapters, and analytics
+adapters. Phase 5A implements deterministic mock/file intake, a simulated
+publisher, simulated/file analytics, and a refusing live-publisher adapter.
+`supervised_autopilot` and `full_autopilot` are explicit placeholders and do
+not create a live path.
+
+Safety is fixed for Phase 5A: no live publishing, platform API upload, OAuth,
+scraping, browser posting, credentials, or live analytics. Publish records and
+metrics are simulated local artifacts only. Generated `output/` remains
+ignored by Git.
+
 ## Rules
 
 Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.

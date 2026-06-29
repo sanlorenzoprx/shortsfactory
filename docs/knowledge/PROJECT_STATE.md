@@ -2,16 +2,16 @@
 
 ## Current status
 
-Phase 4F is complete locally: LIT-GhostTown now returns a strict validated rich
-idea verdict through a provider boundary, and Shorts Factory consumes that
-verdict with receipt provenance while preserving legacy and deterministic
-fallback behavior. No publishing, platform, scraping, or engagement boundary
-changed.
+Phase 5A is complete locally: one resumable receipt-driven command now runs the
+entire machine path from deterministic trend intake through idea generation,
+LIT verdict filtering, short generation, machine gates, simulated publishing,
+simulated analytics, performance review, and the next batch plan. It remains
+dry-run only and requires no platform credentials, scraping, or live services.
 
 ## Last known remote HEAD
 
 ```txt
-6f33f4e Fix Mission Control revision redirect timeout
+4b47c4f Add Phase 4F rich LIT verdict integration
 ```
 
 ## Last known commit log
@@ -45,7 +45,9 @@ bd8d3e3 Add Phase 2C voiceover generation
 
 ```txt
 pytest -q
-209 passed in 91.87s
+Phase 5A focused suite: 18 passed
+Phase 5A real dry-run: 3 jobs, 9 simulated publishes, 9 simulated snapshots
+Final `pytest -q`: 227 passed in 97.85s
 ```
 
 ## Known working capabilities
@@ -111,6 +113,13 @@ pytest -q
   MVP-test fields available to Shorts Factory templates as inert text
 - Receipt-level `verdict_provenance` and `verdict_warnings`
 - Legacy-rich downgrade warnings and unchanged invalid-legacy `api_fallback`
+- Receipt-driven Phase 5A dry-run autopilot with stage-level resume
+- Deterministic mock and local-file trend provider boundaries
+- Programmatic trend-to-business-idea generation and LIT verdict batch filter
+- Existing short generator plus deterministic quality/compliance machine gates
+- Simulated publisher and analytics adapters with refusing live adapter
+- Local performance review and deterministic next-batch experiment receipt
+- Batch list/status/show/resume/next-plan CLI inspection
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -151,10 +160,13 @@ pytest -q
 - Phase 4F provider output is evaluated and validated in LIT-GhostTown. Shorts
   Factory never invents missing business conclusions and only formats validated
   rich or backward-compatible legacy fields.
+- Phase 5A runtime state lives under ignored `output/autopilot/batches/`.
+- `supervised_autopilot` and `full_autopilot` are non-live placeholders; Phase
+  5A refuses both rather than weakening the dry-run boundary.
 
 ## Current risk
 
-Phase 4F ends at rich verdict generation/validation and safe local consumption.
-Do not begin Phase 4G or add live AI providers, automatic analytics, engagement
-automation, upload clients, remote services, or live publisher integrations
-without explicit approval.
+Phase 5A proves the automated loop using only deterministic local/simulated
+providers. Do not add live publisher adapters, official platform connectors,
+credentials, remote trend sources, or live analytics without a separately
+approved Phase 5B/5C/5D/5E handoff.
