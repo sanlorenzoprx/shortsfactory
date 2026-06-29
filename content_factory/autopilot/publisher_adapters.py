@@ -6,6 +6,7 @@ from typing import Protocol
 
 from .autopilot_config import AutopilotConfig, AutopilotRefusal, LIVE_REFUSAL
 from .autopilot_models import PublishAttempt
+from .youtube_publisher import YouTubePublisherAdapter
 
 
 CREATED_AT = "2026-06-29T00:06:00+00:00"

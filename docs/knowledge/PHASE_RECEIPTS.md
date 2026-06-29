@@ -661,3 +661,41 @@ Evidence:
 Notes:
 Phase 5A ends at the local simulated machine path. `supervised_autopilot` and
 `full_autopilot` are refusing placeholders. No Phase 5B connector was started.
+
+## Phase 5B — YouTube Official Publisher Adapter Boundary
+
+Status: complete
+
+Commit:
+`Add Phase 5B YouTube publisher adapter boundary`
+
+Implemented:
+- `YouTubePublisherAdapter` as a structural `PublisherAdapter` implementation
+- Lazy OAuth access-token, upload-scope, and expiry preflight
+- Global/platform live switches, emergency stop, local quota budget, and
+  explicit policy acknowledgement gates
+- Top-level plan plus YouTube metadata live opt-in and approval checks
+- Existing publisher metadata conversion to a validated `videos.insert`
+  `snippet,status` body
+- Explicit made-for-kids, privacy, media containment, title, description, tag,
+  category, notification, and job-identity validation
+- Future ISO-8601 scheduled publishing with mandatory private visibility
+- Optional official Google API client transport and injected test transport
+- Atomic redacted blocked/failed/success per-attempt receipts
+
+Evidence:
+- Phase 5A baseline focused suite: 18 passed
+- Phase 5B plus Phase 5A focused suite: 25 passed
+- Final `pytest -q`: 234 passed in 96.74s
+- Python compile check passed
+- Real one-job Phase 5A dry run completed with 3 simulated attempts
+- Dry-run receipt retained `dry_run: true`, live disabled, and no credential use
+- No YouTube publisher receipt directory was created by dry-run
+- Missing OAuth, quota, policy, emergency-stop, approval, and invalid metadata
+  cases blocked before the injected transport
+- Successful adapter-path test wrote a durable receipt through a fake transport
+  without a network request or real upload
+
+Notes:
+No real YouTube credentials or upload were used. TikTok, Instagram, OAuth login
+UX, refresh-token storage, analytics, and Phase 5C were not started.

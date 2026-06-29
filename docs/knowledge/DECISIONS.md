@@ -261,3 +261,18 @@ Reason:
 Durable stage receipts make the automated loop inspectable, deterministic, and
 safe to resume after interruption. Provider boundaries keep future trend,
 publisher, and analytics integrations separate from the dry-run engine.
+
+## D023 — YouTube live access is a fail-closed adapter boundary
+
+Status: accepted
+
+Decision:
+The YouTube adapter may reach the official upload transport only after explicit
+full mode, global and platform enablement, OAuth scope/expiry, local quota,
+policy, approval, metadata, and media checks pass. Every outcome must write a
+redacted receipt. Dry-run does not instantiate or consult this live path.
+
+Reason:
+Separating payload/preflight/transport makes the official integration testable
+without credentials or uploads, while preventing an incomplete configuration
+from silently becoming a publish action.

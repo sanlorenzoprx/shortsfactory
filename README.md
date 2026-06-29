@@ -641,9 +641,58 @@ scraping, browser posting, credentials, or live analytics. Publish records and
 metrics are simulated local artifacts only. Generated `output/` remains
 ignored by Git.
 
+## Phase 5B: YouTube official publisher adapter boundary
+
+Phase 5B adds a fail-closed `YouTubePublisherAdapter` without changing the
+default Phase 5A runner. `dry_run` still uses only
+`SimulatedPublisherAdapter`, never reads YouTube credentials, and never calls a
+platform API.
+
+The YouTube adapter validates the existing publisher plan and its
+`youtube_shorts/metadata.json`, resolves the local video safely, and builds the
+official `videos.insert` `snippet` and `status` body. Scheduled uploads accept
+an ISO-8601 `schedule_window.publish_at`, require a future time, and force
+`privacyStatus: private`, matching the official
+[YouTube video resource rules](https://developers.google.com/youtube/v3/docs/videos).
+
+Live preflight requires all of the following before the transport can run:
+
+- `full_autopilot` mode at the adapter boundary
+- `LIVE_PUBLISHING_ENABLED=true`
+- `YOUTUBE_PUBLISHING_ENABLED=true`
+- `AUTOPILOT_EMERGENCY_STOP=false`
+- a non-expired OAuth access token with the
+  `https://www.googleapis.com/auth/youtube.upload` scope
+- `YOUTUBE_UPLOAD_QUOTA_REMAINING` of at least one
+- `YOUTUBE_POLICY_ACKNOWLEDGED=true`
+- top-level and YouTube metadata live opt-ins and approval
+- explicit `made_for_kids`, valid privacy, title, description, tags, media,
+  and optional schedule metadata
+
+The official transport uses YouTube Data API
+[`videos.insert`](https://developers.google.com/youtube/v3/docs/videos/insert)
+through optional `google-api-python-client` and `google-auth` packages. Those
+packages and credentials are not required for tests or dry-run operation.
+Google documents that upload requests require OAuth authorization, are quota
+controlled, and may be restricted to private visibility for unaudited API
+projects.
+
+Every blocked, failed, or successful adapter attempt writes a redacted local
+receipt under:
+
+```txt
+output/autopilot/batches/<batch_id>/publisher_receipts/youtube_shorts/<publish_attempt_id>.json
+```
+
+Tests use an injected fake transport. They exercise the successful adapter
+path but do not publish a video or contact YouTube. TikTok, Instagram, OAuth
+login UX, token refresh/storage, analytics, and production credential setup
+remain out of scope.
+
 ## Rules
 
-Do not add publishing, TikTok API, paid TTS, real trend scraping, or G20 scaling until the local mock pipeline and tests pass.
+Do not activate live publishing or add TikTok, Instagram, real trend scraping,
+or G20 scaling without a separately approved phase and green gate.
 
 ## What this MVP does
 

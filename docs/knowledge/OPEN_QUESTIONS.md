@@ -113,3 +113,12 @@ Current answer:
 Phase 5A is complete as a deterministic dry-run machine path. Future official
 publisher/analytics and trend-source connectors must be separately bounded as
 Phase 5B/5C/5D/5E work. No live platform or credential path is approved yet.
+
+## Q019 — What remains after the Phase 5B YouTube boundary?
+
+Current answer:
+The adapter contract, preflight, payload, schedule rules, official optional
+transport, and receipts are complete. Real setup still needs a Google project,
+API enablement/audit status, OAuth consent/client and token lifecycle, quota,
+policy approval, optional Google client installation, and a separately approved
+live credential smoke. TikTok and Instagram remain out of scope.

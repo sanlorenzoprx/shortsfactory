@@ -519,3 +519,28 @@ Notes:
 The Phase 5A provider boundaries are local/simulated only. No live publishing,
 platform connector, OAuth, scraping, browser posting, paid key, or Phase 5B
 work was added.
+
+## Phase 5B — YouTube Official Publisher Adapter Boundary
+
+Status: passed
+
+Commit:
+`Add Phase 5B YouTube publisher adapter boundary`
+
+Commands/evidence:
+- Baseline `pytest tests/test_autopilot_phase5a.py tests/test_autopilot_cli.py -q`: 18 passed
+- `pytest tests/test_youtube_publisher_adapter.py tests/test_autopilot_phase5a.py tests/test_autopilot_cli.py -q`: 25 passed
+- Final `pytest -q`: 234 passed in 96.74s
+- `python -m compileall -q content_factory/autopilot tests/test_youtube_publisher_adapter.py`: passed
+- `python autopilot.py --output-root .tmp_phase5b_dry_run run --mode dry_run --batch-size 1 --locale en-US`: passed
+- Dry-run inspection: 3/3 attempts remained `adapter: simulated`, credentials
+  remained unused, live remained disabled, and no YouTube credential receipt
+  path was created
+- Live-path tests used an injected fake transport only; no network or upload
+  occurred
+
+Notes:
+The optional official transport remains unreachable without full mode, both
+live switches, valid OAuth scope/expiry, quota, policy acknowledgement,
+approval, and valid metadata. No TikTok, Instagram, analytics, scraping, or
+Phase 5C work was added.

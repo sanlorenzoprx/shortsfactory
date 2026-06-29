@@ -2,21 +2,23 @@
 
 ## Current status
 
-Phase 5A is complete locally: one resumable receipt-driven command now runs the
-entire machine path from deterministic trend intake through idea generation,
-LIT verdict filtering, short generation, machine gates, simulated publishing,
-simulated analytics, performance review, and the next batch plan. It remains
-dry-run only and requires no platform credentials, scraping, or live services.
+Phase 5B is complete locally as a fail-closed YouTube official publisher
+boundary. Phase 5A `dry_run` remains the default and never reads YouTube
+credentials. The new adapter performs OAuth/scope/expiry, two-key enablement,
+quota, policy, metadata, approval, media, and schedule preflight before its
+optional official transport can run. No real account or upload was used.
 
 ## Last known remote HEAD
 
 ```txt
-4b47c4f Add Phase 4F rich LIT verdict integration
+bd9b55d Add Phase 5A full autopilot dry-run pipeline
 ```
 
 ## Last known commit log
 
 ```txt
+bd9b55d Add Phase 5A full autopilot dry-run pipeline
+4b47c4f Add Phase 4F rich LIT verdict integration
 6f33f4e Fix Mission Control revision redirect timeout
 c75a58f Add Phase 4E local performance review
 34cfb6e Add Phase 4D manual results ledger
@@ -48,6 +50,9 @@ pytest -q
 Phase 5A focused suite: 18 passed
 Phase 5A real dry-run: 3 jobs, 9 simulated publishes, 9 simulated snapshots
 Final `pytest -q`: 227 passed in 97.85s
+Phase 5B focused suite: 25 passed
+Phase 5B final `pytest -q`: 234 passed in 96.74s
+Phase 5B dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads
 ```
 
 ## Known working capabilities
@@ -120,6 +125,12 @@ Final `pytest -q`: 227 passed in 97.85s
 - Simulated publisher and analytics adapters with refusing live adapter
 - Local performance review and deterministic next-batch experiment receipt
 - Batch list/status/show/resume/next-plan CLI inspection
+- YouTube official publisher adapter and injectable upload transport boundary
+- Lazy OAuth credential preflight with upload-scope and expiry checks
+- Two-key live enablement, local quota budget, and policy acknowledgement gates
+- Existing publisher metadata to validated `videos.insert` payload conversion
+- Future private scheduled-publish payload support
+- Redacted durable per-attempt YouTube publish receipts
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -161,12 +172,15 @@ Final `pytest -q`: 227 passed in 97.85s
   Factory never invents missing business conclusions and only formats validated
   rich or backward-compatible legacy fields.
 - Phase 5A runtime state lives under ignored `output/autopilot/batches/`.
-- `supervised_autopilot` and `full_autopilot` are non-live placeholders; Phase
-  5A refuses both rather than weakening the dry-run boundary.
+- The Phase 5A runner still refuses `supervised_autopilot` and
+  `full_autopilot`; Phase 5B exposes only the separately testable YouTube
+  adapter boundary.
+- Real YouTube setup still requires an approved Google Cloud project, enabled
+  YouTube Data API, OAuth consent/client configuration, token lifecycle,
+  available upload quota, policy review, and optional Google client packages.
 
 ## Current risk
 
-Phase 5A proves the automated loop using only deterministic local/simulated
-providers. Do not add live publisher adapters, official platform connectors,
-credentials, remote trend sources, or live analytics without a separately
-approved Phase 5B/5C/5D/5E handoff.
+Phase 5B has not been exercised with real YouTube credentials. Do not activate
+live publishing or add TikTok, Instagram, live analytics, or remote trend
+connectors without a separately approved and credentialed phase.
