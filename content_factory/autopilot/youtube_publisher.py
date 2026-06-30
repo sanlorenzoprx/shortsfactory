@@ -261,7 +261,10 @@ class YouTubeUploadPayloadBuilder:
         hashtags = metadata.get("hashtags", [])
         if not isinstance(hashtags, list) or any(not isinstance(value, str) for value in hashtags):
             raise YouTubePublisherError("YouTube hashtags must be a list of strings")
-        tags = [value.lstrip("#").strip() for value in hashtags if value.lstrip("#").strip()]
+        raw_tags = metadata.get("tags", hashtags)
+        if not isinstance(raw_tags, list) or any(not isinstance(value, str) for value in raw_tags):
+            raise YouTubePublisherError("YouTube tags must be a list of strings")
+        tags = [value.lstrip("#").strip() for value in raw_tags if value.lstrip("#").strip()]
         if sum(len(value) for value in tags) > 500:
             raise YouTubePublisherError("YouTube tags exceed the metadata limit")
 

@@ -83,3 +83,10 @@ The Phase 5A runner must continue refusing `supervised_autopilot` and
 `full_autopilot`. No agent, scheduler, batch runner, test, or dry-run may invoke
 the real upload transport. Attempt and final receipts must be separate and
 immutable.
+
+Phase 5B.3 metadata preparation must use `youtube_metadata.py harden` against
+the generated metadata referenced by the publisher plan. Do not manually patch
+JSON or create an unreferenced sidecar. Metadata output must pass the versioned
+contract, contain no secrets/authentication URLs, and be valid UTF-8 without a
+BOM. Website and CTA text may enter upload metadata only through this validated
+composer. Metadata hardening never authorizes or invokes an upload.

@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from content_factory.mission_control.job_index import is_within
 
+from .youtube_metadata import YouTubeMetadataError, YouTubeUploadMetadataV1, read_metadata_json
 from .youtube_credentials import DEFAULT_RECEIPT, GoogleYouTubeOAuthBackend
 from .youtube_publisher import (
     GoogleApiYouTubeUploadTransport,
@@ -430,11 +431,16 @@ class SupervisedYouTubeUploadGate:
         ):
             raise SourceChainError("blocked_invalid_metadata", "metadata_bound_to_publisher_plan", "metadata is not the generated YouTube metadata referenced by the job publisher plan", sources)
         try:
-            metadata = _read_json(metadata_path, "YouTube metadata")
-        except ValueError as exc:
+            metadata_value, _ = read_metadata_json(metadata_path)
+            metadata = YouTubeUploadMetadataV1.from_dict(
+                metadata_value,
+                allow_legacy=True,
+                source_receipt_references={
+                    key: value for key, value in sources.items() if isinstance(value, str)
+                },
+            ).to_dict()
+        except YouTubeMetadataError as exc:
             raise SourceChainError("blocked_invalid_metadata", "upload_metadata", str(exc), sources) from exc
-        if not isinstance(metadata, dict):
-            raise SourceChainError("blocked_invalid_metadata", "upload_metadata", "YouTube metadata must contain an object", sources)
         if metadata.get("source_job_id") != job_id:
             raise SourceChainError("blocked_invalid_metadata", "metadata_job", "metadata does not match the selected video job", sources)
 
@@ -570,6 +576,7 @@ class SupervisedYouTubeUploadGate:
             "selected_video_path": str(selected_video) if selected_video else None,
             "metadata_summary": {
                 "metadata_path": str(metadata_path.expanduser().resolve()),
+                "schema_version": metadata.get("schema_version"),
                 "source_job_id": metadata.get("source_job_id"),
                 "title": metadata.get("title"),
                 "description_present": isinstance(description, str) and bool(description.strip()),

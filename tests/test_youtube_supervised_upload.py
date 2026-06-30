@@ -77,6 +77,7 @@ def _fixture(tmp_path: Path) -> dict[str, Path | str]:
         "title": "A supervised first upload",
         "description": "Validate one painful use case before building.",
         "hashtags": ["#Shorts", "#Validation"],
+        "tags": ["business ideas", "startup validation"],
         "video": "../../short.mp4",
         "made_for_kids": False,
         "privacy_status": "private",
@@ -288,6 +289,53 @@ def test_invalid_metadata_is_refused_before_transport(tmp_path):
     assert transport.calls == []
 
 
+def test_missing_hardened_fields_suggests_metadata_command(tmp_path):
+    files = _fixture(tmp_path)
+    metadata_path = Path(files["metadata"])
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    for name in ("privacy_status", "made_for_kids", "tags"):
+        metadata.pop(name)
+    _write(metadata_path, metadata)
+    transport = FakeTransport(files["output"])
+    result = _run(files, transport)
+    assert result.classification == "blocked_invalid_metadata"
+    persisted = Path(result.receipt_paths[0]).read_text(encoding="utf-8")
+    assert "python youtube_metadata.py harden --job-id ap-supervised-job" in persisted
+    assert transport.calls == []
+
+
+def test_bom_metadata_is_refused_with_hardening_guidance(tmp_path):
+    files = _fixture(tmp_path)
+    metadata_path = Path(files["metadata"])
+    metadata_path.write_bytes(b"\xef\xbb\xbf" + metadata_path.read_bytes())
+    transport = FakeTransport(files["output"])
+    result = _run(files, transport)
+    assert result.classification == "blocked_invalid_metadata"
+    persisted = Path(result.receipt_paths[0]).read_text(encoding="utf-8")
+    assert "contains a UTF-8 BOM" in persisted
+    assert "youtube_metadata.py harden" in persisted
+    assert transport.calls == []
+
+
+def test_sidecar_metadata_is_refused_until_publisher_plan_references_it(tmp_path):
+    files = _fixture(tmp_path)
+    trusted = Path(files["metadata"])
+    sidecar = trusted.with_name("supervised-sidecar.json")
+    sidecar.write_bytes(trusted.read_bytes())
+    transport = FakeTransport(files["output"])
+    refused = _run(files, transport, metadata_path=sidecar)
+    assert refused.classification == "blocked_invalid_metadata"
+    assert transport.calls == []
+
+    plan_path = trusted.parents[1] / "publisher_plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["platforms"]["youtube_shorts"] = "youtube_shorts/supervised-sidecar.json"
+    _write(plan_path, plan)
+    accepted = _run(files, transport, metadata_path=sidecar)
+    assert accepted.classification == "successful_live_upload"
+    assert len(transport.calls) == 1
+
+
 def test_scheduled_non_private_metadata_is_refused(tmp_path):
     files = _fixture(tmp_path)
     metadata = json.loads(Path(files["metadata"]).read_text(encoding="utf-8"))
@@ -307,6 +355,9 @@ def test_transport_is_reached_only_after_all_gates_and_attempt_receipt(tmp_path)
     assert result.classification == "successful_live_upload"
     assert len(transport.calls) == 1
     assert len(transport.receipts_seen_during_call) == 1
+    assert transport.calls[0]["payload"].body["snippet"]["tags"] == [
+        "business ideas", "startup validation"
+    ]
     assert len(result.receipt_paths) == 2
     assert result.receipt_paths[0].endswith("01_attempted_live_upload.json")
     assert result.receipt_paths[1].endswith("02_successful_live_upload.json")
@@ -316,6 +367,7 @@ def test_transport_is_reached_only_after_all_gates_and_attempt_receipt(tmp_path)
     assert attempted["videos_insert_called"] is False
     assert successful["upload_attempted"] is True
     assert successful["videos_insert_called"] is True
+    assert successful["metadata_summary"]["schema_version"] == "youtube_upload_metadata.v1"
     assert successful["result"]["video_id"] == "supervised-video-123"
     assert Path(result.receipt_paths[0]).is_file()
 

@@ -27,14 +27,16 @@
 - Phase 5B YouTube official publisher adapter boundary
 - Phase 5B.1 YouTube credential bootstrap and preflight
 - Phase 5B.2 supervised first YouTube upload gate
+- Phase 5B.3 YouTube upload hardening and metadata contract
 
 ## Current checkpoint
 
-Phase 5B.2 gate complete. One manually invoked command can upload exactly one
-receipt-bound video only after preflight, channel, metadata, LIT,
-quality/compliance, quota, policy, and live-approval gates pass. Dry-run remains
-the default; both autopilot live modes remain closed. The first real upload has
-not been performed. Stop before TikTok, Instagram, or any unsupervised upload.
+Phase 5B.3 metadata hardening complete. The first manual supervised upload to
+Ghost Town Test succeeded, and future jobs receive versioned, UTF-8-safe,
+publisher-plan-bound metadata through a dedicated composer before the unchanged
+supervised gate. Dry-run remains the default and both autopilot live modes
+remain closed. Stop before analytics connectors, TikTok, Instagram, or any
+unsupervised upload.
 
 ## Recommended next options
 
@@ -71,6 +73,5 @@ Make installation, setup, and one-command local running easier.
 - automated analytics or metric synchronization
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
-- Hector's first manual supervised YouTube upload and production credential smoke
 - official analytics connectors
 - Phase 5C or later work

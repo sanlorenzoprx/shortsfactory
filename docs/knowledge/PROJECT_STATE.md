@@ -2,17 +2,18 @@
 
 ## Current status
 
-Phase 5B.2 adds a separate, fail-closed supervised gate for exactly one
-human-selected YouTube upload. It requires the passed Phase 5B.1 receipt, the
-exact Ghost Town Test channel ID, a generated-video receipt chain, matching LIT
-and quality/compliance evidence, valid generated metadata, and three explicit
-approval flags. Attempt and final receipts are immutable separate files. Phase
-5A `dry_run` remains unchanged and never reads credential files;
-`supervised_autopilot` and `full_autopilot` remain refused.
+Phase 5B.3 adds a versioned, schema-validated YouTube metadata composer so a
+generated job can become supervised-upload ready without manual JSON editing.
+It preserves publisher-plan binding, writes UTF-8 without BOM, defaults first
+tests to private/not-for-kids, normalizes canonical tags, validates optional
+website/CTA content, and emits hash receipts. The first manual supervised upload
+succeeded on `Ghost Town Test` as `rnPTrNn2bgc`. Phase 5A `dry_run` remains
+unchanged; `supervised_autopilot` and `full_autopilot` remain refused.
 
 ## Last known remote HEAD
 
 ```txt
+3e1db5a Add Phase 5B.2 supervised YouTube upload gate
 e148fae Fix YouTube preflight channel identity scope
 ```
 
@@ -67,6 +68,10 @@ Phase 5B.2 focused suites: 41 passed and 18 passed
 Phase 5B.2 final `pytest -q`: 268 passed in 100.23s
 Phase 5B.2 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
 0 credential use, and 0 supervised upload receipts
+Phase 5B.3 focused suites: 56 passed and 18 passed
+Phase 5B.3 final `pytest -q`: 283 passed in 102.36s
+Phase 5B.3 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
+0 credential use, V1 metadata, UTF-8 without BOM, and 0 upload receipts
 ```
 
 ## Known working capabilities
@@ -157,6 +162,10 @@ Phase 5B.2 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
 - Generated-artifact trust chain through content, batch, LIT, quality, and compliance receipts
 - Exact Ghost Town Test channel confirmation and three per-invocation approvals
 - Immutable blocked/attempted/success/failure supervised upload receipts
+- Versioned `youtube_upload_metadata.v1` contract and legacy upgrade validation
+- One-job metadata hardening CLI with publisher-plan and generation-receipt binding
+- Canonical tag normalization plus validated website/CTA composition
+- UTF-8 no-BOM metadata output and immutable before/after hash receipts
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -210,13 +219,18 @@ Phase 5B.2 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
   autopilot. It is only one required input to the explicit Phase 5B.2 command.
 - Supervised upload receipts live under ignored
   `output/youtube/supervised_uploads/<attempt_id>/` and are never overwritten.
+- Metadata hardening must operate on the YouTube metadata referenced by the
+  generated publisher plan; manual sidecars remain untrusted unless the plan is
+  intentionally updated.
+- Metadata hardening receipts live under ignored
+  `output/youtube/metadata_hardening/<job_id>/`.
 
 ## Current risk
 
-The authenticated credential preflight currently identifies `Ghost Town Test`
-as channel `UCIzMYpBt3WdSXZBrvoE7eCg`; no real upload has been performed by the
-Phase 5B.2 implementation or tests. Hector must still select one generated job,
-ensure its generated metadata includes explicit privacy and made-for-kids
-values, review quota and policy, and manually invoke the supervised command.
-TikTok, Instagram, live analytics, remote trend connectors, and automatic live
-publishing remain out of scope.
+The authenticated credential preflight identifies `Ghost Town Test` as channel
+`UCIzMYpBt3WdSXZBrvoE7eCg`. The first manual upload succeeded at
+`https://www.youtube.com/watch?v=rnPTrNn2bgc`; tests still use only injected fake
+transports. Future uploads must harden one generated job, review the emitted
+metadata and receipt, review quota/policy, and manually invoke the supervised
+command. YouTube analytics, TikTok, Instagram, remote trend connectors, and
+automatic live publishing remain out of scope.

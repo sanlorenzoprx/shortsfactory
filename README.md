@@ -815,11 +815,69 @@ references, and gate results, but never tokens, secrets, or authentication URLs.
 Tests inject a fake transport and make no real network calls. No real upload is
 performed by setup, tests, dry-run, or documentation commands.
 
+## Phase 5B.3: YouTube metadata hardening
+
+The first manual supervised upload succeeded on `Ghost Town Test` as video
+[`rnPTrNn2bgc`](https://www.youtube.com/watch?v=rnPTrNn2bgc). Phase 5B.3
+removes the manual JSON patching that was needed before that upload. It adds the
+versioned `youtube_upload_metadata.v1` contract and a composer that rewrites the
+publisher-plan-owned metadata as valid UTF-8 JSON without a BOM. It does not
+upload, read credentials, or enable either autopilot live mode.
+
+Harden one generated job before each future supervised upload:
+
+```powershell
+python youtube_metadata.py harden `
+  --job-id <job_id> `
+  --privacy-status private `
+  --made-for-kids false `
+  --brand-name "Ghost Town Test" `
+  --website-url "" `
+  --cta-text "Follow Ghost Town Test for more business idea tests."
+```
+
+The command finds `output/jobs/<job_id>/receipt.json`, follows that job's
+`publish/publisher_plan.json` to the original generated YouTube metadata, and
+verifies that its video is listed by the generation receipt. It preserves the
+generated title, description, caption, hashtags, video, thumbnail, and captions;
+then it adds:
+
+- `schema_version: youtube_upload_metadata.v1`
+- `privacy_status`, defaulting to `private`
+- explicit `made_for_kids`, defaulting to `false`
+- clean YouTube `tags` without `#`, including the canonical Ghost Town Test tags
+- safe category `22` when no category is present
+- source receipt references and generation timestamp
+- optional validated public website and CTA text, appended only to the description
+
+Websites must use public `http` or `https` URLs without credentials,
+authentication endpoints, or token-like query parameters. Metadata containing
+secrets or authentication URLs is refused. Scheduled `publish_at` metadata is
+valid only with private visibility. Hashtags remain separate and retain `#`.
+
+Each successful hardening writes:
+
+```txt
+output/youtube/metadata_hardening/<job_id>/<timestamp>_YOUTUBE_METADATA_HARDENING.json
+```
+
+The receipt records the previous/new SHA-256 hashes, upload settings, tags,
+website/CTA inclusion, source receipts, and UTF-8-without-BOM verification. The
+CLI then prints the exact `youtube_supervised_upload.py` command for that job.
+Manual JSON editing and sidecar metadata are unnecessary; a sidecar remains
+refused unless the trusted publisher plan explicitly references it.
+
+The supervised uploader accepts schema-valid V1 metadata or a complete legacy
+record that can be safely upgraded in memory. Missing hardening fields, invalid
+JSON, or a BOM are refused with a command telling the operator to run
+`youtube_metadata.py harden`. Upload receipts record the metadata schema version.
+
 ## Rules
 
 Do not activate unsupervised live publishing or add TikTok, Instagram, real
 trend scraping, or G20 scaling without a separately approved phase and green
-gate. The Phase 5B.2 command is the only approved supervised upload boundary.
+gate. The Phase 5B.2 command remains the only approved supervised upload
+boundary; Phase 5B.3 only composes and validates metadata.
 
 ## What this MVP does
 
