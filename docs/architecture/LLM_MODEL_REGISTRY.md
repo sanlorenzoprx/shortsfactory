@@ -26,14 +26,22 @@ local profile files.
 
 ## Add or switch a model
 
-1. Copy a profile from the example into `.local/llm/models.json`.
-2. Give it a unique `model_id`, correct capabilities/limits/pricing, and review
+1. Initialize the ignored profile template or copy an example:
+
+```powershell
+python llm_models.py init-local-config
+```
+
+   The initializer confirms Git ignore protection and refuses overwrite without
+   `--force`. It writes `api_key_env`/`base_url_env` names only.
+2. Edit `.local/llm/models.json`.
+3. Give it a unique `model_id`, correct capabilities/limits/pricing, and review
    its safety notes.
-3. Set `enabled: true` only after review.
-4. For `generic_http`, export `LLM_<PROVIDER>_API_URL` and
-   `LLM_<PROVIDER>_API_KEY`, with non-alphanumeric provider characters changed
-   to underscores and the name uppercased.
-5. Validate and inspect:
+4. Set `enabled: true` only after review.
+5. Export the variables named by `base_url_env` and `api_key_env`. Profiles
+   without explicit names use `LLM_<PROVIDER>_API_URL` and
+   `LLM_<PROVIDER>_API_KEY`.
+6. Validate and inspect:
 
 ```powershell
 python llm_models.py validate-config
@@ -41,7 +49,7 @@ python llm_models.py show --model <model_id>
 python llm_models.py test --model <model_id> --dry-run
 ```
 
-6. Select it explicitly:
+7. Select it explicitly:
 
 ```powershell
 python creative_angle_pack.py generate `

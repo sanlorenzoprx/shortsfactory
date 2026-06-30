@@ -31,15 +31,17 @@
 - Phase 5B.4 YouTube upload verification and analytics snapshots
 - Phase 5B.5 online-capable creative angle packs and long-form assembly
 - Phase 5B.5A plug-and-play LLM model registry and adapter boundary
+- Phase 5B.5B real online LLM configuration and comparison workflow
 
 ## Current checkpoint
 
-Phase 5B.5A model registry complete. Online creative generation selects a
-capability-validated model profile and provider adapter; safe fake/fixture
-adapters stay offline, while generic HTTP remains explicit and credential-gated.
-Dry-run remains the default and both autopilot live modes remain closed. Stop
-before feeding analytics into generation automatically, adding provider-specific
-live adapters, TikTok, Instagram, or any unsupervised upload.
+Phase 5B.5B online workflow complete. Ignored local profile initialization,
+environment-only credentials, one-call strict creative bundle generation,
+attempt receipts, and deterministic-vs-online comparisons are ready. A real
+provider call remains operator-explicit and credential-dependent. Dry-run stays
+the default and both autopilot live modes remain closed. Stop before feeding
+analytics/online creative into learning automatically, adding social platforms,
+or any unsupervised upload.
 
 ## Recommended next options
 

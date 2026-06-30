@@ -2,12 +2,12 @@
 
 ## Current status
 
-Phase 5B.5A adds a plug-and-play LLM model registry and adapter boundary.
-Online creative generation selects a safe profile by model ID, verifies JSON
-schema capability and enabled state, then delegates to fake, local-fixture, or
-generic HTTP adapters. Receipts record redacted model/profile/adapter provenance
-and cost/token estimates. LLMs still generate candidates only; Phase 5A
-`dry_run` is unchanged and both autopilot live modes remain refused.
+Phase 5B.5B adds ignored real-model profile initialization, environment-only
+credentials, one-call strict online creative-bundle generation, attempt receipts,
+and offline deterministic-vs-online comparison reports. Invalid JSON/schema,
+secrets, unsupported claims, publishing requests, and YouTube API instructions
+fail closed. LLMs still generate candidates only; Phase 5A `dry_run` is unchanged
+and both autopilot live modes remain refused.
 
 ## Last known remote HEAD
 
@@ -91,6 +91,13 @@ Phase 5B.5A YouTube regression suite: 68 passed
 Phase 5B.5A final `pytest -q`: 318 passed in 121.61s
 Phase 5B.5A fake online smoke: 5 angles, 5 shorts, 5 long-form chapters,
 model/profile/adapter/token/cost provenance, 0 network calls, and 0 publishing
+Phase 5B.5B registry + creative focused suite: 29 passed
+Phase 5B.5B Phase 5A/CLI regression suite: 18 passed
+Phase 5B.5B YouTube regression suite: 68 passed
+Phase 5B.5B final `pytest -q`: 324 passed in 122.50s
+Phase 5B.5B deterministic/fake comparison: 5 angles per pack, complete
+long-form plans, passing source gates, 0 network calls, 0 YouTube calls, and
+0 publishing attempts
 ```
 
 ## Known working capabilities
@@ -199,6 +206,10 @@ model/profile/adapter/token/cost provenance, 0 network calls, and 0 publishing
 - Fake, local-fixture, and generic HTTP adapters behind one interface
 - Offline registry list/show/validate/test CLI with explicit live-call confirmation
 - Receipt-level model provider/profile hash, adapter, token, cost, and network provenance
+- Safe `.local/llm/models.json` initializer with overwrite and Git-ignore checks
+- One-call five-angle/short/long-form online prompt and strict bundle schema
+- Passed/blocked/failed real-online attempt receipts with YouTube/publishing safety flags
+- Offline deterministic-vs-online comparison receipts and specificity summaries
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -269,6 +280,8 @@ model/profile/adapter/token/cost provenance, 0 network calls, and 0 publishing
   into future batches in Phase 5B.5.
 - Local LLM model overrides live under ignored `.local/llm/`; profile files may
   not contain credentials, and generic adapter keys remain environment-only.
+- A real model still requires the operator to set its configured API key/base URL
+  environment variables and explicitly run one online generation command.
 
 ## Current risk
 

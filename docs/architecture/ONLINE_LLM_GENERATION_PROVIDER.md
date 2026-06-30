@@ -31,6 +31,14 @@ through a direct `result`/`output`, an OpenAI-compatible
 `choices[0].message.content`, or `output_text` envelope. Provider-specific
 capabilities beyond the adapter contract are not assumed.
 
+Phase 5B.5B uses one `generate_creative_bundle` request per pack. Its prompt
+contains only the stable prefix, one LIT verdict object, required five-angle
+rubric, Ghost Town Test brand/audience context, and constraints requiring five
+shorts, one long-form plan, draft metadata, the canonical CTA, no publishing,
+and no invented claims. The output schema covers the complete bundle. Source
+receipt paths, local files, environment files, YouTube credentials, upload
+receipts, and repository secrets are never included.
+
 ## Fail-closed behavior
 
 - Online mode is never selected by default.
@@ -43,6 +51,8 @@ capabilities beyond the adapter contract are not assumed.
 - Token use is recorded only when returned as a numeric summary; cost remains
   optional and does not control orchestration.
 - LLM output cannot approve, publish, fetch analytics, or alter autopilot mode.
+- Attempt receipts explicitly record schema status, redacted error, network,
+  YouTube API, `videos.insert`, publishing, secret, and raw-response flags.
 
 Tests use deterministic, fake, and fixture adapters only. Fake online generation
 exercises the complete registry/provider/schema path without a network request.

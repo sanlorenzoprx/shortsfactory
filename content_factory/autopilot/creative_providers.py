@@ -315,14 +315,15 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         self.model_provider = profile.provider
         self.model_profile_hash = profile.profile_hash
         self.adapter_type = adapter.adapter_type
+        self._bundle: JsonDict | None = None
 
     @property
     def network_called(self) -> bool:
         return self.adapter.network_called
 
     @property
-    def tokens_used(self) -> int:
-        return self.adapter.estimated_input_tokens + self.adapter.estimated_output_tokens
+    def tokens_used(self) -> int | None:
+        return self.adapter.tokens_used
 
     @property
     def cost_estimate(self) -> float:
@@ -355,6 +356,91 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             raise CreativeProviderError(f"LLM adapter rejected {task}: {exc}") from exc
 
     def generate_angle_pack(self, context: CreativeGenerationContext) -> list[JsonDict]:
+        angles = self._ensure_bundle(context).get("angles")
+        if not isinstance(angles, list):
+            raise CreativeProviderError("online angle pack is invalid")
+        return deepcopy(angles)
+
+    def generate_short_script(self, context: CreativeGenerationContext, angle: JsonDict) -> JsonDict:
+        short = self._short(context, angle)
+        return {key: deepcopy(short.get(key)) for key in ("hook", "script", "cta")}
+
+    def generate_title_variants(self, context: CreativeGenerationContext, angle: JsonDict) -> list[str]:
+        variants = self._short(context, angle).get("title_variants")
+        if not isinstance(variants, list):
+            raise CreativeProviderError("online title variants are invalid")
+        return deepcopy(variants)
+
+    def generate_thumbnail_text(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
+        return str(self._short(context, angle).get("thumbnail_text", ""))
+
+    def generate_caption(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
+        return str(self._short(context, angle).get("caption", ""))
+
+    def generate_youtube_metadata_draft(
+        self, context: CreativeGenerationContext, angle: JsonDict, short_content: JsonDict,
+    ) -> JsonDict:
+        value = self._short(context, angle).get("youtube_metadata_draft")
+        if not isinstance(value, dict):
+            raise CreativeProviderError("online YouTube metadata draft is invalid")
+        return deepcopy(value)
+
+    def generate_longform_assembly_plan(
+        self, context: CreativeGenerationContext, short_jobs: list[JsonDict],
+    ) -> JsonDict:
+        value = deepcopy(self._ensure_bundle(context).get("longform"))
+        if not isinstance(value, dict):
+            raise CreativeProviderError("online long-form plan is invalid")
+        jobs_by_angle = {job.get("angle_id"): job for job in short_jobs}
+        for index, chapter in enumerate(value.get("ordered_chapters", []), 1):
+            if not isinstance(chapter, dict):
+                continue
+            chapter["order"] = index
+            source_job = jobs_by_angle.get(chapter.get("angle_id"), {})
+            chapter["job_id"] = source_job.get("job_id")
+        return value
+
+    def _ensure_bundle(self, context: CreativeGenerationContext) -> JsonDict:
+        if self._bundle is None:
+            value = self._call(
+                "generate_creative_bundle",
+                {
+                    "lit_verdict_id": context.lit_verdict_id,
+                    "lit_verdict": context.verdict_record.verdict,
+                    "required_angles": list(ANGLE_RUBRIC),
+                    "brand_context": {
+                        "brand": "Ghost Town Test",
+                        "website": "GhostTownTest.com",
+                        "audience": context.idea.target_user,
+                        "market": context.idea.market,
+                    },
+                    "requirements": {
+                        "exactly_five_angles": True,
+                        "one_short_per_angle": True,
+                        "one_longform_assembly_plan": True,
+                        "canonical_cta": CTA,
+                        "youtube_metadata_drafts_only": True,
+                        "publishing_instructions_allowed": False,
+                        "external_claims_allowed": False,
+                        "invented_facts_allowed": False,
+                    },
+                },
+                self._bundle_schema(),
+            )
+            if not isinstance(value, dict):
+                raise CreativeProviderError("online creative bundle is invalid")
+            self._bundle = value
+        return self._bundle
+
+    def _short(self, context: CreativeGenerationContext, angle: JsonDict) -> JsonDict:
+        shorts = self._ensure_bundle(context).get("shorts", {})
+        value = shorts.get(angle.get("angle_id")) if isinstance(shorts, dict) else None
+        if not isinstance(value, dict):
+            raise CreativeProviderError(f"online short is missing for {angle.get('angle_id')}")
+        return value
+
+    @staticmethod
+    def _bundle_schema() -> JsonDict:
         angle_properties = {
             "angle_id": {"type": "string"},
             "angle_name": {"type": "string"},
@@ -364,170 +450,84 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             "viewer_question": {"type": "string"},
             "expected_behavior_signal": {"type": "string"},
         }
-        value = self._call(
-            "generate_angle_pack",
-            {**context.provider_input(), "required_angles": list(ANGLE_RUBRIC)},
-            {
-                "type": "object",
-                "properties": {
-                    "angles": {
-                        "type": "array",
-                        "minItems": 5,
-                        "maxItems": 5,
-                        "items": {
-                            "type": "object",
-                            "properties": angle_properties,
-                            "required": list(angle_properties),
-                            "additionalProperties": False,
-                        },
-                    }
-                },
-                "required": ["angles"],
-                "additionalProperties": False,
+        metadata_schema = {
+            "type": "object",
+            "properties": {
+                "angle_id": {"type": "string"},
+                "cta": {"type": "string"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+                "hashtags": {"type": "array", "items": {"type": "string"}},
+                "status": {"type": "string"},
+                "live_publish_enabled": {"type": "boolean"},
             },
-        )
-        angles = value.get("angles") if isinstance(value, dict) else value
-        if not isinstance(angles, list):
-            raise CreativeProviderError("online angle pack is invalid")
-        return angles
-
-    def generate_short_script(self, context: CreativeGenerationContext, angle: JsonDict) -> JsonDict:
-        value = self._call(
-            "generate_short_script",
-            {**context.provider_input(), "angle": angle, "required_cta": CTA},
-            {
-                "type": "object",
-                "properties": {key: {"type": "string"} for key in ("hook", "script", "cta")},
-                "required": ["hook", "script", "cta"],
-                "additionalProperties": False,
+            "required": ["angle_id", "cta", "tags", "hashtags", "status", "live_publish_enabled"],
+            "additionalProperties": False,
+        }
+        short_properties = {
+            "title_variants": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+            "hook": {"type": "string"},
+            "script": {"type": "string"},
+            "caption": {"type": "string"},
+            "thumbnail_text": {"type": "string"},
+            "cta": {"type": "string"},
+            "youtube_metadata_draft": metadata_schema,
+        }
+        short_schema = {
+            "type": "object",
+            "properties": short_properties,
+            "required": list(short_properties),
+            "additionalProperties": False,
+        }
+        chapter_schema = {
+            "type": "object",
+            "properties": {
+                "angle_id": {"type": "string"},
+                "chapter_title": {"type": "string"},
+                "chapter_script": {"type": "string"},
             },
-        )
-        if not isinstance(value, dict):
-            raise CreativeProviderError("online short script is invalid")
-        return value
-
-    def generate_title_variants(self, context: CreativeGenerationContext, angle: JsonDict) -> list[str]:
-        value = self._call(
-            "generate_title_variants",
-            {**context.provider_input(), "angle": angle, "max_length": 100},
-            {
-                "type": "object",
-                "properties": {"title_variants": {"type": "array", "items": {"type": "string"}, "minItems": 1}},
-                "required": ["title_variants"],
-                "additionalProperties": False,
+            "required": ["angle_id", "chapter_title", "chapter_script"],
+            "additionalProperties": False,
+        }
+        timestamp_schema = {
+            "type": "object",
+            "properties": {"timestamp": {"type": "string"}, "label": {"type": "string"}},
+            "required": ["timestamp", "label"],
+            "additionalProperties": False,
+        }
+        longform_properties = {
+            "longform_title": {"type": "string"},
+            "intro_script": {"type": "string"},
+            "ordered_chapters": {"type": "array", "items": chapter_schema, "minItems": 5, "maxItems": 5},
+            "transition_lines": {"type": "array", "items": {"type": "string"}, "minItems": 4, "maxItems": 4},
+            "conclusion": {"type": "string"},
+            "cta_to_ghosttowntest_com": {"type": "string"},
+            "suggested_description": {"type": "string"},
+            "suggested_chapters_timestamps": {
+                "type": "array", "items": timestamp_schema, "minItems": 6, "maxItems": 6,
             },
-        )
-        variants = value.get("title_variants") if isinstance(value, dict) else value
-        if not isinstance(variants, list):
-            raise CreativeProviderError("online title variants are invalid")
-        return variants
-
-    def generate_thumbnail_text(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
-        value = self._call(
-            "generate_thumbnail_text",
-            {**context.provider_input(), "angle": angle},
-            {
-                "type": "object",
-                "properties": {"thumbnail_text": {"type": "string"}},
-                "required": ["thumbnail_text"],
-                "additionalProperties": False,
-            },
-        )
-        return str(value.get("thumbnail_text", "")) if isinstance(value, dict) else str(value)
-
-    def generate_caption(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
-        value = self._call(
-            "generate_caption",
-            {**context.provider_input(), "angle": angle, "required_cta": CTA},
-            {
-                "type": "object",
-                "properties": {"caption": {"type": "string"}},
-                "required": ["caption"],
-                "additionalProperties": False,
-            },
-        )
-        return str(value.get("caption", "")) if isinstance(value, dict) else str(value)
-
-    def generate_youtube_metadata_draft(
-        self, context: CreativeGenerationContext, angle: JsonDict, short_content: JsonDict,
-    ) -> JsonDict:
-        value = self._call(
-            "generate_youtube_metadata_draft",
-            {**context.provider_input(), "angle": angle, "short": short_content, "status": "draft_not_upload_ready"},
-            {
-                "type": "object",
-                "properties": {
-                    "angle_id": {"type": "string"},
-                    "cta": {"type": "string"},
-                    "tags": {"type": "array", "items": {"type": "string"}},
-                    "hashtags": {"type": "array", "items": {"type": "string"}},
-                    "status": {"type": "string"},
-                    "live_publish_enabled": {"type": "boolean"},
-                },
-                "required": ["angle_id", "cta", "tags", "hashtags", "status", "live_publish_enabled"],
-                "additionalProperties": False,
-            },
-        )
-        if not isinstance(value, dict):
-            raise CreativeProviderError("online YouTube metadata draft is invalid")
-        return value
-
-    def generate_longform_assembly_plan(
-        self, context: CreativeGenerationContext, short_jobs: list[JsonDict],
-    ) -> JsonDict:
-        value = self._call(
-            "generate_longform_assembly_plan",
-            {**context.provider_input(), "short_jobs": short_jobs, "required_cta": CTA},
-            {
-                "type": "object",
-                "properties": {
-                    key: {"type": "string"}
-                    for key in (
-                        "longform_title", "intro_script", "conclusion",
-                        "cta_to_ghosttowntest_com", "suggested_description",
-                    )
-                } | {
-                    "ordered_chapters": {
-                        "type": "array", "minItems": 5, "maxItems": 5,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "order": {"type": "integer"},
-                                "angle_id": {"type": "string"},
-                                "job_id": {"type": "string"},
-                                "chapter_title": {"type": "string"},
-                                "chapter_script": {"type": "string"},
-                            },
-                            "required": ["order", "angle_id", "job_id", "chapter_title", "chapter_script"],
-                            "additionalProperties": False,
-                        },
-                    },
-                    "transition_lines": {
-                        "type": "array", "minItems": 4, "maxItems": 4,
-                        "items": {"type": "string"},
-                    },
-                    "suggested_chapters_timestamps": {
-                        "type": "array", "minItems": 6, "maxItems": 6,
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "timestamp": {"type": "string"},
-                                "label": {"type": "string"},
-                                "job_id": {"type": ["string", "null"]},
-                            },
-                            "required": ["timestamp", "label"],
-                            "additionalProperties": False,
-                        },
+        }
+        angle_ids = [row["angle_id"] for row in ANGLE_RUBRIC]
+        return {
+            "type": "object",
+            "properties": {
+                "angles": {
+                    "type": "array", "minItems": 5, "maxItems": 5,
+                    "items": {
+                        "type": "object", "properties": angle_properties,
+                        "required": list(angle_properties), "additionalProperties": False,
                     },
                 },
-                "required": [
-                    "longform_title", "intro_script", "ordered_chapters", "transition_lines",
-                    "conclusion", "cta_to_ghosttowntest_com", "suggested_description",
-                    "suggested_chapters_timestamps",
-                ],
-                "additionalProperties": False,
+                "shorts": {
+                    "type": "object",
+                    "properties": {angle_id: short_schema for angle_id in angle_ids},
+                    "required": angle_ids,
+                    "additionalProperties": False,
+                },
+                "longform": {
+                    "type": "object", "properties": longform_properties,
+                    "required": list(longform_properties), "additionalProperties": False,
+                },
             },
-        )
-        if not isinstance(value, dict):
-            raise CreativeProviderError("online long-form plan is invalid")
-        return value
+            "required": ["angles", "shorts", "longform"],
+            "additionalProperties": False,
+        }

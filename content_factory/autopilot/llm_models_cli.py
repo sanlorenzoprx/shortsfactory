@@ -23,6 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     show = commands.add_parser("show", help="Show one redacted model profile")
     show.add_argument("--model", required=True)
     commands.add_parser("validate-config", help="Validate example and local profile files")
+    init = commands.add_parser("init-local-config", help="Create an ignored real-model profile template")
+    init.add_argument("--force", action="store_true", help="Replace an existing local model profile file")
     test = commands.add_parser("test", help="Test adapter readiness; network is opt-in")
     test.add_argument("--model", required=True)
     mode = test.add_mutually_exclusive_group(required=True)
@@ -38,6 +40,19 @@ def _registry(args: argparse.Namespace) -> LLMModelRegistry:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "init-local-config":
+            path = LLMModelRegistry.init_local_config(
+                local_path=args.models_file,
+                force=args.force,
+            )
+            print(json.dumps({
+                "status": "created",
+                "path": str(path),
+                "git_ignored": True,
+                "credentials_included": False,
+                "credential_source": "environment_variables",
+            }, indent=2))
+            return 0
         registry = _registry(args)
         if args.command == "list":
             print(json.dumps([

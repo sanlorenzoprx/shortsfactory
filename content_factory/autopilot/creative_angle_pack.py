@@ -23,6 +23,7 @@ from .creative_angle_models import (
     LongFormAssemblyPlan,
 )
 from .creative_generation_provider import CreativeGenerationContext, CreativeGenerationProvider
+from .creative_pack_comparison import CreativePackComparator, CreativePackComparisonError
 from .creative_providers import (
     RUBRIC_VERSION,
     CreativeProviderError,
@@ -34,7 +35,7 @@ from .llm_model_registry import DEFAULT_LOCAL_PATH, LLMModelRegistry, LLMModelRe
 from .llm_provider_adapters import LLMAdapterError, build_llm_adapter
 
 
-RECEIPT_VERSION = "phase5b.5a.creative-angle-pack.v2"
+RECEIPT_VERSION = "phase5b.5b.real-online-llm-generation.v1"
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -221,6 +222,8 @@ class CreativeAnglePackGenerator:
                 short_jobs_created=0,
                 longform_plan_created=False,
                 artifacts={},
+                schema_valid=False,
+                redacted_error="online provider was not selected explicitly",
             )
         try:
             raw_angles = self.provider.generate_angle_pack(context)
@@ -262,6 +265,11 @@ class CreativeAnglePackGenerator:
                 "blocking": True,
                 "reason": f"provider output failed schema validation ({type(exc).__name__})",
             },)
+            attempt_status = (
+                "failed"
+                if self.provider.provider_type == "online_llm" and self.provider.network_called
+                else "blocked"
+            )
             return self._write_receipt(
                 timestamp=timestamp,
                 angle_pack_id=angle_pack_id,
@@ -270,11 +278,13 @@ class CreativeAnglePackGenerator:
                 output_hash=output_hash,
                 gates=gates,
                 source_receipt_references=source_receipt_references,
-                status="blocked",
+                status=attempt_status,
                 five_angles_generated=len(raw_output.get("angles", [])) == 5,
                 short_jobs_created=0,
                 longform_plan_created=False,
                 artifacts={},
+                schema_valid=False,
+                redacted_error=f"{type(exc).__name__}: provider output or transport failed validation",
             )
         if any(gate["blocking"] for gate in gates):
             return self._write_receipt(
@@ -290,6 +300,8 @@ class CreativeAnglePackGenerator:
                 short_jobs_created=0,
                 longform_plan_created=False,
                 artifacts={},
+                schema_valid=True,
+                redacted_error=None,
             )
         artifacts = self._persist_artifacts(pack, short_jobs, longform)
         return self._write_receipt(
@@ -300,11 +312,13 @@ class CreativeAnglePackGenerator:
             output_hash=output_hash,
             gates=gates,
             source_receipt_references=source_receipt_references,
-            status="completed",
+            status="passed" if self.provider.provider_type == "online_llm" else "completed",
             five_angles_generated=True,
             short_jobs_created=5,
             longform_plan_created=True,
             artifacts=artifacts,
+            schema_valid=True,
+            redacted_error=None,
         )
 
     def _build_shorts(
@@ -462,6 +476,8 @@ class CreativeAnglePackGenerator:
         short_jobs_created: int,
         longform_plan_created: bool,
         artifacts: dict[str, str],
+        schema_valid: bool,
+        redacted_error: str | None,
     ) -> CreativeAnglePackReceipt:
         receipt = CreativeAnglePackReceipt(
             receipt_version=RECEIPT_VERSION,
@@ -489,6 +505,10 @@ class CreativeAnglePackGenerator:
             network_called=self.provider.network_called,
             raw_response_stored=self.provider.raw_response_stored,
             publish_attempted=False,
+            youtube_api_called=False,
+            videos_insert_called=False,
+            schema_valid=schema_valid,
+            redacted_error=redacted_error,
             status=status,
             artifacts=artifacts,
             safety={
@@ -622,6 +642,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ignored local model registry overrides",
     )
     generate.add_argument("--output-root", dest="output_root", default=argparse.SUPPRESS)
+    compare = subparsers.add_parser("compare", help="Compare deterministic and online creative packs offline")
+    compare.add_argument("--left", required=True, help="Left creative_angle_pack.json")
+    compare.add_argument("--right", required=True, help="Right creative_angle_pack.json")
+    compare.add_argument("--output-root", dest="output_root", default=argparse.SUPPRESS)
     return parser
 
 
@@ -635,13 +659,24 @@ def _provider_from_args(args: argparse.Namespace) -> CreativeGenerationProvider:
         return FixtureCreativeGenerationProvider(fixture.get("creative_output"))
     registry = LLMModelRegistry(local_path=args.models_file)
     profile = registry.require(args.model, require_json_schema=True)
-    adapter = build_llm_adapter(profile, allow_network=True, require_config=True)
+    adapter = build_llm_adapter(profile, allow_network=True, require_config=False)
     return OnlineLLMCreativeGenerationProvider(profile, adapter)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if args.command == "compare":
+            receipt, path = CreativePackComparator(output_root=args.output_root).compare(
+                left=args.left,
+                right=args.right,
+            )
+            print(f"Comparison: {receipt['comparison_id']}")
+            print(f"Status: {receipt['status']}")
+            print(f"Receipt: {path}")
+            print("Network called: false")
+            print("Publishing attempted: false")
+            return 0
         provider = _provider_from_args(args)
         generator = CreativeAnglePackGenerator(
             provider=provider,
@@ -662,7 +697,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Full autopilot enabled: false")
         print("Supervised autopilot enabled: false")
         print("Live publishing enabled: false")
-        return 0 if receipt.status == "completed" else 1
+        return 0 if receipt.status in {"completed", "passed"} else 1
     except (
         CreativeAnglePackError,
         CreativeAngleContractError,
@@ -670,6 +705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         CreativeProviderError,
         LLMModelRegistryError,
         LLMAdapterError,
+        CreativePackComparisonError,
         AutopilotStoreError,
         ValueError,
         OSError,

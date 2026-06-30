@@ -116,3 +116,12 @@ but profile files must never contain credentials. Generic adapter credentials
 remain environment-only. Missing, disabled, or schema-incapable models refuse
 before generation. `llm_models.py test` is offline unless the operator passes
 `--confirm-live-llm-call`; tests must use fake/local-fixture adapters only.
+
+Phase 5B.5B real online generation requires an ignored local model profile,
+environment-only API key/base URL, explicit `--provider online_llm`, and an
+explicit model ID. Send only the stored LIT verdict, stable prefix, five-angle
+contract, brand/audience context, requirements, and output schema. Never send
+YouTube tokens, upload receipts, `.local`/`.env` files, or repository secrets.
+One online attempt may generate candidates and receipts only; it must not
+publish, call YouTube, enable either autopilot live mode, or feed learning back
+automatically. Invalid output writes no accepted creative artifacts.

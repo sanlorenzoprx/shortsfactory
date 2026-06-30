@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
+import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -14,8 +17,9 @@ RECOMMENDATION_TYPES = {
 LATENCY_CLASSES = {"fast", "balanced", "slow"}
 SAFE_ID = re.compile(r"^[A-Za-z0-9._:-]+$")
 FORBIDDEN_CONFIG_KEYS = re.compile(
-    r"(?i)(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization)"
+    r"(?i)^(api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret|authorization)$"
 )
+ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 DEFAULT_EXAMPLE_PATH = Path("config/examples/llm_models.example.json")
 DEFAULT_LOCAL_PATH = Path(".local/llm/models.json")
 
@@ -45,6 +49,8 @@ class LLMModelProfile:
     recommended_for: tuple[str, ...]
     safety_notes: str
     enabled: bool
+    api_key_env: str | None = None
+    base_url_env: str | None = None
 
     def __post_init__(self) -> None:
         for name in ("model_id", "provider", "display_name", "endpoint_type", "safety_notes"):
@@ -59,6 +65,10 @@ class LLMModelProfile:
             raise LLMModelRegistryError("model capabilities must be boolean")
         if not isinstance(self.enabled, bool):
             raise LLMModelRegistryError("enabled must be boolean")
+        for name in ("api_key_env", "base_url_env"):
+            value = getattr(self, name)
+            if value is not None and (not isinstance(value, str) or not ENV_NAME.fullmatch(value)):
+                raise LLMModelRegistryError(f"{name} must be null or a safe environment variable name")
         if not isinstance(self.max_input_tokens, int) or self.max_input_tokens < 1:
             raise LLMModelRegistryError("max_input_tokens must be a positive integer")
         if not isinstance(self.max_output_tokens, int) or self.max_output_tokens < 1:
@@ -173,3 +183,68 @@ class LLMModelRegistry:
             "disabled_count": sum(not profile.enabled for profile in profiles),
             "secrets_recorded": False,
         }
+
+    @classmethod
+    def init_local_config(
+        cls,
+        *,
+        local_path: str | Path = DEFAULT_LOCAL_PATH,
+        example_path: str | Path = DEFAULT_EXAMPLE_PATH,
+        force: bool = False,
+        ignore_checker=None,
+    ) -> Path:
+        path = Path(local_path).expanduser().resolve()
+        checker = ignore_checker or cls._git_ignored
+        if not checker(path):
+            raise LLMModelRegistryError("local LLM config path is not protected by Git ignore rules")
+        if path.exists() and not force:
+            raise LLMModelRegistryError("local LLM config already exists; pass --force to replace it")
+        examples = cls._read_config(Path(example_path).expanduser().resolve())
+        source = next(
+            (profile for profile in examples["models"] if profile.get("endpoint_type") == "generic_http"),
+            None,
+        )
+        if not isinstance(source, dict):
+            raise LLMModelRegistryError("safe example config has no generic HTTP profile")
+        profile = {
+            **source,
+            "model_id": "real-creative-model",
+            "provider": "generic_http",
+            "display_name": "Real Creative Model",
+            "endpoint_type": "chat_json",
+            "max_input_tokens": 120000,
+            "max_output_tokens": 8000,
+            "safety_notes": "Online provider must return structured JSON only.",
+            "enabled": True,
+            "api_key_env": "LLM_API_KEY",
+            "base_url_env": "LLM_BASE_URL",
+        }
+        value = {"schema_version": "llm_model_registry.v1", "models": [profile]}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, name = tempfile.mkstemp(prefix=".llm-models.", suffix=".tmp", dir=path.parent)
+        temporary = Path(name)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+                json.dump(value, handle, indent=2, ensure_ascii=False)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        cls._read_config(path)
+        return path
+
+    @staticmethod
+    def _git_ignored(path: Path) -> bool:
+        try:
+            result = subprocess.run(
+                ["git", "check-ignore", "-q", str(path)],
+                cwd=Path.cwd(),
+                check=False,
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return result.returncode == 0

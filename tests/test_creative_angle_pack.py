@@ -14,6 +14,7 @@ from content_factory.autopilot.creative_angle_models import (
     LongFormAssemblyPlan,
 )
 from content_factory.autopilot.creative_angle_pack import CreativeAnglePackGenerator, main
+from content_factory.autopilot.creative_pack_comparison import CreativePackComparator
 from content_factory.autopilot.creative_providers import (
     CTA,
     DeterministicCreativeGenerationProvider,
@@ -25,6 +26,7 @@ from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter
 
 
 FIXTURE = Path("fixtures/lit_verdicts/sample.json")
+NO_LOCAL_MODELS = Path("tests/fixtures/llm_models.none.json")
 NOW = datetime(2026, 6, 30, 18, 0, tzinfo=timezone.utc)
 EXPECTED_ANGLES = {
     "ghost_town_risk",
@@ -120,13 +122,23 @@ def test_fixture_provider_uses_checked_in_outputs_without_network(tmp_path, monk
     assert network_calls == []
 
 
+class CapturingFakeAdapter(FakeLLMAdapter):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.prompts = []
+
+    def generate_json(self, prompt, schema, model_profile):
+        self.prompts.append(json.loads(prompt))
+        return super().generate_json(prompt, schema, model_profile)
+
+
 def test_fake_adapter_generates_valid_online_creative_pack_without_network(tmp_path):
-    profile = LLMModelRegistry().require("fake-json-model", require_json_schema=True)
-    adapter = FakeLLMAdapter()
+    profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require("fake-json-model", require_json_schema=True)
+    adapter = CapturingFakeAdapter()
     provider = OnlineLLMCreativeGenerationProvider(profile, adapter)
     output, _, receipt = _generate(tmp_path, provider, online_explicit=True)
     pack, jobs, longform = _artifacts(output, receipt)
-    assert receipt.status == "completed"
+    assert receipt.status == "passed"
     assert receipt.provider_type == "online_llm"
     assert receipt.model_id == "fake-json-model"
     assert receipt.model_provider == "fake"
@@ -134,15 +146,27 @@ def test_fake_adapter_generates_valid_online_creative_pack_without_network(tmp_p
     assert receipt.adapter_type == "fake"
     assert receipt.network_called is False
     assert receipt.raw_response_stored is False
+    assert receipt.schema_valid is True
+    assert receipt.youtube_api_called is False
+    assert receipt.videos_insert_called is False
+    assert receipt.publish_attempted is False
+    assert receipt.redacted_error is None
     assert receipt.estimated_input_tokens > 0
     assert receipt.estimated_output_tokens > 0
     assert receipt.estimated_cost == 0
     assert len(pack.angles) == len(jobs) == len(longform.ordered_chapters) == 5
+    assert len(adapter.prompts) == 1
+    assert adapter.prompts[0]["task"] == "generate_creative_bundle"
+    prompt_input = adapter.prompts[0]["input"]
+    assert set(prompt_input) == {
+        "lit_verdict_id", "lit_verdict", "required_angles", "brand_context", "requirements",
+    }
+    assert "source_receipt_references" not in json.dumps(prompt_input)
 
 
 @pytest.mark.parametrize("response_mode", ["malformed_json", "schema_invalid"])
 def test_invalid_fake_llm_output_writes_blocked_receipt_only(tmp_path, response_mode):
-    profile = LLMModelRegistry().require("fake-json-model", require_json_schema=True)
+    profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require("fake-json-model", require_json_schema=True)
     provider = OnlineLLMCreativeGenerationProvider(
         profile, FakeLLMAdapter(response_mode=response_mode),
     )
@@ -183,6 +207,24 @@ class UnsafeDeterministicProvider(DeterministicCreativeGenerationProvider):
         return super().generate_caption(context, angle) + " api_key=fixture-secret-never-store"
 
 
+class SecretFakeAdapter(FakeLLMAdapter):
+    def generate_json(self, prompt, schema, model_profile):
+        value = super().generate_json(prompt, schema, model_profile)
+        value["shorts"]["ghost_town_risk"]["caption"] += " api_key=online-secret-never-store"
+        return value
+
+
+def test_online_provider_output_containing_secret_is_blocked_and_redacted(tmp_path):
+    profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require("fake-json-model", require_json_schema=True)
+    provider = OnlineLLMCreativeGenerationProvider(profile, SecretFakeAdapter())
+    _, generator, receipt = _generate(tmp_path, provider, online_explicit=True)
+    persisted = generator.receipt_path(receipt.angle_pack_id).read_text(encoding="utf-8")
+    assert receipt.status == "blocked"
+    assert receipt.schema_valid is True
+    assert receipt.artifacts == {}
+    assert "online-secret-never-store" not in persisted
+
+
 def test_failed_gate_writes_only_durable_redacted_receipt(tmp_path):
     output, generator, receipt = _generate(tmp_path, UnsafeDeterministicProvider())
     receipt_path = generator.receipt_path(receipt.angle_pack_id)
@@ -212,6 +254,8 @@ def test_generation_does_not_publish_or_enable_autopilot_modes(tmp_path):
     output, _, receipt = _generate(tmp_path)
     _, jobs, longform = _artifacts(output, receipt)
     assert receipt.publish_attempted is False
+    assert receipt.youtube_api_called is False
+    assert receipt.videos_insert_called is False
     assert receipt.safety["live_publishing_enabled"] is False
     assert receipt.safety["full_autopilot_enabled"] is False
     assert receipt.safety["supervised_autopilot_enabled"] is False
@@ -278,7 +322,14 @@ def test_online_generic_model_refuses_missing_credentials_without_network(tmp_pa
         "--output-root", str(tmp_path / "output"),
     ])
     assert result == 1
-    assert "requires provider API URL and API key" in capsys.readouterr().err
+    stdout = capsys.readouterr().out
+    assert "Status: blocked" in stdout
+    receipts = list((tmp_path / "output" / "creative_angle_packs").glob("*/ANGLE_PACK_RECEIPT.json"))
+    assert len(receipts) == 1
+    receipt = json.loads(receipts[0].read_text(encoding="utf-8"))
+    assert receipt["network_called"] is False
+    assert receipt["schema_valid"] is False
+    assert receipt["redacted_error"]
     assert calls == []
 
 
@@ -295,3 +346,23 @@ def test_cli_online_mode_refuses_without_config(tmp_path, monkeypatch, capsys):
     stderr = capsys.readouterr().err
     assert result == 1
     assert "online_llm requires --model" in stderr
+
+
+def test_deterministic_vs_online_comparison_receipt(tmp_path):
+    output, _, deterministic = _generate(tmp_path)
+    profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require("fake-json-model", require_json_schema=True)
+    provider = OnlineLLMCreativeGenerationProvider(profile, FakeLLMAdapter())
+    _, _, online = _generate(tmp_path, provider, online_explicit=True)
+    comparator = CreativePackComparator(output_root=output, now=lambda: NOW)
+    receipt, path = comparator.compare(
+        left=output / deterministic.artifacts["creative_angle_pack"],
+        right=output / online.artifacts["creative_angle_pack"],
+    )
+    assert path.is_file()
+    assert receipt["status"] == "completed"
+    assert len(receipt["angle_comparisons"]) == 5
+    assert receipt["angle_uniqueness"] == {"left": True, "right": True}
+    assert receipt["longform_completeness"] == {"left": True, "right": True}
+    assert receipt["quality_gate_result"] == {"left": True, "right": True}
+    assert receipt["safety"]["network_called"] is False
+    assert receipt["safety"]["publish_attempted"] is False

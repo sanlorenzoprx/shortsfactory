@@ -1046,6 +1046,58 @@ collect analytics, or change Phase 5A `dry_run`. Both `supervised_autopilot` and
 `docs/architecture/CREATIVE_ANGLE_PACKS.md` and
 `docs/architecture/ONLINE_LLM_GENERATION_PROVIDER.md`.
 
+### Phase 5B.5B: first real online creative generation
+
+Create the ignored local real-model profile template:
+
+```powershell
+python llm_models.py init-local-config
+```
+
+The command refuses to overwrite `.local/llm/models.json` unless `--force` is
+passed, verifies that Git ignores the target, and writes environment-variable
+names—not credentials. Edit the profile’s model identity/capabilities if needed,
+then set its configured `LLM_API_KEY` and `LLM_BASE_URL` environment variables.
+Never place their values in the profile, `.env` under version control, command
+arguments, or receipts.
+
+Validate locally before an online attempt:
+
+```powershell
+python llm_models.py validate-config
+python llm_models.py show --model real-creative-model
+```
+
+Then explicitly generate one real candidate pack:
+
+```powershell
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider online_llm `
+  --model real-creative-model
+```
+
+The adapter makes one structured creative-bundle request containing the stable
+prompt prefix, one LIT verdict, five-angle contract, brand/audience context, and
+output schema. It requests five shorts and one long-form plan together. Invalid
+JSON/schema, secrets, unsupported claims, publishing instructions, or YouTube
+API instructions fail closed. Every online attempt writes a redacted receipt;
+accepted artifacts use status `passed`, while preflight/schema failures are
+`blocked` and transport-bound failures are `failed`.
+
+Compare a deterministic pack with an accepted online pack entirely offline:
+
+```powershell
+python creative_angle_pack.py compare `
+  --left output/creative_angle_packs/<deterministic_pack_id>/creative_angle_pack.json `
+  --right output/creative_angle_packs/<online_pack_id>/creative_angle_pack.json
+```
+
+The comparison receipt covers hooks, titles, thumbnail text, CTA, script
+specificity, angle uniqueness, long-form completeness, and source quality gates.
+Generation and comparison never publish or call YouTube APIs; both autopilot
+live modes remain closed.
+
 ## Rules
 
 Do not activate unsupervised live publishing or add TikTok, Instagram, real

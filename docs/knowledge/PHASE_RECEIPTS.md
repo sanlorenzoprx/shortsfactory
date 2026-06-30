@@ -847,3 +847,42 @@ The generic HTTP adapter remains a credential-gated placeholder; no real LLM
 provider was called. API keys remain environment-only and model profile files
 reject credential fields. Deterministic mode is unchanged, creative candidates
 cannot publish, and `full_autopilot` remains closed.
+
+## Phase 5B.5B — Real Online LLM Provider Configuration + First Generation Workflow
+
+Status: implementation complete; first credentialed provider call pending local credentials
+
+Commit:
+`Add Phase 5B.5B real online LLM generation`
+
+Implemented:
+- Safe ignored `.local/llm/models.json` initializer with `--force` overwrite gate
+- Environment-variable-name-only real provider profile (`LLM_API_KEY`, `LLM_BASE_URL`)
+- Generic `chat_json`/HTTP adapter with strict structured bundle schema validation
+- One minimal request for five angles, five shorts, and one long-form plan
+- Passed/blocked/failed attempt receipt contract with redacted errors
+- Explicit no-publish, no-YouTube, no-`videos.insert`, no-secret, and no-raw-response flags
+- Output gates for required angles, traceability, completeness, claims, CTA,
+  secrets/auth URLs, publishing requests, and YouTube API instructions
+- Offline deterministic-vs-online comparison report and CLI
+
+Evidence:
+- Registry + creative focused suite: 29 passed
+- Phase 5A and autopilot CLI regressions: 18 passed
+- YouTube credential/publisher/upload/metadata/analytics regressions: 68 passed
+- Final `pytest -q`: 324 passed in 122.50s
+- Python compile check and scoped Ruff check passed
+- Local config initialized under Git-ignored `.local/llm/models.json` with no credentials
+- Registry list/validate and fake-model dry-run passed offline
+- Deterministic and fake-online generation each created five short jobs and one
+  five-chapter long-form plan
+- Comparison receipt covered five angles and passed uniqueness, completeness,
+  and source quality checks
+- Fake-online receipt recorded schema valid, 0 network, 0 YouTube, 0
+  `videos.insert`, 0 publishing, 0 secrets, and 0 raw response storage
+
+Notes:
+No real LLM request was made because `LLM_API_KEY` and `LLM_BASE_URL` were not
+present. The local profile is ready for the operator to configure and invoke
+explicitly. A real call must not be followed by publishing. Online outputs are
+not connected to the learning loop, and both autopilot live modes remain closed.

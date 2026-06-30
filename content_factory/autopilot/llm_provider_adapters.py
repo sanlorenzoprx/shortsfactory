@@ -31,6 +31,7 @@ class LLMProviderAdapter(ABC):
         self.estimated_input_tokens = 0
         self.estimated_output_tokens = 0
         self.estimated_cost = 0.0
+        self.tokens_used: int | None = None
         self.raw_response_stored = False
 
     @abstractmethod
@@ -94,6 +95,51 @@ class LLMProviderAdapter(ABC):
         if cost is not None:
             self.estimated_cost = round(self.estimated_cost + cost, 8)
 
+    @classmethod
+    def validate_json_schema(cls, value: Any, schema: dict[str, Any], path: str = "$") -> None:
+        expected = schema.get("type")
+        allowed = expected if isinstance(expected, list) else [expected] if expected else []
+        if allowed and not any(cls._matches_type(value, kind) for kind in allowed):
+            raise LLMAdapterError(f"structured output fails schema at {path}: expected {expected}")
+        if value is None:
+            return
+        if "enum" in schema and value not in schema["enum"]:
+            raise LLMAdapterError(f"structured output fails schema at {path}: value is not allowed")
+        if isinstance(value, dict):
+            properties = schema.get("properties", {})
+            required = schema.get("required", [])
+            missing = [name for name in required if name not in value]
+            if missing:
+                raise LLMAdapterError(f"structured output fails schema at {path}: missing {', '.join(missing)}")
+            if schema.get("additionalProperties") is False:
+                extras = sorted(set(value) - set(properties))
+                if extras:
+                    raise LLMAdapterError(f"structured output fails schema at {path}: unexpected {', '.join(extras)}")
+            for key, child in value.items():
+                if key in properties:
+                    cls.validate_json_schema(child, properties[key], f"{path}.{key}")
+        if isinstance(value, list):
+            if len(value) < int(schema.get("minItems", 0)):
+                raise LLMAdapterError(f"structured output fails schema at {path}: too few items")
+            if "maxItems" in schema and len(value) > int(schema["maxItems"]):
+                raise LLMAdapterError(f"structured output fails schema at {path}: too many items")
+            item_schema = schema.get("items")
+            if isinstance(item_schema, dict):
+                for index, child in enumerate(value):
+                    cls.validate_json_schema(child, item_schema, f"{path}[{index}]")
+
+    @staticmethod
+    def _matches_type(value: Any, kind: str) -> bool:
+        return {
+            "object": isinstance(value, dict),
+            "array": isinstance(value, list),
+            "string": isinstance(value, str),
+            "integer": isinstance(value, int) and not isinstance(value, bool),
+            "number": isinstance(value, (int, float)) and not isinstance(value, bool),
+            "boolean": isinstance(value, bool),
+            "null": value is None,
+        }.get(kind, True)
+
 
 class LocalFixtureLLMAdapter(LLMProviderAdapter):
     adapter_type = "local_fixture"
@@ -128,6 +174,8 @@ class LocalFixtureLLMAdapter(LLMProviderAdapter):
         output = self._creative_output()
         if task == "registry_healthcheck":
             return {"ok": True}
+        if task == "generate_creative_bundle":
+            return deepcopy(output)
         if task == "generate_angle_pack":
             return {"angles": deepcopy(output.get("angles"))}
         angle = payload.get("angle", {})
@@ -159,6 +207,7 @@ class LocalFixtureLLMAdapter(LLMProviderAdapter):
     ) -> Any:
         task, payload = self._prompt_value(prompt)
         result = self._fixture_result(task, payload)
+        self.validate_json_schema(result, schema)
         self._record_usage(prompt, result, model_profile)
         return result
 
@@ -191,6 +240,7 @@ class FakeLLMAdapter(LocalFixtureLLMAdapter):
             raise LLMAdapterError("adapter returned malformed JSON")
         if self.response_mode == "schema_invalid":
             result = {"angles": [{"angle_id": "invalid"}]}
+            self.validate_json_schema(result, schema)
             self._record_usage(prompt, result, model_profile)
             return result
         return super().generate_json(prompt, schema, model_profile)
@@ -212,6 +262,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         api_key: str | None,
         timeout_seconds: float = 45.0,
         allow_network: bool = False,
+        endpoint_type: str = "generic_http",
         transport: Callable[..., Any] | None = None,
     ) -> None:
         super().__init__()
@@ -219,6 +270,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         self.api_key = (api_key or "").strip()
         self.timeout_seconds = timeout_seconds
         self.allow_network = allow_network
+        self.endpoint_type = endpoint_type
         self._transport = transport
 
     @classmethod
@@ -231,8 +283,10 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         transport: Callable[..., Any] | None = None,
     ) -> "GenericHTTPAdapter":
         prefix = "LLM_" + re.sub(r"[^A-Za-z0-9]", "_", profile.provider).upper()
-        endpoint = os.getenv(f"{prefix}_API_URL") or os.getenv("CREATIVE_LLM_API_URL")
-        api_key = os.getenv(f"{prefix}_API_KEY") or os.getenv("CREATIVE_LLM_API_KEY")
+        endpoint_name = profile.base_url_env or f"{prefix}_API_URL"
+        key_name = profile.api_key_env or f"{prefix}_API_KEY"
+        endpoint = os.getenv(endpoint_name) or os.getenv("CREATIVE_LLM_API_URL")
+        api_key = os.getenv(key_name) or os.getenv("CREATIVE_LLM_API_KEY")
         timeout_raw = os.getenv(f"{prefix}_TIMEOUT_SECONDS") or os.getenv("CREATIVE_LLM_TIMEOUT_SECONDS") or "45"
         try:
             timeout = float(timeout_raw)
@@ -243,6 +297,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             api_key=api_key,
             timeout_seconds=timeout,
             allow_network=allow_network,
+            endpoint_type=profile.endpoint_type,
             transport=transport,
         )
         if require_config:
@@ -268,6 +323,8 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             raise LLMAdapterError("live LLM network call requires explicit confirmation")
         if not model_profile.supports_json_schema:
             raise LLMAdapterError("selected model does not support required JSON schema output")
+        if self._estimate_tokens(prompt) > model_profile.max_input_tokens:
+            raise LLMAdapterError("prompt exceeds the selected model input-token limit")
         body = {
             "model": model_profile.model_id,
             "messages": [
@@ -286,14 +343,14 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 import requests
 
                 response = requests.post(
-                    self.endpoint_url,
+                    self._request_url(),
                     headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                     json=body,
                     timeout=self.timeout_seconds,
                 )
             else:
                 response = self._transport(
-                    url=self.endpoint_url,
+                    url=self._request_url(),
                     headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                     json=body,
                     timeout=self.timeout_seconds,
@@ -302,12 +359,21 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 response.raise_for_status()
             raw = response.json() if hasattr(response, "json") else response
             value = self._structured_value(raw)
+            self.validate_json_schema(value, schema)
+            usage = raw.get("usage", {}) if isinstance(raw, dict) else {}
+            if isinstance(usage, dict) and isinstance(usage.get("total_tokens"), int):
+                self.tokens_used = usage["total_tokens"]
             self._record_usage(prompt, value, model_profile)
             return value
         except LLMAdapterError:
             raise
         except Exception as exc:
             raise LLMAdapterError(f"generic HTTP LLM request failed: {type(exc).__name__}") from exc
+
+    def _request_url(self) -> str:
+        if self.endpoint_type == "chat_json" and not self.endpoint_url.rstrip("/").endswith("/chat/completions"):
+            return self.endpoint_url.rstrip("/") + "/chat/completions"
+        return self.endpoint_url
 
     @staticmethod
     def _structured_value(raw: Any) -> Any:
@@ -360,7 +426,7 @@ def build_llm_adapter(
         return FakeLLMAdapter(fixture_path)
     if profile.endpoint_type == "local_fixture":
         return LocalFixtureLLMAdapter(fixture_path)
-    if profile.endpoint_type == "generic_http":
+    if profile.endpoint_type in {"generic_http", "chat_json"}:
         return GenericHTTPAdapter.from_environment(
             profile,
             allow_network=allow_network,

@@ -220,6 +220,10 @@ class CreativeAnglePackReceipt:
     network_called: bool
     raw_response_stored: bool
     publish_attempted: bool
+    youtube_api_called: bool
+    videos_insert_called: bool
+    schema_valid: bool
+    redacted_error: str | None
     status: str
     artifacts: dict[str, str] = field(default_factory=dict)
     safety: JsonDict = field(default_factory=dict)
@@ -236,6 +240,10 @@ class CreativeAnglePackReceipt:
             raise CreativeAngleContractError("receipts must not store raw LLM responses")
         if self.publish_attempted is not False:
             raise CreativeAngleContractError("creative generation cannot publish")
+        if self.youtube_api_called is not False or self.videos_insert_called is not False:
+            raise CreativeAngleContractError("creative generation cannot call YouTube APIs")
+        if self.provider_type == "online_llm" and self.status not in {"passed", "blocked", "failed"}:
+            raise CreativeAngleContractError("online LLM receipt status must be passed, blocked, or failed")
         if self.safety.get("full_autopilot_enabled") is not False:
             raise CreativeAngleContractError("receipts cannot enable full_autopilot")
         if self.safety.get("supervised_autopilot_enabled") is not False:

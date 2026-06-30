@@ -20,10 +20,15 @@ from content_factory.autopilot.llm_provider_adapters import (
 
 
 EXAMPLE = Path("config/examples/llm_models.example.json")
+NO_LOCAL = Path("tests/fixtures/llm_models.none.json")
+
+
+def _registry():
+    return LLMModelRegistry(local_path=NO_LOCAL)
 
 
 def test_registry_loads_safe_example_profiles():
-    registry = LLMModelRegistry()
+    registry = _registry()
     profiles = registry.list_profiles()
     assert len(profiles) == 4
     fake = registry.require("fake-json-model", require_json_schema=True)
@@ -37,7 +42,7 @@ def test_registry_loads_safe_example_profiles():
 
 
 def test_registry_refuses_missing_disabled_and_schema_incapable_models():
-    registry = LLMModelRegistry()
+    registry = _registry()
     with pytest.raises(LLMModelRegistryError, match="model not found"):
         registry.require("missing-model")
     with pytest.raises(LLMModelRegistryError, match="disabled"):
@@ -67,6 +72,36 @@ def test_registry_rejects_credential_fields_even_in_local_config(tmp_path):
         LLMModelRegistry(local_path=local)
 
 
+def test_init_local_config_writes_env_names_without_keys_and_refuses_overwrite(tmp_path):
+    path = tmp_path / ".local" / "llm" / "models.json"
+    created = LLMModelRegistry.init_local_config(
+        local_path=path,
+        ignore_checker=lambda _: True,
+    )
+    value = json.loads(created.read_text(encoding="utf-8"))
+    encoded = created.read_text(encoding="utf-8")
+    profile = value["models"][0]
+    assert profile["model_id"] == "real-creative-model"
+    assert profile["endpoint_type"] == "chat_json"
+    assert profile["api_key_env"] == "LLM_API_KEY"
+    assert profile["base_url_env"] == "LLM_BASE_URL"
+    assert '"api_key"' not in encoded
+    assert '"base_url"' not in encoded
+    with pytest.raises(LLMModelRegistryError, match="already exists"):
+        LLMModelRegistry.init_local_config(local_path=path, ignore_checker=lambda _: True)
+    assert LLMModelRegistry.init_local_config(
+        local_path=path, force=True, ignore_checker=lambda _: True,
+    ) == path
+
+
+def test_init_local_config_refuses_unignored_path(tmp_path):
+    with pytest.raises(LLMModelRegistryError, match="not protected"):
+        LLMModelRegistry.init_local_config(
+            local_path=tmp_path / "models.json",
+            ignore_checker=lambda _: False,
+        )
+
+
 def test_fake_and_fixture_adapter_healthchecks_are_offline():
     fake = FakeLLMAdapter()
     fixture = LocalFixtureLLMAdapter()
@@ -77,7 +112,7 @@ def test_fake_and_fixture_adapter_healthchecks_are_offline():
 
 
 def test_generic_http_adapter_refuses_missing_credentials_without_network(monkeypatch):
-    profile = LLMModelRegistry().get("generic-http-example")
+    profile = _registry().get("generic-http-example")
     for name in (
         "LLM_EXAMPLE_PROVIDER_API_URL", "LLM_EXAMPLE_PROVIDER_API_KEY",
         "CREATIVE_LLM_API_URL", "CREATIVE_LLM_API_KEY",
@@ -87,24 +122,44 @@ def test_generic_http_adapter_refuses_missing_credentials_without_network(monkey
         build_llm_adapter(profile, allow_network=True, require_config=True)
 
 
-def test_model_cli_list_show_validate_and_dry_test_make_no_network(monkeypatch, capsys):
+def test_model_cli_list_show_validate_and_dry_test_make_no_network(tmp_path, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
-    assert main(["list"]) == 0
+    registry_args = ["--models-file", str(tmp_path / "missing-models.json")]
+    assert main([*registry_args, "list"]) == 0
     listed = capsys.readouterr().out
     assert "fake-json-model" in listed
-    assert main(["show", "--model", "fake-json-model"]) == 0
+    assert main([*registry_args, "show", "--model", "fake-json-model"]) == 0
     shown = capsys.readouterr().out
     assert "model_profile_hash" in shown
-    assert main(["validate-config"]) == 0
+    assert main([*registry_args, "validate-config"]) == 0
     validated = capsys.readouterr().out
     assert '"status": "valid"' in validated
-    assert main(["test", "--model", "fake-json-model", "--dry-run"]) == 0
+    assert main([*registry_args, "test", "--model", "fake-json-model", "--dry-run"]) == 0
     tested = capsys.readouterr().out
     assert '"network_called": false' in tested
     assert calls == []
 
 
+def test_model_cli_init_local_config_reports_safe_creation(tmp_path, monkeypatch, capsys):
+    path = tmp_path / ".local" / "llm" / "models.json"
+    monkeypatch.setattr(LLMModelRegistry, "_git_ignored", staticmethod(lambda _: True))
+    assert main(["--models-file", str(path), "init-local-config"]) == 0
+    output = capsys.readouterr().out
+    assert '"git_ignored": true' in output
+    assert '"credentials_included": false' in output
+
+
 def test_cost_estimation_uses_profile_rates():
-    profile = LLMModelRegistry().require("fake-json-model")
+    profile = _registry().require("fake-json-model")
     assert GenericHTTPAdapter(endpoint_url=None, api_key=None).estimate_cost(100, 100, profile) == 0
+
+
+def test_chat_json_adapter_expands_base_url_without_network():
+    adapter = GenericHTTPAdapter(
+        endpoint_url="https://provider.example/v1",
+        api_key="test-only-key",
+        endpoint_type="chat_json",
+    )
+    assert adapter._request_url() == "https://provider.example/v1/chat/completions"
+    assert adapter.network_called is False
