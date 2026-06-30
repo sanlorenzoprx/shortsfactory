@@ -21,8 +21,29 @@ Ignored local overrides/additions:
 Local entries override an example with the same `model_id`. Profiles contain
 provider identity, endpoint type, JSON-schema/tool capabilities, input/output
 limits, optional per-million-token prices, latency class, recommended tasks,
-safety notes, and enabled state. Credential-like fields are rejected even in
-local profile files.
+safety notes, enabled state, and the provider-facing `provider_model`. Credential-like
+fields are rejected even in local profile files.
+
+## Preferred free routes
+
+`openrouter-free` is the preferred first remote route. It uses
+`provider_model: openrouter/free`, requires `OPENROUTER_API_KEY`, and reads its
+HTTPS base URL from `OPENROUTER_BASE_URL`. Optional `OPENROUTER_HTTP_REFERER`
+and `OPENROUTER_APP_TITLE` values add attribution headers but are never required
+or persisted.
+
+`ollama-local` is the preferred no-cloud route. It defaults to
+`provider_model: llama3.1:8b`, needs no API key, and reads `OLLAMA_BASE_URL`.
+Plain HTTP is accepted only because this profile explicitly enables localhost,
+and then only for `localhost`, `127.0.0.1`, or `::1`. Arbitrary remote HTTP is
+always refused.
+
+Free routes can be rate-limited or unavailable, and open models may return less
+reliable JSON. Server-side structured output never replaces the strict local
+schema and quality gates. Hugging Face can be added as an operator-reviewed
+generic OpenAI-compatible profile when a chosen endpoint matches this adapter;
+it is documented only and has no built-in profile because endpoint behavior and
+authentication vary.
 
 ## Add or switch a model
 
@@ -38,13 +59,16 @@ python llm_models.py init-local-config
 3. Give it a unique `model_id`, correct capabilities/limits/pricing, and review
    its safety notes.
 4. Set `enabled: true` only after review.
-5. Export the variables named by `base_url_env` and `api_key_env`. Profiles
-   without explicit names use `LLM_<PROVIDER>_API_URL` and
-   `LLM_<PROVIDER>_API_KEY`.
+5. Export the variables named by `base_url_env` and `api_key_env`. A null
+   `api_key_env` is allowed only for a reviewed keyless route such as local
+   Ollama. Environment-variable names are configuration; values never belong in
+   the registry.
 6. Validate and inspect:
 
 ```powershell
 python llm_models.py validate-config
+python llm_models.py show --model openrouter-free
+python llm_models.py show --model ollama-local
 python llm_models.py show --model <model_id>
 python llm_models.py test --model <model_id> --dry-run
 ```

@@ -30,7 +30,7 @@ def _registry():
 def test_registry_loads_safe_example_profiles():
     registry = _registry()
     profiles = registry.list_profiles()
-    assert len(profiles) == 4
+    assert len(profiles) == 6
     fake = registry.require("fake-json-model", require_json_schema=True)
     assert fake.provider == "fake"
     assert fake.endpoint_type == "fake_json"
@@ -39,6 +39,23 @@ def test_registry_loads_safe_example_profiles():
     assert fake.latency_class == "fast"
     assert "scripts" in fake.recommended_for
     assert len(fake.profile_hash) == 64
+
+
+def test_free_openrouter_and_local_ollama_profiles_load():
+    registry = _registry()
+    openrouter = registry.require("openrouter-free", require_json_schema=True)
+    assert openrouter.provider_model == "openrouter/free"
+    assert openrouter.api_key_env == "OPENROUTER_API_KEY"
+    assert openrouter.base_url_env == "OPENROUTER_BASE_URL"
+    assert openrouter.allow_localhost is False
+    assert openrouter.cost_per_1m_input_tokens == 0
+
+    ollama = registry.require("ollama-local", require_json_schema=True)
+    assert ollama.provider_model == "llama3.1:8b"
+    assert ollama.api_key_env is None
+    assert ollama.base_url_env == "OLLAMA_BASE_URL"
+    assert ollama.allow_localhost is True
+    assert ollama.supports_json_schema is False
 
 
 def test_registry_refuses_missing_disabled_and_schema_incapable_models():
@@ -69,6 +86,17 @@ def test_registry_rejects_credential_fields_even_in_local_config(tmp_path):
     local = tmp_path / "models.json"
     local.write_text(json.dumps({"models": [{"api_key": "never-store"}]}), encoding="utf-8")
     with pytest.raises(LLMModelRegistryError, match="must not contain credentials"):
+        LLMModelRegistry(local_path=local)
+
+
+def test_registry_refuses_missing_provider_model(tmp_path):
+    example = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    profile = dict(example["models"][2])
+    profile.pop("provider_model")
+    profile.update({"model_id": "missing-provider-model", "enabled": True})
+    local = tmp_path / "models.json"
+    local.write_text(json.dumps({"models": [profile]}), encoding="utf-8")
+    with pytest.raises(LLMModelRegistryError, match="provider_model is required"):
         LLMModelRegistry(local_path=local)
 
 
@@ -122,6 +150,62 @@ def test_generic_http_adapter_refuses_missing_credentials_without_network(monkey
         build_llm_adapter(profile, allow_network=True, require_config=True)
 
 
+def test_openrouter_requires_api_key_and_supports_optional_attribution(monkeypatch):
+    profile = _registry().require("openrouter-free")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    with pytest.raises(LLMAdapterError, match="requires provider API key"):
+        build_llm_adapter(profile, allow_network=False, require_config=True)
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_HTTP_REFERER", "https://ghosttowntest.com")
+    monkeypatch.setenv("OPENROUTER_APP_TITLE", "Ghost Town Test")
+    adapter = build_llm_adapter(profile, allow_network=False, require_config=True)
+    assert adapter._headers() == {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer test-only-key",
+        "HTTP-Referer": "https://ghosttowntest.com",
+        "X-Title": "Ghost Town Test",
+    }
+    assert adapter.network_called is False
+
+    adapter.http_referer = "https://ghosttowntest.com\r\nX-Injected: unsafe"
+    with pytest.raises(LLMAdapterError, match="referer must be a safe HTTPS URL"):
+        adapter._headers()
+
+
+def test_ollama_requires_no_key_and_accepts_explicit_loopback_only(monkeypatch):
+    profile = _registry().require("ollama-local", require_json_schema=True)
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    adapter = build_llm_adapter(profile, allow_network=False, require_config=True)
+    assert "Authorization" not in adapter._headers()
+    assert adapter.healthcheck()["status"] == "ready"
+    assert adapter.network_called is False
+
+    monkeypatch.setenv("OLLAMA_BASE_URL", "http://models.example/v1")
+    with pytest.raises(LLMAdapterError, match="must use HTTPS"):
+        build_llm_adapter(profile, allow_network=False, require_config=True)
+
+
+def test_localhost_http_is_refused_without_explicit_local_profile():
+    remote_profile_adapter = GenericHTTPAdapter(
+        endpoint_url="http://127.0.0.1:11434/v1",
+        api_key="test-only-key",
+        allow_localhost=False,
+    )
+    with pytest.raises(LLMAdapterError, match="must use HTTPS"):
+        remote_profile_adapter._validate_config()
+
+    local_profile_adapter = GenericHTTPAdapter(
+        endpoint_url="http://127.0.0.1:11434/v1",
+        api_key=None,
+        api_key_required=False,
+        allow_localhost=True,
+    )
+    local_profile_adapter._validate_config()
+    assert local_profile_adapter.network_called is False
+
+
 def test_model_cli_list_show_validate_and_dry_test_make_no_network(tmp_path, monkeypatch, capsys):
     calls = []
     monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
@@ -138,6 +222,19 @@ def test_model_cli_list_show_validate_and_dry_test_make_no_network(tmp_path, mon
     assert main([*registry_args, "test", "--model", "fake-json-model", "--dry-run"]) == 0
     tested = capsys.readouterr().out
     assert '"network_called": false' in tested
+    assert calls == []
+
+
+def test_model_cli_free_route_dry_runs_need_no_network_or_credentials(tmp_path, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
+    for name in ("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OLLAMA_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    registry_args = ["--models-file", str(tmp_path / "missing-models.json")]
+    assert main([*registry_args, "test", "--model", "openrouter-free", "--dry-run"]) == 0
+    assert '"runtime_configuration_status": "blocked_missing_config"' in capsys.readouterr().out
+    assert main([*registry_args, "test", "--model", "ollama-local", "--dry-run"]) == 0
+    assert '"network_called": false' in capsys.readouterr().out
     assert calls == []
 
 

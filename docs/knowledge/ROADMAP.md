@@ -32,14 +32,17 @@
 - Phase 5B.5 online-capable creative angle packs and long-form assembly
 - Phase 5B.5A plug-and-play LLM model registry and adapter boundary
 - Phase 5B.5B real online LLM configuration and comparison workflow
+- Phase 5B.5B free/open-source provider profile patch
 
 ## Current checkpoint
 
-Phase 5B.5B online workflow complete. Ignored local profile initialization,
-environment-only credentials, one-call strict creative bundle generation,
-attempt receipts, and deterministic-vs-online comparisons are ready. A real
-provider call remains operator-explicit and credential-dependent. Dry-run stays
-the default and both autopilot live modes remain closed. Stop before feeding
+Phase 5B.5B online workflow complete. OpenRouter Free is the preferred remote
+route and Ollama is the preferred no-cloud route. Ignored local profile
+initialization, environment-only credentials, loopback-only local HTTP,
+one-call strict creative bundle generation, attempt receipts, and
+deterministic-vs-online comparisons are ready. A real provider call remains
+operator-explicit. Dry-run stays the default and both autopilot live modes
+remain closed. Stop before feeding
 analytics/online creative into learning automatically, adding social platforms,
 or any unsupervised upload.
 

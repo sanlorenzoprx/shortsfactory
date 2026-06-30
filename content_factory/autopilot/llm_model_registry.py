@@ -37,6 +37,7 @@ def _canonical_hash(value: Any) -> str:
 class LLMModelProfile:
     model_id: str
     provider: str
+    provider_model: str
     display_name: str
     endpoint_type: str
     supports_json_schema: bool
@@ -51,9 +52,14 @@ class LLMModelProfile:
     enabled: bool
     api_key_env: str | None = None
     base_url_env: str | None = None
+    allow_localhost: bool = False
+    http_referer_env: str | None = None
+    app_title_env: str | None = None
 
     def __post_init__(self) -> None:
-        for name in ("model_id", "provider", "display_name", "endpoint_type", "safety_notes"):
+        for name in (
+            "model_id", "provider", "provider_model", "display_name", "endpoint_type", "safety_notes",
+        ):
             value = getattr(self, name)
             if not isinstance(value, str) or not value.strip():
                 raise LLMModelRegistryError(f"{name} is required")
@@ -65,10 +71,12 @@ class LLMModelProfile:
             raise LLMModelRegistryError("model capabilities must be boolean")
         if not isinstance(self.enabled, bool):
             raise LLMModelRegistryError("enabled must be boolean")
-        for name in ("api_key_env", "base_url_env"):
+        for name in ("api_key_env", "base_url_env", "http_referer_env", "app_title_env"):
             value = getattr(self, name)
             if value is not None and (not isinstance(value, str) or not ENV_NAME.fullmatch(value)):
                 raise LLMModelRegistryError(f"{name} must be null or a safe environment variable name")
+        if not isinstance(self.allow_localhost, bool):
+            raise LLMModelRegistryError("allow_localhost must be boolean")
         if not isinstance(self.max_input_tokens, int) or self.max_input_tokens < 1:
             raise LLMModelRegistryError("max_input_tokens must be a positive integer")
         if not isinstance(self.max_output_tokens, int) or self.max_output_tokens < 1:
@@ -86,6 +94,12 @@ class LLMModelProfile:
     def from_dict(cls, value: dict[str, Any]) -> "LLMModelProfile":
         if not isinstance(value, dict):
             raise LLMModelRegistryError("model profile must be a JSON object")
+        if not str(value.get("provider_model", "")).strip():
+            raise LLMModelRegistryError("provider_model is required")
+        if value.get("endpoint_type") in {"generic_http", "chat_json"}:
+            missing = [name for name in ("api_key_env", "base_url_env") if name not in value]
+            if missing:
+                raise LLMModelRegistryError("HTTP model profile is missing: " + ", ".join(missing))
         return cls(**{**value, "recommended_for": tuple(value.get("recommended_for", []))})
 
     def to_dict(self) -> dict[str, Any]:
@@ -167,7 +181,8 @@ class LLMModelRegistry:
             raise LLMModelRegistryError(f"model not found in registry: {model_id}")
         if require_enabled and not profile.enabled:
             raise LLMModelRegistryError(f"model is disabled: {model_id}")
-        if require_json_schema and not profile.supports_json_schema:
+        local_client_validation = profile.allow_localhost and profile.endpoint_type == "chat_json"
+        if require_json_schema and not profile.supports_json_schema and not local_client_validation:
             raise LLMModelRegistryError(f"model lacks required JSON schema capability: {model_id}")
         return profile
 
@@ -210,6 +225,7 @@ class LLMModelRegistry:
             **source,
             "model_id": "real-creative-model",
             "provider": "generic_http",
+            "provider_model": "replace-with-provider-model",
             "display_name": "Real Creative Model",
             "endpoint_type": "chat_json",
             "max_input_tokens": 120000,
@@ -218,6 +234,9 @@ class LLMModelRegistry:
             "enabled": True,
             "api_key_env": "LLM_API_KEY",
             "base_url_env": "LLM_BASE_URL",
+            "allow_localhost": False,
+            "http_referer_env": None,
+            "app_title_env": None,
         }
         value = {"schema_version": "llm_model_registry.v1", "models": [profile]}
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -13,8 +13,29 @@ and long-form generation methods. Three provider modes implement the boundary:
 Phase 5B.5A resolves `--model` through `LLMModelRegistry`. Safe examples live
 in `config/examples/llm_models.example.json`; additions and overrides belong in
 ignored `.local/llm/models.json`. Profiles never contain credentials. Generic
-HTTP adapters read provider-specific `LLM_<PROVIDER>_API_URL` and
-`LLM_<PROVIDER>_API_KEY` environment variables.
+HTTP adapters read the exact environment-variable names declared by each
+profile.
+
+The preferred free remote profile is `openrouter-free`:
+
+```powershell
+$env:OPENROUTER_API_KEY="<key>"
+$env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+$env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
+$env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
+```
+
+The preferred no-cloud profile is `ollama-local`:
+
+```powershell
+$env:OLLAMA_BASE_URL="http://localhost:11434/v1"
+```
+
+OpenRouter free capacity can be rate-limited or unavailable. Ollama and other
+free/open models may be weaker at structured JSON. Both still pass the same
+strict client-side schema and creative quality gates. Hugging Face is a
+documentation-only generic-profile option when a specific endpoint is cleanly
+OpenAI compatible; there is no built-in route.
 
 Then select online mode explicitly:
 
@@ -44,6 +65,8 @@ receipts, and repository secrets are never included.
 - Online mode is never selected by default.
 - Missing, disabled, or schema-incapable model profiles refuse before generation.
 - Missing generic-provider URL or key refuses before network access.
+- Remote endpoints require HTTPS. Loopback HTTP is accepted only by an
+  explicitly local profile and only for localhost/127.0.0.1/::1.
 - Provider input containing detected secrets/authentication URLs is refused.
 - Raw responses and API keys are never persisted.
 - Only schema-valid, gate-passing output becomes a creative artifact.

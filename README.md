@@ -1098,6 +1098,50 @@ specificity, angle uniqueness, long-form completeness, and source quality gates.
 Generation and comparison never publish or call YouTube APIs; both autopilot
 live modes remain closed.
 
+### Free/open-source model routes
+
+`openrouter-free` is the preferred first remote route. Its key and base URL stay
+in environment variables, with optional attribution headers:
+
+```powershell
+$env:OPENROUTER_API_KEY="<key>"
+$env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
+$env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
+$env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
+
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider online_llm `
+  --model openrouter-free
+```
+
+`ollama-local` is the preferred no-cloud route and needs no API key:
+
+```powershell
+$env:OLLAMA_BASE_URL="http://localhost:11434/v1"
+
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider online_llm `
+  --model ollama-local
+```
+
+Inspect both profiles without a network call:
+
+```powershell
+python llm_models.py show --model openrouter-free
+python llm_models.py show --model ollama-local
+python llm_models.py test --model openrouter-free --dry-run
+python llm_models.py test --model ollama-local --dry-run
+```
+
+Free routes may be rate-limited or unavailable, and free/open models may have
+weaker JSON reliability. All output still must pass strict local schema and
+quality gates. Remote HTTP is refused; loopback HTTP is allowed only for the
+explicit local profile. Hugging Face is documented as an optional reviewed
+generic OpenAI-compatible profile, not enabled as a built-in route. LLM output
+never publishes, and API keys remain environment-only.
+
 ## Rules
 
 Do not activate unsupervised live publishing or add TikTok, Instagram, real

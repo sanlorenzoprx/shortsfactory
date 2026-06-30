@@ -4,6 +4,7 @@
     {
       "model_id": "fake-json-model",
       "provider": "fake",
+      "provider_model": "fake-json-model",
       "display_name": "Offline Fake JSON Model",
       "endpoint_type": "fake_json",
       "supports_json_schema": true,
@@ -15,11 +16,17 @@
       "latency_class": "fast",
       "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform", "critique"],
       "safety_notes": "Offline deterministic fake adapter for tests and local smoke runs only.",
-      "enabled": true
+      "enabled": true,
+      "api_key_env": null,
+      "base_url_env": null,
+      "allow_localhost": false,
+      "http_referer_env": null,
+      "app_title_env": null
     },
     {
       "model_id": "fixture-json-model",
       "provider": "local_fixture",
+      "provider_model": "fixture-json-model",
       "display_name": "Local Fixture JSON Model",
       "endpoint_type": "local_fixture",
       "supports_json_schema": true,
@@ -31,11 +38,17 @@
       "latency_class": "fast",
       "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform"],
       "safety_notes": "Reads checked-in structured fixture output and never calls a network.",
-      "enabled": true
+      "enabled": true,
+      "api_key_env": null,
+      "base_url_env": null,
+      "allow_localhost": false,
+      "http_referer_env": null,
+      "app_title_env": null
     },
     {
       "model_id": "generic-http-example",
       "provider": "example_provider",
+      "provider_model": "replace-with-provider-model",
       "display_name": "Generic HTTP Example",
       "endpoint_type": "generic_http",
       "supports_json_schema": true,
@@ -47,11 +60,17 @@
       "latency_class": "balanced",
       "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform", "critique"],
       "safety_notes": "Disabled example. Copy into ignored local config, rename, review pricing, and enable explicitly.",
-      "enabled": false
+      "enabled": false,
+      "api_key_env": "LLM_EXAMPLE_PROVIDER_API_KEY",
+      "base_url_env": "LLM_EXAMPLE_PROVIDER_API_URL",
+      "allow_localhost": false,
+      "http_referer_env": null,
+      "app_title_env": null
     },
     {
       "model_id": "no-schema-example",
       "provider": "example_provider",
+      "provider_model": "no-schema-example",
       "display_name": "No JSON Schema Example",
       "endpoint_type": "generic_http",
       "supports_json_schema": false,
@@ -63,7 +82,56 @@
       "latency_class": "slow",
       "recommended_for": ["critique"],
       "safety_notes": "Disabled capability-negative example used to prove fail-closed selection.",
-      "enabled": false
+      "enabled": false,
+      "api_key_env": "LLM_EXAMPLE_PROVIDER_API_KEY",
+      "base_url_env": "LLM_EXAMPLE_PROVIDER_API_URL",
+      "allow_localhost": false,
+      "http_referer_env": null,
+      "app_title_env": null
+    },
+    {
+      "model_id": "openrouter-free",
+      "provider": "generic_http",
+      "provider_model": "openrouter/free",
+      "display_name": "OpenRouter Free Router",
+      "endpoint_type": "chat_json",
+      "supports_json_schema": true,
+      "supports_tool_calling": false,
+      "max_input_tokens": 32000,
+      "max_output_tokens": 4000,
+      "cost_per_1m_input_tokens": 0,
+      "cost_per_1m_output_tokens": 0,
+      "latency_class": "balanced",
+      "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform"],
+      "safety_notes": "Free route may be rate-limited or unavailable. Output must still pass schema and gates.",
+      "enabled": true,
+      "api_key_env": "OPENROUTER_API_KEY",
+      "base_url_env": "OPENROUTER_BASE_URL",
+      "allow_localhost": false,
+      "http_referer_env": "OPENROUTER_HTTP_REFERER",
+      "app_title_env": "OPENROUTER_APP_TITLE"
+    },
+    {
+      "model_id": "ollama-local",
+      "provider": "generic_http",
+      "provider_model": "llama3.1:8b",
+      "display_name": "Ollama Local Open Model",
+      "endpoint_type": "chat_json",
+      "supports_json_schema": false,
+      "supports_tool_calling": false,
+      "max_input_tokens": 16000,
+      "max_output_tokens": 4000,
+      "cost_per_1m_input_tokens": 0,
+      "cost_per_1m_output_tokens": 0,
+      "latency_class": "slow",
+      "recommended_for": ["hooks", "captions", "scripts"],
+      "safety_notes": "Runs locally through Ollama. No cloud API cost. May produce weaker structured JSON; client-side schema gates remain strict.",
+      "enabled": true,
+      "api_key_env": null,
+      "base_url_env": "OLLAMA_BASE_URL",
+      "allow_localhost": true,
+      "http_referer_env": null,
+      "app_title_env": null
     }
   ]
 }

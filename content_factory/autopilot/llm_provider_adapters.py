@@ -260,6 +260,10 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         *,
         endpoint_url: str | None,
         api_key: str | None,
+        api_key_required: bool = True,
+        allow_localhost: bool = False,
+        http_referer: str | None = None,
+        app_title: str | None = None,
         timeout_seconds: float = 45.0,
         allow_network: bool = False,
         endpoint_type: str = "generic_http",
@@ -268,6 +272,10 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         super().__init__()
         self.endpoint_url = (endpoint_url or "").strip()
         self.api_key = (api_key or "").strip()
+        self.api_key_required = api_key_required
+        self.allow_localhost = allow_localhost
+        self.http_referer = (http_referer or "").strip()
+        self.app_title = (app_title or "").strip()
         self.timeout_seconds = timeout_seconds
         self.allow_network = allow_network
         self.endpoint_type = endpoint_type
@@ -283,10 +291,11 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         transport: Callable[..., Any] | None = None,
     ) -> "GenericHTTPAdapter":
         prefix = "LLM_" + re.sub(r"[^A-Za-z0-9]", "_", profile.provider).upper()
-        endpoint_name = profile.base_url_env or f"{prefix}_API_URL"
-        key_name = profile.api_key_env or f"{prefix}_API_KEY"
-        endpoint = os.getenv(endpoint_name) or os.getenv("CREATIVE_LLM_API_URL")
-        api_key = os.getenv(key_name) or os.getenv("CREATIVE_LLM_API_KEY")
+        endpoint_name = profile.base_url_env
+        endpoint = os.getenv(endpoint_name) if endpoint_name else None
+        api_key = os.getenv(profile.api_key_env) if profile.api_key_env else None
+        http_referer = os.getenv(profile.http_referer_env) if profile.http_referer_env else None
+        app_title = os.getenv(profile.app_title_env) if profile.app_title_env else None
         timeout_raw = os.getenv(f"{prefix}_TIMEOUT_SECONDS") or os.getenv("CREATIVE_LLM_TIMEOUT_SECONDS") or "45"
         try:
             timeout = float(timeout_raw)
@@ -295,6 +304,10 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         adapter = cls(
             endpoint_url=endpoint,
             api_key=api_key,
+            api_key_required=profile.api_key_env is not None,
+            allow_localhost=profile.allow_localhost,
+            http_referer=http_referer,
+            app_title=app_title,
             timeout_seconds=timeout,
             allow_network=allow_network,
             endpoint_type=profile.endpoint_type,
@@ -305,15 +318,48 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         return adapter
 
     def _validate_config(self) -> None:
-        if not self.endpoint_url or not self.api_key:
-            raise LLMAdapterError("generic HTTP model requires provider API URL and API key environment configuration")
+        if not self.endpoint_url:
+            raise LLMAdapterError("generic HTTP model requires provider API URL environment configuration")
+        if self.api_key_required and not self.api_key:
+            raise LLMAdapterError("generic HTTP model requires provider API key environment configuration")
         parsed = urlparse(self.endpoint_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
             raise LLMAdapterError("provider API URL must be a safe HTTP(S) endpoint")
+        hostname = (parsed.hostname or "").casefold()
+        is_loopback = hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme == "http" and not (self.allow_localhost and is_loopback):
+            raise LLMAdapterError("provider API URL must use HTTPS unless an explicit local profile targets loopback")
         if "youtube" in parsed.netloc.casefold() or "youtube" in parsed.path.casefold():
             raise LLMAdapterError("provider API URL must not target a YouTube API")
         if self.timeout_seconds <= 0:
             raise LLMAdapterError("provider timeout must be positive")
+        self._headers()
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.http_referer:
+            parsed = urlparse(self.http_referer)
+            unsafe_header_value = (
+                "\r" in self.http_referer
+                or "\n" in self.http_referer
+                or len(self.http_referer) > 2048
+            )
+            if (
+                unsafe_header_value
+                or parsed.scheme != "https"
+                or not parsed.netloc
+                or parsed.username
+                or parsed.password
+            ):
+                raise LLMAdapterError("provider attribution referer must be a safe HTTPS URL")
+            headers["HTTP-Referer"] = self.http_referer
+        if self.app_title:
+            if "\r" in self.app_title or "\n" in self.app_title or len(self.app_title) > 200:
+                raise LLMAdapterError("provider attribution title is unsafe")
+            headers["X-Title"] = self.app_title
+        return headers
 
     def generate_json(
         self, prompt: str, schema: dict[str, Any], model_profile: LLMModelProfile,
@@ -321,20 +367,25 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         self._validate_config()
         if not self.allow_network:
             raise LLMAdapterError("live LLM network call requires explicit confirmation")
-        if not model_profile.supports_json_schema:
+        local_client_validation = model_profile.allow_localhost and model_profile.endpoint_type == "chat_json"
+        if not model_profile.supports_json_schema and not local_client_validation:
             raise LLMAdapterError("selected model does not support required JSON schema output")
         if self._estimate_tokens(prompt) > model_profile.max_input_tokens:
             raise LLMAdapterError("prompt exceeds the selected model input-token limit")
         body = {
-            "model": model_profile.model_id,
+            "model": model_profile.provider_model,
             "messages": [
                 {"role": "system", "content": "Return only schema-valid JSON. Never publish or call platform APIs."},
                 {"role": "user", "content": prompt},
             ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": "creative_generation", "strict": True, "schema": schema},
-            },
+            "response_format": (
+                {
+                    "type": "json_schema",
+                    "json_schema": {"name": "creative_generation", "strict": True, "schema": schema},
+                }
+                if model_profile.supports_json_schema
+                else {"type": "json_object"}
+            ),
             "max_tokens": model_profile.max_output_tokens,
         }
         self.network_called = True
@@ -344,14 +395,14 @@ class GenericHTTPAdapter(LLMProviderAdapter):
 
                 response = requests.post(
                     self._request_url(),
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    headers=self._headers(),
                     json=body,
                     timeout=self.timeout_seconds,
                 )
             else:
                 response = self._transport(
                     url=self._request_url(),
-                    headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                    headers=self._headers(),
                     json=body,
                     timeout=self.timeout_seconds,
                 )

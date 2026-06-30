@@ -4,7 +4,9 @@
 
 Phase 5B.5B adds ignored real-model profile initialization, environment-only
 credentials, one-call strict online creative-bundle generation, attempt receipts,
-and offline deterministic-vs-online comparison reports. Invalid JSON/schema,
+offline deterministic-vs-online comparison reports, and safe built-in
+`openrouter-free`/`ollama-local` profiles. OpenRouter is the preferred free
+remote route; Ollama is the preferred no-cloud route. Invalid JSON/schema,
 secrets, unsupported claims, publishing requests, and YouTube API instructions
 fail closed. LLMs still generate candidates only; Phase 5A `dry_run` is unchanged
 and both autopilot live modes remain refused.
@@ -98,6 +100,12 @@ Phase 5B.5B final `pytest -q`: 324 passed in 122.50s
 Phase 5B.5B deterministic/fake comparison: 5 angles per pack, complete
 long-form plans, passing source gates, 0 network calls, 0 YouTube calls, and
 0 publishing attempts
+Phase 5B.5B free/open-source patch focused suite: 35 passed
+Phase 5B.5B free/open-source patch Phase 5A/CLI regressions: 18 passed
+Phase 5B.5B free/open-source patch YouTube regressions: 68 passed
+Phase 5B.5B free/open-source patch final `pytest -q`: 330 passed in 153.06s
+OpenRouter/Ollama dry runs and deterministic/fake-online smokes: 0 real network
+calls, 0 YouTube calls, 0 publishing attempts, and both autopilot modes closed
 ```
 
 ## Known working capabilities
@@ -210,6 +218,8 @@ long-form plans, passing source gates, 0 network calls, 0 YouTube calls, and
 - One-call five-angle/short/long-form online prompt and strict bundle schema
 - Passed/blocked/failed real-online attempt receipts with YouTube/publishing safety flags
 - Offline deterministic-vs-online comparison receipts and specificity summaries
+- Built-in OpenRouter Free and loopback-only keyless Ollama model profiles
+- Provider-facing model IDs and optional environment-only attribution headers
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -282,6 +292,8 @@ long-form plans, passing source gates, 0 network calls, 0 YouTube calls, and
   not contain credentials, and generic adapter keys remain environment-only.
 - A real model still requires the operator to set its configured API key/base URL
   environment variables and explicitly run one online generation command.
+- Remote model URLs require HTTPS. Insecure HTTP is limited to loopback hosts
+  on profiles with explicit local permission; schema validation remains strict.
 
 ## Current risk
 

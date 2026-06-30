@@ -307,7 +307,8 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
     ):
         if not profile.enabled:
             raise CreativeProviderError(f"model is disabled: {profile.model_id}")
-        if not profile.supports_json_schema:
+        local_client_validation = profile.allow_localhost and profile.endpoint_type == "chat_json"
+        if not profile.supports_json_schema and not local_client_validation:
             raise CreativeProviderError(f"model lacks required JSON schema capability: {profile.model_id}")
         self.profile = profile
         self.adapter = adapter

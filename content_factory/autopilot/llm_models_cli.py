@@ -83,11 +83,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             require_config=args.confirm_live_llm_call,
         )
         if args.dry_run:
+            health = adapter.healthcheck()
             result = {
                 "model_id": profile.model_id,
                 "provider": profile.provider,
                 "model_profile_hash": profile.profile_hash,
-                **adapter.healthcheck(),
+                **{key: value for key, value in health.items() if key != "status"},
+                "status": "ready",
+                "runtime_configuration_status": health.get("status"),
                 "dry_run": True,
                 "network_called": False,
             }
