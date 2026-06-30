@@ -2,12 +2,12 @@
 
 ## Current status
 
-Phase 5B.5 adds deterministic, fixture, and explicitly selected online-LLM
-creative providers. One stored LIT-tested idea becomes five gated short-form
-jobs, YouTube metadata drafts, analytics placeholders, and one long-form
-assembly plan. Online output is structured, validated, and fail-closed; it does
-not orchestrate or publish. Phase 5A `dry_run` remains unchanged;
-`supervised_autopilot` and `full_autopilot` remain refused.
+Phase 5B.5A adds a plug-and-play LLM model registry and adapter boundary.
+Online creative generation selects a safe profile by model ID, verifies JSON
+schema capability and enabled state, then delegates to fake, local-fixture, or
+generic HTTP adapters. Receipts record redacted model/profile/adapter provenance
+and cost/token estimates. LLMs still generate candidates only; Phase 5A
+`dry_run` is unchanged and both autopilot live modes remain refused.
 
 ## Last known remote HEAD
 
@@ -84,6 +84,13 @@ Phase 5B.5 Phase 5A/CLI regression suite: 18 passed
 Phase 5B.5 final `pytest -q`: 306 passed in 110.38s
 Phase 5B.5 deterministic smoke: 5 angles, 5 short jobs, 5 long-form chapters,
 0 credential reads, 0 network calls, and 0 publish attempts
+Phase 5B.5A registry + creative focused suite: 23 passed
+Phase 5B.5A creative acceptance suite: 15 passed
+Phase 5B.5A Phase 5A/CLI regression suite: 18 passed
+Phase 5B.5A YouTube regression suite: 68 passed
+Phase 5B.5A final `pytest -q`: 318 passed in 121.61s
+Phase 5B.5A fake online smoke: 5 angles, 5 shorts, 5 long-form chapters,
+model/profile/adapter/token/cost provenance, 0 network calls, and 0 publishing
 ```
 
 ## Known working capabilities
@@ -188,6 +195,10 @@ Phase 5B.5 deterministic smoke: 5 angles, 5 short jobs, 5 long-form chapters,
 - Optional explicit structured-JSON online LLM provider with redacted receipts
 - Five traceable short jobs plus one long-form assembly plan per passing pack
 - Pending offline analytics mappings for every short and long-form plan
+- Capability-validated LLM model registry with safe examples and ignored overrides
+- Fake, local-fixture, and generic HTTP adapters behind one interface
+- Offline registry list/show/validate/test CLI with explicit live-call confirmation
+- Receipt-level model provider/profile hash, adapter, token, cost, and network provenance
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -256,6 +267,8 @@ Phase 5B.5 deterministic smoke: 5 angles, 5 short jobs, 5 long-form chapters,
   requires an explicit provider flag and ignored local/environment config.
 - Creative analytics fields are placeholders only; no automatic learning feeds
   into future batches in Phase 5B.5.
+- Local LLM model overrides live under ignored `.local/llm/`; profile files may
+  not contain credentials, and generic adapter keys remain environment-only.
 
 ## Current risk
 

@@ -810,3 +810,40 @@ generation is optional, explicit, and was not called during tests or smoke
 validation. Creative analytics mappings remain pending placeholders; no
 automatic learning feeds into the next batch. Phase 5A dry-run is unchanged,
 and both supervised and full autopilot remain refused.
+
+## Phase 5B.5A — Plug-and-Play LLM Model Registry
+
+Status: complete
+
+Commit:
+`Add Phase 5B.5A plug-and-play LLM model registry`
+
+Implemented:
+- `LLMModelProfile` contracts and an override-capable `LLMModelRegistry`
+- Safe checked-in fake, fixture, disabled generic HTTP, and no-schema profiles
+- Ignored `.local/llm/models.json` profile overrides with credential-field refusal
+- `LLMProviderAdapter` boundary with fake, local-fixture, and generic HTTP adapters
+- Offline-by-default `llm_models.py` list/show/validate/test commands
+- Registry-selected online creative generation with task-specific JSON schemas
+- Fail-closed missing, disabled, schema-incapable, malformed, and invalid outputs
+- Receipt provenance for provider/model/profile hash/adapter/tokens/cost/network
+- Publishing/YouTube-action refusal and raw-response/secret non-persistence
+
+Evidence:
+- Registry + creative focused suite: 23 passed
+- Creative acceptance suite: 15 passed
+- Phase 5A and autopilot CLI regressions: 18 passed
+- YouTube credential/publisher/upload/metadata/analytics regressions: 68 passed
+- Final `pytest -q`: 318 passed in 121.61s
+- Python compile check and scoped Ruff check passed
+- Registry list/show/validate/fake dry-run commands passed without network
+- Deterministic and `fake-json-model` online smokes each created five shorts and
+  one five-chapter long-form plan
+- Fake-online receipt recorded model profile hash, adapter, token/cost estimates,
+  0 network calls, 0 raw responses, 0 secrets, and 0 publishing
+
+Notes:
+The generic HTTP adapter remains a credential-gated placeholder; no real LLM
+provider was called. API keys remain environment-only and model profile files
+reject credential fields. Deterministic mode is unchanged, creative candidates
+cannot publish, and `full_autopilot` remains closed.

@@ -989,9 +989,26 @@ python creative_angle_pack.py generate `
   --provider fixture
 ```
 
-Online generation is optional and must be selected explicitly. Configure the
-ignored `.local/creative_llm/config.json` or the environment with
-`CREATIVE_LLM_API_URL`, `CREATIVE_LLM_API_KEY`, and a model, then run:
+Online generation is optional and must be selected explicitly. Phase 5B.5A
+resolves the selected model through the model registry instead of hardcoding a
+provider. Inspect the safe example profiles and validate optional ignored local
+overrides:
+
+```powershell
+python llm_models.py list
+python llm_models.py show --model fake-json-model
+python llm_models.py validate-config
+python llm_models.py test --model fake-json-model --dry-run
+```
+
+Local model profiles belong in `.local/llm/models.json`, which is ignored by
+Git. Safe examples live in `config/examples/llm_models.example.json`. Profiles
+contain capabilities, context/output limits, optional pricing, latency class,
+recommended tasks, and safety notes—but never credentials. Generic HTTP adapter
+credentials remain environment-only using provider-specific
+`LLM_<PROVIDER>_API_URL` and `LLM_<PROVIDER>_API_KEY` names.
+
+Switch models with `--model`:
 
 ```powershell
 python creative_angle_pack.py generate `
@@ -1000,11 +1017,24 @@ python creative_angle_pack.py generate `
   --model <model_id>
 ```
 
+The checked-in `fake-json-model` exercises the complete online-provider path
+offline:
+
+```powershell
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider online_llm `
+  --model fake-json-model
+```
+
 The online adapter requests structured JSON only. It stores validated output,
 hashes, token/cost summaries when supplied, and redacted receipts—never API
-keys, prompts containing detected secrets, or raw provider responses. Missing
-configuration refuses before a network call. Invalid schemas or failed quality
-gates write a blocked receipt without creating short or long-form artifacts.
+keys, prompts containing detected secrets, or raw provider responses. Missing,
+disabled, or schema-incapable model profiles refuse before generation. Missing
+generic-provider credentials refuse before a network call. Invalid JSON,
+invalid schemas, or failed quality gates write a blocked receipt without
+creating short or long-form artifacts. `llm_models.py test` cannot call a live
+provider unless `--confirm-live-llm-call` is passed explicitly.
 
 Every provider remains subordinate to orchestration and gates. The five required
 angles are `ghost_town_risk`, `buyer_reality`, `fast_validation_test`,

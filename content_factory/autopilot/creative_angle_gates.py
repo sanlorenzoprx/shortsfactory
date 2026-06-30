@@ -16,6 +16,10 @@ AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_
 UNSUPPORTED_CERTAINTY = re.compile(
     r"(?i)\b(guaranteed|definitely works?|risk[- ]free|everyone needs|will make money|proven revenue)\b|\$\s*\d|\b\d+(?:\.\d+)?%"
 )
+FORBIDDEN_PLATFORM_ACTION = re.compile(
+    r"(?i)(youtube\.googleapis\.com|videos\.insert|call\s+the\s+youtube\s+api|"
+    r"upload\s+(?:this|the)\s+video|publish\s+(?:this|the|now))"
+)
 EXPECTED_ANGLES = {row["angle_id"] for row in ANGLE_RUBRIC}
 WORD_PATTERN = re.compile(r"[a-z0-9]{4,}", re.I)
 GROUNDING_STOPWORDS = {
@@ -207,6 +211,12 @@ def evaluate_creative_pack(
         not contains_sensitive_content(output_value),
         "validated artifacts contain no secrets or authentication URLs",
         "a secret or authentication URL appears in generated content",
+    ))
+    gates.append(_gate(
+        "no_platform_actions",
+        not FORBIDDEN_PLATFORM_ACTION.search(json.dumps(output_value, ensure_ascii=False)),
+        "LLM output contains no publishing or YouTube API action",
+        "LLM output attempted to request publishing or a YouTube API call",
     ))
     gates.append(_gate(
         "online_provider_explicit",

@@ -108,3 +108,11 @@ output must pass the same contracts and creative gates; invalid online output
 writes only a blocked redacted receipt. Creative metadata remains a draft and
 must not invoke credentials, uploads, verification, analytics, supervised
 autopilot, or full autopilot.
+
+Phase 5B.5A online model selection must go through `LLMModelRegistry` and an
+`LLMProviderAdapter`; creative code must not hardcode a model vendor. Profiles
+may come from the checked-in safe examples or ignored `.local/llm/models.json`,
+but profile files must never contain credentials. Generic adapter credentials
+remain environment-only. Missing, disabled, or schema-incapable models refuse
+before generation. `llm_models.py test` is offline unless the operator passes
+`--confirm-live-llm-call`; tests must use fake/local-fixture adapters only.

@@ -16,11 +16,12 @@ from content_factory.autopilot.creative_angle_models import (
 from content_factory.autopilot.creative_angle_pack import CreativeAnglePackGenerator, main
 from content_factory.autopilot.creative_providers import (
     CTA,
-    CreativeProviderError,
     DeterministicCreativeGenerationProvider,
     FixtureCreativeGenerationProvider,
-    OnlineLLMConfig,
+    OnlineLLMCreativeGenerationProvider,
 )
+from content_factory.autopilot.llm_model_registry import LLMModelRegistry
+from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter
 
 
 FIXTURE = Path("fixtures/lit_verdicts/sample.json")
@@ -34,12 +35,13 @@ EXPECTED_ANGLES = {
 }
 
 
-def _generate(tmp_path: Path, provider=None):
+def _generate(tmp_path: Path, provider=None, *, online_explicit=False):
     output = tmp_path / "output with spaces"
     generator = CreativeAnglePackGenerator(
         provider=provider or DeterministicCreativeGenerationProvider(),
         output_root=output,
         now=lambda: NOW,
+        online_provider_explicit=online_explicit,
     )
     receipt = generator.generate(lit_verdict_file=FIXTURE)
     return output, generator, receipt
@@ -118,17 +120,41 @@ def test_fixture_provider_uses_checked_in_outputs_without_network(tmp_path, monk
     assert network_calls == []
 
 
-def test_online_provider_refuses_missing_config_without_network(tmp_path, monkeypatch):
-    for name in (
-        "CREATIVE_LLM_API_URL", "CREATIVE_LLM_API_KEY", "CREATIVE_LLM_MODEL",
-        "CREATIVE_LLM_TIMEOUT_SECONDS",
-    ):
-        monkeypatch.delenv(name, raising=False)
-    calls = []
-    monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
-    with pytest.raises(CreativeProviderError, match="requires CREATIVE_LLM_API_URL"):
-        OnlineLLMConfig.load(config_path=tmp_path / "missing.json")
-    assert calls == []
+def test_fake_adapter_generates_valid_online_creative_pack_without_network(tmp_path):
+    profile = LLMModelRegistry().require("fake-json-model", require_json_schema=True)
+    adapter = FakeLLMAdapter()
+    provider = OnlineLLMCreativeGenerationProvider(profile, adapter)
+    output, _, receipt = _generate(tmp_path, provider, online_explicit=True)
+    pack, jobs, longform = _artifacts(output, receipt)
+    assert receipt.status == "completed"
+    assert receipt.provider_type == "online_llm"
+    assert receipt.model_id == "fake-json-model"
+    assert receipt.model_provider == "fake"
+    assert receipt.model_profile_hash == profile.profile_hash
+    assert receipt.adapter_type == "fake"
+    assert receipt.network_called is False
+    assert receipt.raw_response_stored is False
+    assert receipt.estimated_input_tokens > 0
+    assert receipt.estimated_output_tokens > 0
+    assert receipt.estimated_cost == 0
+    assert len(pack.angles) == len(jobs) == len(longform.ordered_chapters) == 5
+
+
+@pytest.mark.parametrize("response_mode", ["malformed_json", "schema_invalid"])
+def test_invalid_fake_llm_output_writes_blocked_receipt_only(tmp_path, response_mode):
+    profile = LLMModelRegistry().require("fake-json-model", require_json_schema=True)
+    provider = OnlineLLMCreativeGenerationProvider(
+        profile, FakeLLMAdapter(response_mode=response_mode),
+    )
+    _, generator, receipt = _generate(tmp_path, provider, online_explicit=True)
+    assert receipt.status == "blocked"
+    assert receipt.artifacts == {}
+    assert receipt.short_jobs_created == 0
+    assert receipt.network_called is False
+    assert receipt.raw_response_stored is False
+    assert list(generator.pack_dir(receipt.angle_pack_id).iterdir()) == [
+        generator.receipt_path(receipt.angle_pack_id)
+    ]
 
 
 class UnselectedOnlineProvider(DeterministicCreativeGenerationProvider):
@@ -214,6 +240,48 @@ def test_cli_generates_deterministic_pack_and_reports_paths(tmp_path, capsys):
     assert "Supervised autopilot enabled: false" in stdout
 
 
+def test_deterministic_cli_does_not_load_model_registry_or_credentials(tmp_path, monkeypatch):
+    def refuse_registry(*args, **kwargs):
+        raise AssertionError("deterministic mode must not load the LLM registry")
+
+    monkeypatch.setattr(
+        "content_factory.autopilot.creative_angle_pack.LLMModelRegistry",
+        refuse_registry,
+    )
+    assert main([
+        "generate",
+        "--lit-verdict-file", str(FIXTURE),
+        "--provider", "deterministic",
+        "--output-root", str(tmp_path / "output"),
+    ]) == 0
+
+
+def test_online_generic_model_refuses_missing_credentials_without_network(tmp_path, monkeypatch, capsys):
+    example = json.loads(Path("config/examples/llm_models.example.json").read_text(encoding="utf-8"))
+    profile = dict(next(row for row in example["models"] if row["model_id"] == "generic-http-example"))
+    profile.update({"model_id": "enabled-generic-test", "enabled": True})
+    models_file = tmp_path / "models.json"
+    models_file.write_text(json.dumps({"models": [profile]}), encoding="utf-8")
+    for name in (
+        "LLM_EXAMPLE_PROVIDER_API_URL", "LLM_EXAMPLE_PROVIDER_API_KEY",
+        "CREATIVE_LLM_API_URL", "CREATIVE_LLM_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    calls = []
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
+    result = main([
+        "generate",
+        "--lit-verdict-file", str(FIXTURE),
+        "--provider", "online_llm",
+        "--model", "enabled-generic-test",
+        "--models-file", str(models_file),
+        "--output-root", str(tmp_path / "output"),
+    ])
+    assert result == 1
+    assert "requires provider API URL and API key" in capsys.readouterr().err
+    assert calls == []
+
+
 def test_cli_online_mode_refuses_without_config(tmp_path, monkeypatch, capsys):
     for name in ("CREATIVE_LLM_API_URL", "CREATIVE_LLM_API_KEY", "CREATIVE_LLM_MODEL"):
         monkeypatch.delenv(name, raising=False)
@@ -221,10 +289,9 @@ def test_cli_online_mode_refuses_without_config(tmp_path, monkeypatch, capsys):
         "generate",
         "--lit-verdict-file", str(FIXTURE),
         "--provider", "online_llm",
-        "--model", "fixture-model",
-        "--online-config", str(tmp_path / "missing.json"),
+        "--models-file", str(tmp_path / "missing.json"),
         "--output-root", str(tmp_path / "output"),
     ])
     stderr = capsys.readouterr().err
     assert result == 1
-    assert "online_llm requires" in stderr
+    assert "online_llm requires --model" in stderr

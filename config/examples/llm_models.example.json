@@ -1,0 +1,69 @@
+{
+  "schema_version": "llm_model_registry.v1",
+  "models": [
+    {
+      "model_id": "fake-json-model",
+      "provider": "fake",
+      "display_name": "Offline Fake JSON Model",
+      "endpoint_type": "fake_json",
+      "supports_json_schema": true,
+      "supports_tool_calling": false,
+      "max_input_tokens": 32000,
+      "max_output_tokens": 8000,
+      "cost_per_1m_input_tokens": 0,
+      "cost_per_1m_output_tokens": 0,
+      "latency_class": "fast",
+      "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform", "critique"],
+      "safety_notes": "Offline deterministic fake adapter for tests and local smoke runs only.",
+      "enabled": true
+    },
+    {
+      "model_id": "fixture-json-model",
+      "provider": "local_fixture",
+      "display_name": "Local Fixture JSON Model",
+      "endpoint_type": "local_fixture",
+      "supports_json_schema": true,
+      "supports_tool_calling": false,
+      "max_input_tokens": 32000,
+      "max_output_tokens": 8000,
+      "cost_per_1m_input_tokens": 0,
+      "cost_per_1m_output_tokens": 0,
+      "latency_class": "fast",
+      "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform"],
+      "safety_notes": "Reads checked-in structured fixture output and never calls a network.",
+      "enabled": true
+    },
+    {
+      "model_id": "generic-http-example",
+      "provider": "example_provider",
+      "display_name": "Generic HTTP Example",
+      "endpoint_type": "generic_http",
+      "supports_json_schema": true,
+      "supports_tool_calling": false,
+      "max_input_tokens": 128000,
+      "max_output_tokens": 16000,
+      "cost_per_1m_input_tokens": null,
+      "cost_per_1m_output_tokens": null,
+      "latency_class": "balanced",
+      "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform", "critique"],
+      "safety_notes": "Disabled example. Copy into ignored local config, rename, review pricing, and enable explicitly.",
+      "enabled": false
+    },
+    {
+      "model_id": "no-schema-example",
+      "provider": "example_provider",
+      "display_name": "No JSON Schema Example",
+      "endpoint_type": "generic_http",
+      "supports_json_schema": false,
+      "supports_tool_calling": false,
+      "max_input_tokens": 32000,
+      "max_output_tokens": 4000,
+      "cost_per_1m_input_tokens": null,
+      "cost_per_1m_output_tokens": null,
+      "latency_class": "slow",
+      "recommended_for": ["critique"],
+      "safety_notes": "Disabled capability-negative example used to prove fail-closed selection.",
+      "enabled": false
+    }
+  ]
+}

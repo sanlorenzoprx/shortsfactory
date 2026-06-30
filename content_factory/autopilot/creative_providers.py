@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from copy import deepcopy
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable
-from urllib.parse import urlparse
+from typing import Any
 
 from .creative_generation_provider import CreativeGenerationContext, CreativeGenerationProvider, JsonDict
+from .llm_model_registry import LLMModelProfile
+from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter
 
 
 CTA = "Test your business idea at GhostTownTest.com."
@@ -298,156 +296,156 @@ class FixtureCreativeGenerationProvider(CreativeGenerationProvider):
         return plan
 
 
-@dataclass(frozen=True)
-class OnlineLLMConfig:
-    api_url: str
-    api_key: str
-    model_id: str
-    timeout_seconds: float = 45.0
-
-    @classmethod
-    def load(
-        cls,
-        *,
-        model_override: str | None = None,
-        config_path: str | Path = ".local/creative_llm/config.json",
-    ) -> "OnlineLLMConfig":
-        local: JsonDict = {}
-        path = Path(config_path).expanduser()
-        if path.is_file():
-            try:
-                parsed = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-                raise CreativeProviderError("online LLM local config is invalid") from exc
-            if isinstance(parsed, dict):
-                local = parsed
-        api_url = os.getenv("CREATIVE_LLM_API_URL", str(local.get("api_url", ""))).strip()
-        api_key = os.getenv("CREATIVE_LLM_API_KEY", str(local.get("api_key", ""))).strip()
-        model_id = (model_override or os.getenv("CREATIVE_LLM_MODEL") or str(local.get("model_id", ""))).strip()
-        timeout_raw = os.getenv("CREATIVE_LLM_TIMEOUT_SECONDS", str(local.get("timeout_seconds", 45)))
-        if not api_url or not api_key or not model_id:
-            raise CreativeProviderError(
-                "online_llm requires CREATIVE_LLM_API_URL, CREATIVE_LLM_API_KEY, and --model/CREATIVE_LLM_MODEL"
-            )
-        parsed_url = urlparse(api_url)
-        if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc or parsed_url.username or parsed_url.password:
-            raise CreativeProviderError("CREATIVE_LLM_API_URL must be a safe HTTP(S) endpoint")
-        try:
-            timeout = float(timeout_raw)
-        except ValueError as exc:
-            raise CreativeProviderError("CREATIVE_LLM_TIMEOUT_SECONDS must be numeric") from exc
-        if timeout <= 0:
-            raise CreativeProviderError("CREATIVE_LLM_TIMEOUT_SECONDS must be positive")
-        return cls(api_url=api_url, api_key=api_key, model_id=model_id, timeout_seconds=timeout)
-
-
 class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
     provider_type = "online_llm"
     prompt_prefix = PROMPT_PREFIX
 
     def __init__(
         self,
-        config: OnlineLLMConfig,
-        *,
-        transport: Callable[..., Any] | None = None,
+        profile: LLMModelProfile,
+        adapter: LLMProviderAdapter,
     ):
-        self.config = config
-        self.model_id = config.model_id
-        self.network_called = False
-        self.tokens_used = None
-        self.cost_estimate = None
-        self._transport = transport
+        if not profile.enabled:
+            raise CreativeProviderError(f"model is disabled: {profile.model_id}")
+        if not profile.supports_json_schema:
+            raise CreativeProviderError(f"model lacks required JSON schema capability: {profile.model_id}")
+        self.profile = profile
+        self.adapter = adapter
+        self.model_id = profile.model_id
+        self.model_provider = profile.provider
+        self.model_profile_hash = profile.profile_hash
+        self.adapter_type = adapter.adapter_type
 
-    def _call(self, task: str, payload: JsonDict) -> Any:
-        body = {
-            "model": self.model_id,
-            "messages": [
-                {"role": "system", "content": self.prompt_prefix},
-                {"role": "user", "content": json.dumps({"task": task, "input": payload}, ensure_ascii=False)},
-            ],
-            "response_format": {"type": "json_object"},
-        }
-        self.network_called = True
+    @property
+    def network_called(self) -> bool:
+        return self.adapter.network_called
+
+    @property
+    def tokens_used(self) -> int:
+        return self.adapter.estimated_input_tokens + self.adapter.estimated_output_tokens
+
+    @property
+    def cost_estimate(self) -> float:
+        return self.adapter.estimated_cost
+
+    @property
+    def estimated_input_tokens(self) -> int:
+        return self.adapter.estimated_input_tokens
+
+    @property
+    def estimated_output_tokens(self) -> int:
+        return self.adapter.estimated_output_tokens
+
+    @property
+    def estimated_cost(self) -> float:
+        return self.adapter.estimated_cost
+
+    @property
+    def raw_response_stored(self) -> bool:
+        return self.adapter.raw_response_stored
+
+    def _call(self, task: str, payload: JsonDict, schema: JsonDict) -> Any:
+        prompt = json.dumps(
+            {"system_prefix": self.prompt_prefix, "task": task, "input": payload},
+            ensure_ascii=False,
+        )
         try:
-            if self._transport is None:
-                import requests
-
-                response = requests.post(
-                    self.config.api_url,
-                    headers={"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"},
-                    json=body,
-                    timeout=self.config.timeout_seconds,
-                )
-            else:
-                response = self._transport(
-                    url=self.config.api_url,
-                    headers={"Authorization": f"Bearer {self.config.api_key}", "Content-Type": "application/json"},
-                    json=body,
-                    timeout=self.config.timeout_seconds,
-                )
-            if hasattr(response, "raise_for_status"):
-                response.raise_for_status()
-            raw = response.json() if hasattr(response, "json") else response
-            value = self._structured_value(raw)
-            usage = raw.get("usage", {}) if isinstance(raw, dict) else {}
-            if isinstance(usage, dict) and isinstance(usage.get("total_tokens"), int):
-                self.tokens_used = (self.tokens_used or 0) + usage["total_tokens"]
-            cost = raw.get("cost_estimate") if isinstance(raw, dict) else None
-            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
-                self.cost_estimate = round((self.cost_estimate or 0.0) + float(cost), 8)
-            return value
-        except CreativeProviderError:
-            raise
-        except Exception as exc:
-            raise CreativeProviderError(f"online LLM request failed: {type(exc).__name__}") from exc
-
-    @staticmethod
-    def _structured_value(raw: Any) -> Any:
-        if not isinstance(raw, dict):
-            raise CreativeProviderError("online LLM response is not a JSON object")
-        value: Any = raw.get("result", raw.get("output"))
-        if value is None:
-            choices = raw.get("choices")
-            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
-                message = choices[0].get("message", {})
-                value = message.get("content") if isinstance(message, dict) else None
-        if value is None and isinstance(raw.get("output_text"), str):
-            value = raw["output_text"]
-        if isinstance(value, str):
-            try:
-                value = json.loads(value)
-            except json.JSONDecodeError as exc:
-                raise CreativeProviderError("online LLM did not return structured JSON") from exc
-        if value is None:
-            raise CreativeProviderError("online LLM response has no structured output")
-        return value
+            return self.adapter.generate_json(prompt, schema, self.profile)
+        except LLMAdapterError as exc:
+            raise CreativeProviderError(f"LLM adapter rejected {task}: {exc}") from exc
 
     def generate_angle_pack(self, context: CreativeGenerationContext) -> list[JsonDict]:
-        value = self._call("generate_angle_pack", {**context.provider_input(), "required_angles": list(ANGLE_RUBRIC)})
+        angle_properties = {
+            "angle_id": {"type": "string"},
+            "angle_name": {"type": "string"},
+            "purpose": {"type": "string"},
+            "hook_style": {"type": "string"},
+            "target_emotion": {"type": "string"},
+            "viewer_question": {"type": "string"},
+            "expected_behavior_signal": {"type": "string"},
+        }
+        value = self._call(
+            "generate_angle_pack",
+            {**context.provider_input(), "required_angles": list(ANGLE_RUBRIC)},
+            {
+                "type": "object",
+                "properties": {
+                    "angles": {
+                        "type": "array",
+                        "minItems": 5,
+                        "maxItems": 5,
+                        "items": {
+                            "type": "object",
+                            "properties": angle_properties,
+                            "required": list(angle_properties),
+                            "additionalProperties": False,
+                        },
+                    }
+                },
+                "required": ["angles"],
+                "additionalProperties": False,
+            },
+        )
         angles = value.get("angles") if isinstance(value, dict) else value
         if not isinstance(angles, list):
             raise CreativeProviderError("online angle pack is invalid")
         return angles
 
     def generate_short_script(self, context: CreativeGenerationContext, angle: JsonDict) -> JsonDict:
-        value = self._call("generate_short_script", {**context.provider_input(), "angle": angle, "required_cta": CTA})
+        value = self._call(
+            "generate_short_script",
+            {**context.provider_input(), "angle": angle, "required_cta": CTA},
+            {
+                "type": "object",
+                "properties": {key: {"type": "string"} for key in ("hook", "script", "cta")},
+                "required": ["hook", "script", "cta"],
+                "additionalProperties": False,
+            },
+        )
         if not isinstance(value, dict):
             raise CreativeProviderError("online short script is invalid")
         return value
 
     def generate_title_variants(self, context: CreativeGenerationContext, angle: JsonDict) -> list[str]:
-        value = self._call("generate_title_variants", {**context.provider_input(), "angle": angle, "max_length": 100})
+        value = self._call(
+            "generate_title_variants",
+            {**context.provider_input(), "angle": angle, "max_length": 100},
+            {
+                "type": "object",
+                "properties": {"title_variants": {"type": "array", "items": {"type": "string"}, "minItems": 1}},
+                "required": ["title_variants"],
+                "additionalProperties": False,
+            },
+        )
         variants = value.get("title_variants") if isinstance(value, dict) else value
         if not isinstance(variants, list):
             raise CreativeProviderError("online title variants are invalid")
         return variants
 
     def generate_thumbnail_text(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
-        value = self._call("generate_thumbnail_text", {**context.provider_input(), "angle": angle})
+        value = self._call(
+            "generate_thumbnail_text",
+            {**context.provider_input(), "angle": angle},
+            {
+                "type": "object",
+                "properties": {"thumbnail_text": {"type": "string"}},
+                "required": ["thumbnail_text"],
+                "additionalProperties": False,
+            },
+        )
         return str(value.get("thumbnail_text", "")) if isinstance(value, dict) else str(value)
 
     def generate_caption(self, context: CreativeGenerationContext, angle: JsonDict) -> str:
-        value = self._call("generate_caption", {**context.provider_input(), "angle": angle, "required_cta": CTA})
+        value = self._call(
+            "generate_caption",
+            {**context.provider_input(), "angle": angle, "required_cta": CTA},
+            {
+                "type": "object",
+                "properties": {"caption": {"type": "string"}},
+                "required": ["caption"],
+                "additionalProperties": False,
+            },
+        )
         return str(value.get("caption", "")) if isinstance(value, dict) else str(value)
 
     def generate_youtube_metadata_draft(
@@ -456,6 +454,19 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         value = self._call(
             "generate_youtube_metadata_draft",
             {**context.provider_input(), "angle": angle, "short": short_content, "status": "draft_not_upload_ready"},
+            {
+                "type": "object",
+                "properties": {
+                    "angle_id": {"type": "string"},
+                    "cta": {"type": "string"},
+                    "tags": {"type": "array", "items": {"type": "string"}},
+                    "hashtags": {"type": "array", "items": {"type": "string"}},
+                    "status": {"type": "string"},
+                    "live_publish_enabled": {"type": "boolean"},
+                },
+                "required": ["angle_id", "cta", "tags", "hashtags", "status", "live_publish_enabled"],
+                "additionalProperties": False,
+            },
         )
         if not isinstance(value, dict):
             raise CreativeProviderError("online YouTube metadata draft is invalid")
@@ -467,6 +478,55 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         value = self._call(
             "generate_longform_assembly_plan",
             {**context.provider_input(), "short_jobs": short_jobs, "required_cta": CTA},
+            {
+                "type": "object",
+                "properties": {
+                    key: {"type": "string"}
+                    for key in (
+                        "longform_title", "intro_script", "conclusion",
+                        "cta_to_ghosttowntest_com", "suggested_description",
+                    )
+                } | {
+                    "ordered_chapters": {
+                        "type": "array", "minItems": 5, "maxItems": 5,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "order": {"type": "integer"},
+                                "angle_id": {"type": "string"},
+                                "job_id": {"type": "string"},
+                                "chapter_title": {"type": "string"},
+                                "chapter_script": {"type": "string"},
+                            },
+                            "required": ["order", "angle_id", "job_id", "chapter_title", "chapter_script"],
+                            "additionalProperties": False,
+                        },
+                    },
+                    "transition_lines": {
+                        "type": "array", "minItems": 4, "maxItems": 4,
+                        "items": {"type": "string"},
+                    },
+                    "suggested_chapters_timestamps": {
+                        "type": "array", "minItems": 6, "maxItems": 6,
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "timestamp": {"type": "string"},
+                                "label": {"type": "string"},
+                                "job_id": {"type": ["string", "null"]},
+                            },
+                            "required": ["timestamp", "label"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": [
+                    "longform_title", "intro_script", "ordered_chapters", "transition_lines",
+                    "conclusion", "cta_to_ghosttowntest_com", "suggested_description",
+                    "suggested_chapters_timestamps",
+                ],
+                "additionalProperties": False,
+            },
         )
         if not isinstance(value, dict):
             raise CreativeProviderError("online long-form plan is invalid")

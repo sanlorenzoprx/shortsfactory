@@ -28,12 +28,13 @@ from .creative_providers import (
     CreativeProviderError,
     DeterministicCreativeGenerationProvider,
     FixtureCreativeGenerationProvider,
-    OnlineLLMConfig,
     OnlineLLMCreativeGenerationProvider,
 )
+from .llm_model_registry import DEFAULT_LOCAL_PATH, LLMModelRegistry, LLMModelRegistryError
+from .llm_provider_adapters import LLMAdapterError, build_llm_adapter
 
 
-RECEIPT_VERSION = "phase5b.5.creative-angle-pack.v1"
+RECEIPT_VERSION = "phase5b.5a.creative-angle-pack.v2"
 SAFE_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
@@ -193,7 +194,7 @@ class CreativeAnglePackGenerator:
         assert_safe_provider_input(provider_input)
         input_hash = _sha256(provider_input)
         prompt_prefix_hash = hashlib.sha256(self.provider.prompt_prefix.encode("utf-8")).hexdigest()
-        angle_pack_id = f"cap_{_short_hash({'input_hash': input_hash, 'provider': self.provider.provider_type, 'model': self.provider.model_id, 'timestamp': timestamp})}"
+        angle_pack_id = f"cap_{_short_hash({'input_hash': input_hash, 'provider': self.provider.provider_type, 'model': self.provider.model_id, 'profile': self.provider.model_profile_hash, 'timestamp': timestamp})}"
         context = CreativeGenerationContext(
             idea=idea,
             verdict_record=verdict_record,
@@ -468,11 +469,17 @@ class CreativeAnglePackGenerator:
             angle_pack_id=angle_pack_id,
             provider_type=self.provider.provider_type,
             model_id=self.provider.model_id,
+            model_provider=self.provider.model_provider,
+            model_profile_hash=self.provider.model_profile_hash,
             prompt_prefix_hash=prompt_prefix_hash,
             input_hash=input_hash,
             output_hash=output_hash,
             tokens_used=self.provider.tokens_used,
             cost_estimate=self.provider.cost_estimate,
+            estimated_input_tokens=self.provider.estimated_input_tokens,
+            estimated_output_tokens=self.provider.estimated_output_tokens,
+            estimated_cost=self.provider.estimated_cost,
+            adapter_type=self.provider.adapter_type,
             five_angles_generated=five_angles_generated,
             short_jobs_created=short_jobs_created,
             longform_plan_created=longform_plan_created,
@@ -480,6 +487,7 @@ class CreativeAnglePackGenerator:
             source_receipt_references=source_receipt_references,
             secrets_recorded=False,
             network_called=self.provider.network_called,
+            raw_response_stored=self.provider.raw_response_stored,
             publish_attempted=False,
             status=status,
             artifacts=artifacts,
@@ -608,8 +616,11 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--lit-verdict-file")
     generate.add_argument("--batch-id", help="Optional source autopilot batch ID")
     generate.add_argument("--provider", choices=("deterministic", "fixture", "online_llm"), default="deterministic")
-    generate.add_argument("--model", help="Required online model ID unless configured locally")
-    generate.add_argument("--online-config", default=".local/creative_llm/config.json")
+    generate.add_argument("--model", help="Required registry model ID for online_llm")
+    generate.add_argument(
+        "--models-file", "--online-config", dest="models_file", default=str(DEFAULT_LOCAL_PATH),
+        help="Ignored local model registry overrides",
+    )
     generate.add_argument("--output-root", dest="output_root", default=argparse.SUPPRESS)
     return parser
 
@@ -622,8 +633,10 @@ def _provider_from_args(args: argparse.Namespace) -> CreativeGenerationProvider:
             raise CreativeProviderError("fixture provider requires --lit-verdict-file")
         _, _, fixture = load_lit_verdict_fixture(args.lit_verdict_file)
         return FixtureCreativeGenerationProvider(fixture.get("creative_output"))
-    config = OnlineLLMConfig.load(model_override=args.model, config_path=args.online_config)
-    return OnlineLLMCreativeGenerationProvider(config)
+    registry = LLMModelRegistry(local_path=args.models_file)
+    profile = registry.require(args.model, require_json_schema=True)
+    adapter = build_llm_adapter(profile, allow_network=True, require_config=True)
+    return OnlineLLMCreativeGenerationProvider(profile, adapter)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -655,6 +668,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         CreativeAngleContractError,
         CreativeGateError,
         CreativeProviderError,
+        LLMModelRegistryError,
+        LLMAdapterError,
         AutopilotStoreError,
         ValueError,
         OSError,

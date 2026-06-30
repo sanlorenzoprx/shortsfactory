@@ -28,10 +28,17 @@ class CreativeGenerationContext:
 class CreativeGenerationProvider(ABC):
     provider_type: str
     model_id: str | None = None
+    model_provider: str | None = None
+    model_profile_hash: str | None = None
+    adapter_type: str | None = None
     prompt_prefix: str = ""
     network_called: bool = False
     tokens_used: int | None = None
     cost_estimate: float | None = None
+    estimated_input_tokens: int | None = None
+    estimated_output_tokens: int | None = None
+    estimated_cost: float | None = None
+    raw_response_stored: bool = False
 
     @abstractmethod
     def generate_angle_pack(self, context: CreativeGenerationContext) -> list[JsonDict]:

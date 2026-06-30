@@ -12,3 +12,4 @@ results_ledger/
 performance_reports/
 .local/youtube/
 .local/creative_llm/
+.local/llm/

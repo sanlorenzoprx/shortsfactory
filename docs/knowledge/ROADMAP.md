@@ -30,15 +30,16 @@
 - Phase 5B.3 YouTube upload hardening and metadata contract
 - Phase 5B.4 YouTube upload verification and analytics snapshots
 - Phase 5B.5 online-capable creative angle packs and long-form assembly
+- Phase 5B.5A plug-and-play LLM model registry and adapter boundary
 
 ## Current checkpoint
 
-Phase 5B.5 creative generation layer complete. One LIT-tested idea becomes five
-gated short-form experiments and one long-form assembly plan. Deterministic and
-fixture providers stay offline; `online_llm` is optional, explicit, structured,
-and fail-closed. Dry-run remains the default and both autopilot live modes remain
-closed. Stop before feeding analytics into generation automatically, TikTok,
-Instagram, or any unsupervised upload.
+Phase 5B.5A model registry complete. Online creative generation selects a
+capability-validated model profile and provider adapter; safe fake/fixture
+adapters stay offline, while generic HTTP remains explicit and credential-gated.
+Dry-run remains the default and both autopilot live modes remain closed. Stop
+before feeding analytics into generation automatically, adding provider-specific
+live adapters, TikTok, Instagram, or any unsupervised upload.
 
 ## Recommended next options
 

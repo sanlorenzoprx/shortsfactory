@@ -200,11 +200,17 @@ class CreativeAnglePackReceipt:
     angle_pack_id: str
     provider_type: str
     model_id: str | None
+    model_provider: str | None
+    model_profile_hash: str | None
     prompt_prefix_hash: str
     input_hash: str
     output_hash: str
     tokens_used: int | None
     cost_estimate: float | None
+    estimated_input_tokens: int | None
+    estimated_output_tokens: int | None
+    estimated_cost: float | None
+    adapter_type: str | None
     five_angles_generated: bool
     short_jobs_created: int
     longform_plan_created: bool
@@ -212,6 +218,7 @@ class CreativeAnglePackReceipt:
     source_receipt_references: dict[str, str]
     secrets_recorded: bool
     network_called: bool
+    raw_response_stored: bool
     publish_attempted: bool
     status: str
     artifacts: dict[str, str] = field(default_factory=dict)
@@ -225,6 +232,8 @@ class CreativeAnglePackReceipt:
             _required(getattr(self, name), name)
         if self.secrets_recorded is not False:
             raise CreativeAngleContractError("receipts must not record secrets")
+        if self.raw_response_stored is not False:
+            raise CreativeAngleContractError("receipts must not store raw LLM responses")
         if self.publish_attempted is not False:
             raise CreativeAngleContractError("creative generation cannot publish")
         if self.safety.get("full_autopilot_enabled") is not False:
