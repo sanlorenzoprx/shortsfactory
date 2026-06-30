@@ -756,10 +756,70 @@ python youtube_credentials.py preflight
 The bootstrap prompt will request upload plus readonly access. Preflight still
 does not upload or call `videos.insert`.
 
+## Phase 5B.2: supervised first YouTube upload gate
+
+Phase 5B.2 adds one deliberately separate live path for exactly one
+human-selected, human-approved YouTube video. It does not run through the Phase
+5A batch runner, does not enable `supervised_autopilot` or `full_autopilot`, and
+does not change `dry_run`. The normal autopilot runner still uses only
+`SimulatedPublisherAdapter`.
+
+The command defaults to refusal. Hector must invoke it manually with one video,
+the generated YouTube metadata referenced by that job's publisher plan, the
+exact Ghost Town Test channel ID, and all three approval flags:
+
+```powershell
+python youtube_supervised_upload.py `
+  --video "output/jobs/<job_id>/short.mp4" `
+  --metadata "output/jobs/<job_id>/publish/youtube_shorts/metadata.json" `
+  --confirm-channel-id UCIzMYpBt3WdSXZBrvoE7eCg `
+  --confirm-live-upload `
+  --confirm-quota-reviewed `
+  --confirm-policy-reviewed
+```
+
+Before loading runtime credentials or calling the injected YouTube transport,
+the gate requires:
+
+- a passed, redacted Phase 5B.1 preflight receipt with both scopes and verified
+  channel identity
+- preflight evidence that no upload, `videos.insert`, or secret recording has
+  occurred
+- exact channel confirmation for `UCIzMYpBt3WdSXZBrvoE7eCg` (`Ghost Town Test`)
+- exactly one non-empty video file, with directories and batch selection refused
+- the video listed in its generation `receipt.json`
+- exactly one completed Phase 5A `dry_run` batch containing that generated job
+- matching complete LIT verdict, passing quality gate, and passing compliance gate
+- the generated YouTube metadata file referenced by the same publisher plan
+- a non-empty title and description, explicit valid `privacy_status`, explicit
+  `made_for_kids`, and private visibility for scheduled publishing
+- all three live, quota, and policy approval flags on the current command
+
+The generated dry-run metadata remains non-live. Phase 5B.2 treats the CLI
+approval flags as the live authorization and never rewrites the dry-run plan.
+If the selected generated metadata does not yet contain explicit
+`privacy_status` and `made_for_kids` values, the command refuses before reading
+credentials or calling YouTube.
+
+Each invocation creates a unique directory under:
+
+```txt
+output/youtube/supervised_uploads/<attempt_id>/
+```
+
+Blocked runs write one immutable `01_blocked_*.json` receipt. A transport-bound
+run writes `01_attempted_live_upload.json` before the call, followed by a
+separate `02_successful_live_upload.json` or `02_failed_live_upload.json`.
+Receipts contain channel, selected artifact, metadata summary, source receipt
+references, and gate results, but never tokens, secrets, or authentication URLs.
+Tests inject a fake transport and make no real network calls. No real upload is
+performed by setup, tests, dry-run, or documentation commands.
+
 ## Rules
 
-Do not activate live publishing or add TikTok, Instagram, real trend scraping,
-or G20 scaling without a separately approved phase and green gate.
+Do not activate unsupervised live publishing or add TikTok, Instagram, real
+trend scraping, or G20 scaling without a separately approved phase and green
+gate. The Phase 5B.2 command is the only approved supervised upload boundary.
 
 ## What this MVP does
 

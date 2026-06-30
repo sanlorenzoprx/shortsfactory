@@ -2,22 +2,25 @@
 
 ## Current status
 
-Phase 5B.1 includes the channel-identity scope correction: installed-app OAuth
-requests `youtube.upload` plus `youtube.readonly`; preflight requires both
-before `channels.list(mine=true)`. Upload-only tokens fail without attempting
-channel identity and must be recreated. HTTP failures retain only status/reason
-in redacted receipts. No upload or live mode is enabled, and Phase 5A `dry_run`
-never reads credential files.
+Phase 5B.2 adds a separate, fail-closed supervised gate for exactly one
+human-selected YouTube upload. It requires the passed Phase 5B.1 receipt, the
+exact Ghost Town Test channel ID, a generated-video receipt chain, matching LIT
+and quality/compliance evidence, valid generated metadata, and three explicit
+approval flags. Attempt and final receipts are immutable separate files. Phase
+5A `dry_run` remains unchanged and never reads credential files;
+`supervised_autopilot` and `full_autopilot` remain refused.
 
 ## Last known remote HEAD
 
 ```txt
-bd9b55d Add Phase 5A full autopilot dry-run pipeline
+e148fae Fix YouTube preflight channel identity scope
 ```
 
 ## Last known commit log
 
 ```txt
+e148fae Fix YouTube preflight channel identity scope
+2caf12f Add Phase 5B.1 YouTube credential preflight
 5855322 Add Phase 5B YouTube publisher adapter boundary
 bd9b55d Add Phase 5A full autopilot dry-run pipeline
 4b47c4f Add Phase 4F rich LIT verdict integration
@@ -60,6 +63,10 @@ Phase 5B.1 final `pytest -q`: 247 passed in 102.53s
 Phase 5B.1 dry-run smoke: 1 job, 3 simulated attempts, 0 credential artifacts
 YouTube scope corrective focused suites: 22 passed and 18 passed
 YouTube scope corrective final `pytest -q`: 249 passed in 114.91s
+Phase 5B.2 focused suites: 41 passed and 18 passed
+Phase 5B.2 final `pytest -q`: 268 passed in 100.23s
+Phase 5B.2 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
+0 credential use, and 0 supervised upload receipts
 ```
 
 ## Known working capabilities
@@ -146,6 +153,10 @@ YouTube scope corrective final `pytest -q`: 249 passed in 114.91s
 - Durable redacted credential, quota, and policy readiness receipt
 - Environment live policy requiring a passed, explicitly confirmed receipt
 - Safe channel `HttpError` status/reason receipt detail without request secrets
+- Separate one-video supervised YouTube upload CLI and orchestrator
+- Generated-artifact trust chain through content, batch, LIT, quality, and compliance receipts
+- Exact Ghost Town Test channel confirmation and three per-invocation approvals
+- Immutable blocked/attempted/success/failure supervised upload receipts
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -153,7 +164,7 @@ YouTube scope corrective final `pytest -q`: 249 passed in 114.91s
 
 - Work inside Shorts Factory unless explicitly approved.
 - Do not edit LIT-GhostTown unless the user explicitly asks.
-- No live publishing yet.
+- No unsupervised or automatic live publishing.
 - No real-user recording.
 - No scraping.
 - No cloud workers.
@@ -188,19 +199,24 @@ YouTube scope corrective final `pytest -q`: 249 passed in 114.91s
   rich or backward-compatible legacy fields.
 - Phase 5A runtime state lives under ignored `output/autopilot/batches/`.
 - The Phase 5A runner still refuses `supervised_autopilot` and
-  `full_autopilot`; Phase 5B exposes only the separately testable YouTube
-  adapter boundary.
+  `full_autopilot`; Phase 5B.2 is a separate one-shot CLI and is never selected
+  by the batch runner.
 - Real YouTube setup still requires an approved Google Cloud project, enabled
   YouTube Data API, OAuth consent/client configuration, token lifecycle,
   available upload quota, policy review, and optional Google client packages.
 - Local YouTube secrets default to `.local/youtube/client_secret.json` and
   `.local/youtube/token.json`; `.local/youtube/` is ignored by Git.
 - The credential preflight receipt cannot enable either supervised or full
-  autopilot. It only records readiness evidence for a later approved phase.
+  autopilot. It is only one required input to the explicit Phase 5B.2 command.
+- Supervised upload receipts live under ignored
+  `output/youtube/supervised_uploads/<attempt_id>/` and are never overwritten.
 
 ## Current risk
 
-Phase 5B.1 has not been exercised with real YouTube credentials. The local
-environment is also missing `google-auth-oauthlib` until optional dependencies
-are installed. Do not activate a first upload or add TikTok, Instagram, live
-analytics, or remote trend connectors without a separately approved phase.
+The authenticated credential preflight currently identifies `Ghost Town Test`
+as channel `UCIzMYpBt3WdSXZBrvoE7eCg`; no real upload has been performed by the
+Phase 5B.2 implementation or tests. Hector must still select one generated job,
+ensure its generated metadata includes explicit privacy and made-for-kids
+values, review quota and policy, and manually invoke the supervised command.
+TikTok, Instagram, live analytics, remote trend connectors, and automatic live
+publishing remain out of scope.

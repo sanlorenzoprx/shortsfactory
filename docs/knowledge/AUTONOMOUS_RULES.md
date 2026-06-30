@@ -35,7 +35,8 @@ Stop immediately if:
 - a required secret is missing
 - the same failure repeats twice
 - the fix requires editing another repo
-- the task requires live publishing
+- the task requires Codex to invoke a real live upload; implementation and
+  fake-transport tests of an explicitly approved supervised gate are allowed
 - the task requires real-user recording
 - the task requires scraping
 - the task requires cloud workers
@@ -75,3 +76,10 @@ YouTube credential preflight requires both `youtube.upload` and
 `youtube.readonly`; readonly is used only for authenticated channel identity.
 An upload-only token must not trigger `channels.list` and cannot produce a
 ready receipt. Credential preflight never calls `videos.insert`.
+
+Phase 5B.2 permits only Hector to manually invoke
+`youtube_supervised_upload.py` for one explicitly selected, receipt-bound video.
+The Phase 5A runner must continue refusing `supervised_autopilot` and
+`full_autopilot`. No agent, scheduler, batch runner, test, or dry-run may invoke
+the real upload transport. Attempt and final receipts must be separate and
+immutable.

@@ -26,13 +26,15 @@
 - Phase 5A full autopilot dry-run pipeline
 - Phase 5B YouTube official publisher adapter boundary
 - Phase 5B.1 YouTube credential bootstrap and preflight
+- Phase 5B.2 supervised first YouTube upload gate
 
 ## Current checkpoint
 
-Phase 5B.1 scope correction complete. OAuth requests upload plus readonly, and
-channel identity is gated on both. Dry-run remains the default; preflight cannot
-upload or enable live modes. Stop before the first supervised YouTube upload,
-TikTok, or Instagram.
+Phase 5B.2 gate complete. One manually invoked command can upload exactly one
+receipt-bound video only after preflight, channel, metadata, LIT,
+quality/compliance, quota, policy, and live-approval gates pass. Dry-run remains
+the default; both autopilot live modes remain closed. The first real upload has
+not been performed. Stop before TikTok, Instagram, or any unsupervised upload.
 
 ## Recommended next options
 
@@ -58,7 +60,7 @@ Make installation, setup, and one-command local running easier.
 
 ## Explicitly not yet
 
-- live publishing with a real account
+- unsupervised or automatic live publishing
 - real-user recording
 - scraping
 - cloud worker deployment
@@ -69,6 +71,6 @@ Make installation, setup, and one-command local running easier.
 - automated analytics or metric synchronization
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
-- first supervised YouTube upload approval and production credential smoke
+- Hector's first manual supervised YouTube upload and production credential smoke
 - official analytics connectors
 - Phase 5C or later work

@@ -179,12 +179,16 @@ class GoogleApiYouTubeUploadTransport:
 
     name = "google_api_python_client"
 
+    def __init__(self) -> None:
+        self.videos_insert_called = False
+
     def upload(
         self,
         *,
         access_token: str,
         payload: YouTubeUploadPayload,
     ) -> dict[str, Any]:
+        self.videos_insert_called = False
         try:
             from google.oauth2.credentials import Credentials
             from googleapiclient.discovery import build
@@ -202,6 +206,7 @@ class GoogleApiYouTubeUploadTransport:
             notifySubscribers=payload.notify_subscribers,
             media_body=MediaFileUpload(payload.video_path, mimetype="video/mp4", resumable=True),
         )
+        self.videos_insert_called = True
         response = None
         while response is None:
             _, response = request.next_chunk()
@@ -214,7 +219,13 @@ class YouTubeUploadPayloadBuilder:
     def __init__(self, *, now: Callable[[], datetime] = _utc_now):
         self.now = now
 
-    def build(self, metadata_path: str | Path, *, expected_job_id: str) -> YouTubeUploadPayload:
+    def build(
+        self,
+        metadata_path: str | Path,
+        *,
+        expected_job_id: str,
+        require_embedded_approval: bool = True,
+    ) -> YouTubeUploadPayload:
         requested = Path(metadata_path).expanduser().resolve()
         source = self._read_json(requested, "publisher metadata")
         metadata_file, metadata, job_root = self._resolve_metadata(requested, source)
@@ -223,10 +234,11 @@ class YouTubeUploadPayloadBuilder:
             raise YouTubePublisherError("publisher metadata is not for youtube_shorts")
         if metadata.get("source_job_id") != expected_job_id:
             raise YouTubePublisherError("publisher metadata job does not match publish attempt")
-        if metadata.get("live_publish_enabled") is not True:
-            raise YouTubePublisherError("publisher metadata does not explicitly enable live publishing")
-        if metadata.get("approved_for_live_publish") is not True:
-            raise YouTubePublisherError("publisher metadata is not approved for live publishing")
+        if require_embedded_approval:
+            if metadata.get("live_publish_enabled") is not True:
+                raise YouTubePublisherError("publisher metadata does not explicitly enable live publishing")
+            if metadata.get("approved_for_live_publish") is not True:
+                raise YouTubePublisherError("publisher metadata is not approved for live publishing")
 
         title = metadata.get("title")
         description = metadata.get("description")
