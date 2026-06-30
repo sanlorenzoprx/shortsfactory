@@ -16,6 +16,7 @@ from .autopilot_models import PublishAttempt
 
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 YOUTUBE_READONLY_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
+YOUTUBE_ANALYTICS_READONLY_SCOPE = "https://www.googleapis.com/auth/yt-analytics.readonly"
 YOUTUBE_REQUIRED_SCOPES = (
     YOUTUBE_UPLOAD_SCOPE,
     YOUTUBE_READONLY_SCOPE,

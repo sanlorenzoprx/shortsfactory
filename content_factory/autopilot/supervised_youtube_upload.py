@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -155,6 +156,7 @@ class SupervisedYouTubeUploadGate:
             "lit_verdict_receipt": None,
             "quality_gate_receipt": None,
             "compliance_gate_receipt": None,
+            "metadata_hardening": None,
         }
 
         def check(name: str, passed: bool, detail: str) -> None:
@@ -443,6 +445,10 @@ class SupervisedYouTubeUploadGate:
             raise SourceChainError("blocked_invalid_metadata", "upload_metadata", str(exc), sources) from exc
         if metadata.get("source_job_id") != job_id:
             raise SourceChainError("blocked_invalid_metadata", "metadata_job", "metadata does not match the selected video job", sources)
+        sources["metadata_hardening"] = self._metadata_hardening_receipt(
+            job_id,
+            metadata_path,
+        )
 
         idea_id = job.get("idea_id")
         lit_path = batch_dir / "lit_verdicts.json"
@@ -496,6 +502,24 @@ class SupervisedYouTubeUploadGate:
             and row.get("status") == "pass"
             and row.get("blocking") is False
         ), None)
+
+    def _metadata_hardening_receipt(self, job_id: str, metadata_path: Path) -> str | None:
+        metadata_hash = hashlib.sha256(metadata_path.read_bytes()).hexdigest()
+        root = self.output_root / "youtube" / "metadata_hardening" / job_id
+        if not root.is_dir():
+            return None
+        matches = []
+        for path in root.glob("*_YOUTUBE_METADATA_HARDENING.json"):
+            try:
+                value = _read_json(path, "metadata hardening receipt")
+            except ValueError:
+                continue
+            if (
+                value.get("new_metadata_hash") == metadata_hash
+                and Path(str(value.get("metadata_path", ""))).expanduser().resolve() == metadata_path
+            ):
+                matches.append(path)
+        return str(sorted(matches)[-1].resolve()) if matches else None
 
     def _validate_metadata(self, metadata: dict[str, Any], video: Path, metadata_path: Path) -> None:
         if metadata.get("platform") != "youtube_shorts":
@@ -567,6 +591,11 @@ class SupervisedYouTubeUploadGate:
         result: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         description = metadata.get("description")
+        resolved_metadata = metadata_path.expanduser().resolve()
+        metadata_hash = (
+            hashlib.sha256(resolved_metadata.read_bytes()).hexdigest()
+            if resolved_metadata.is_file() else None
+        )
         return {
             "receipt_version": RECEIPT_VERSION,
             "classification": classification,
@@ -575,7 +604,8 @@ class SupervisedYouTubeUploadGate:
             "channel": {"id": channel.get("id"), "title": channel.get("title")},
             "selected_video_path": str(selected_video) if selected_video else None,
             "metadata_summary": {
-                "metadata_path": str(metadata_path.expanduser().resolve()),
+                "metadata_path": str(resolved_metadata),
+                "metadata_hash": metadata_hash,
                 "schema_version": metadata.get("schema_version"),
                 "source_job_id": metadata.get("source_job_id"),
                 "title": metadata.get("title"),

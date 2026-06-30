@@ -2,13 +2,12 @@
 
 ## Current status
 
-Phase 5B.3 adds a versioned, schema-validated YouTube metadata composer so a
-generated job can become supervised-upload ready without manual JSON editing.
-It preserves publisher-plan binding, writes UTF-8 without BOM, defaults first
-tests to private/not-for-kids, normalizes canonical tags, validates optional
-website/CTA content, and emits hash receipts. The first manual supervised upload
-succeeded on `Ghost Town Test` as `rnPTrNn2bgc`. Phase 5A `dry_run` remains
-unchanged; `supervised_autopilot` and `full_autopilot` remain refused.
+Phase 5B.4 adds a durable upload index, explicit read-only `videos.list`
+verification, and separate video-performance and country analytics snapshots.
+Unsupported metric/dimension combinations soft-block only their own receipt.
+Two supervised uploads have succeeded on Ghost Town Test (`rnPTrNn2bgc` and
+`sa1FZFgUgIQ`), but Phase 5B.4 itself never publishes. Phase 5A `dry_run`
+remains unchanged; `supervised_autopilot` and `full_autopilot` remain refused.
 
 ## Last known remote HEAD
 
@@ -72,6 +71,13 @@ Phase 5B.3 focused suites: 56 passed and 18 passed
 Phase 5B.3 final `pytest -q`: 283 passed in 102.36s
 Phase 5B.3 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
 0 credential use, V1 metadata, UTF-8 without BOM, and 0 upload receipts
+Phase 5B.4 focused suites: 68 passed and 18 passed
+Phase 5B.4 final `pytest -q`: 295 passed in 118.02s
+Phase 5B.4 dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads,
+0 API calls, and 0 upload/verification/analytics receipts
+Phase 5B.4 local index rebuild: 2 successful uploads indexed idempotently
+Phase 5B.4 current analytics preflight: optional scope missing; performance and
+country receipts both blocked safely with 0 API calls and 0 `videos.insert`
 ```
 
 ## Known working capabilities
@@ -166,6 +172,11 @@ Phase 5B.3 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
 - One-job metadata hardening CLI with publisher-plan and generation-receipt binding
 - Canonical tag normalization plus validated website/CTA composition
 - UTF-8 no-BOM metadata output and immutable before/after hash receipts
+- Idempotent successful-upload index with durable job/video/receipt mappings
+- Explicit YouTube Data API `videos.list` verification and redacted receipts
+- Optional `yt-analytics.readonly` scope reporting without breaking upload preflight
+- Independent video-performance and top-25 country analytics snapshot receipts
+- Soft `blocked_or_unsupported` analytics outcomes without pipeline failure
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -224,13 +235,19 @@ Phase 5B.3 dry-run smoke: 1 job, 3 simulated attempts, 0 API calls,
   intentionally updated.
 - Metadata hardening receipts live under ignored
   `output/youtube/metadata_hardening/<job_id>/`.
+- Verification and analytics code may call only their injected read-only
+  transports from explicit CLI commands; neither may import or call an upload
+  transport.
+- The current preflight receipt does not report the optional analytics scope.
+  Analytics remains blocked until an explicitly expanded token is bootstrapped
+  and preflight is rerun.
 
 ## Current risk
 
 The authenticated credential preflight identifies `Ghost Town Test` as channel
-`UCIzMYpBt3WdSXZBrvoE7eCg`. The first manual upload succeeded at
-`https://www.youtube.com/watch?v=rnPTrNn2bgc`; tests still use only injected fake
-transports. Future uploads must harden one generated job, review the emitted
-metadata and receipt, review quota/policy, and manually invoke the supervised
-command. YouTube analytics, TikTok, Instagram, remote trend connectors, and
+`UCIzMYpBt3WdSXZBrvoE7eCg`. Two manual uploads succeeded as `rnPTrNn2bgc` and
+`sa1FZFgUgIQ`; tests still use only injected fake transports. The current token
+preflight lacks analytics-scope evidence, so real analytics snapshots remain
+blocked until Hector explicitly expands authorization and reruns preflight.
+Automated analytics learning, TikTok, Instagram, remote trend connectors, and
 automatic live publishing remain out of scope.

@@ -872,6 +872,97 @@ record that can be safely upgraded in memory. Missing hardening fields, invalid
 JSON, or a BOM are refused with a command telling the operator to run
 `youtube_metadata.py harden`. Upload receipts record the metadata schema version.
 
+## Phase 5B.4: upload verification and analytics snapshots
+
+Phase 5B.4 closes the read-only measurement loop after a successful supervised
+upload. It adds a durable upload index, explicit `videos.list` verification,
+and two independent YouTube Analytics reports. It cannot publish, never calls
+`videos.insert`, does not run from the batch autopilot, and does not enable
+`supervised_autopilot` or `full_autopilot`.
+
+Rebuild or inspect the local upload index:
+
+```powershell
+python youtube_upload_index.py rebuild
+python youtube_upload_index.py show
+```
+
+The idempotent index scans successful supervised-upload receipts and writes:
+
+```txt
+output/youtube/uploads/YOUTUBE_UPLOAD_INDEX.json
+```
+
+It maps YouTube video IDs back to attempt, job, video, V1 metadata, hardening,
+credential-preflight, verification, and analytics receipts. Rebuilds preserve
+the latest verification and analytics pointers.
+
+Verify one indexed upload through the YouTube Data API read-only
+`videos.list` endpoint:
+
+```powershell
+python youtube_verify_upload.py `
+  --video-id sa1FZFgUgIQ `
+  --expected-channel-id UCIzMYpBt3WdSXZBrvoE7eCg
+```
+
+or use its successful upload receipt:
+
+```powershell
+python youtube_verify_upload.py `
+  --from-success-receipt "output/youtube/supervised_uploads/<attempt_id>/02_successful_live_upload.json" `
+  --expected-channel-id UCIzMYpBt3WdSXZBrvoE7eCg
+```
+
+Verification requires the passed credential preflight, exact Ghost Town Test
+channel identity, and runtime readonly credentials before calling
+`videos.list`. It writes an immutable receipt under:
+
+```txt
+output/youtube/verifications/<video_id>/<timestamp>_YOUTUBE_UPLOAD_VERIFICATION.json
+```
+
+YouTube Analytics requires the optional
+`https://www.googleapis.com/auth/yt-analytics.readonly` scope. Existing upload
+and verification preflight remains valid without it. To explicitly replace the
+local token with one that also requests analytics, run the browser bootstrap
+and then refresh the preflight receipt:
+
+```powershell
+python youtube_credentials.py bootstrap --include-analytics-scope
+python youtube_credentials.py preflight
+```
+
+The analytics command is explicit and read-only:
+
+```powershell
+python youtube_analytics_snapshot.py --video-id sa1FZFgUgIQ --days 1
+```
+
+Every invocation writes two separate receipts:
+
+```txt
+output/youtube/analytics/<video_id>/<timestamp>_YOUTUBE_ANALYTICS_SNAPSHOT.json
+output/youtube/analytics/<video_id>/<timestamp>_YOUTUBE_COUNTRY_ANALYTICS_SNAPSHOT.json
+```
+
+The default video-performance report requests:
+
+- `views`
+- `estimatedMinutesWatched`
+- `averageViewDuration`
+- `likes`
+- `comments`
+- `shares`
+
+The country report uses dimension `country`; requests `views`,
+`estimatedMinutesWatched`, `averageViewDuration`, and `likes`; sorts by
+`-views`; and caps results at 25. Each report runs independently. If YouTube
+rejects a metric/dimension combination, only that receipt records
+`snapshot_status: blocked_or_unsupported` with a redacted reason; the sibling
+report still runs and the command does not invoke any upload API. New or private
+videos may legitimately produce `empty` receipts.
+
 ## Rules
 
 Do not activate unsupervised live publishing or add TikTok, Instagram, real

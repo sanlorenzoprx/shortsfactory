@@ -15,6 +15,7 @@ from typing import Any, Callable, Protocol, Sequence
 from content_factory.mission_control.job_index import is_within
 
 from .youtube_publisher import (
+    YOUTUBE_ANALYTICS_READONLY_SCOPE,
     YOUTUBE_READONLY_SCOPE,
     YOUTUBE_REQUIRED_SCOPES,
     YOUTUBE_UPLOAD_SCOPE,
@@ -70,6 +71,7 @@ class YouTubeOAuthBackend(Protocol):
         client_secret_path: Path,
         token_path: Path,
         open_browser: bool,
+        scopes: Sequence[str],
     ) -> TokenInspection: ...
 
     def inspect_token(self, *, token_path: Path) -> TokenInspection: ...
@@ -104,13 +106,14 @@ class GoogleYouTubeOAuthBackend:
         client_secret_path: Path,
         token_path: Path,
         open_browser: bool,
+        scopes: Sequence[str],
     ) -> TokenInspection:
         self._require_dependencies()
         from google_auth_oauthlib.flow import InstalledAppFlow
 
         flow = InstalledAppFlow.from_client_secrets_file(
             str(client_secret_path),
-            scopes=list(YOUTUBE_REQUIRED_SCOPES),
+            scopes=list(scopes),
         )
         credentials = flow.run_local_server(
             port=0,
@@ -226,17 +229,26 @@ class YouTubeCredentialManager:
             "token_git_ignored": self._git_ignored(self.token_path),
         }
 
-    def bootstrap(self, *, open_browser: bool = True) -> dict[str, Any]:
+    def bootstrap(
+        self,
+        *,
+        open_browser: bool = True,
+        include_analytics_scope: bool = False,
+    ) -> dict[str, Any]:
         self._validate_secret_path_safety()
         self._validate_installed_client_file()
+        requested_scopes = YOUTUBE_REQUIRED_SCOPES + (
+            (YOUTUBE_ANALYTICS_READONLY_SCOPE,) if include_analytics_scope else ()
+        )
         state = self.backend.bootstrap(
             client_secret_path=self.client_secret_path,
             token_path=self.token_path,
             open_browser=open_browser,
+            scopes=requested_scopes,
         )
         if not self.token_path.is_file():
             raise YouTubeCredentialError("OAuth flow completed without writing the local token file")
-        missing_scopes = [scope for scope in YOUTUBE_REQUIRED_SCOPES if scope not in state.scopes]
+        missing_scopes = [scope for scope in requested_scopes if scope not in state.scopes]
         if missing_scopes:
             raise YouTubeCredentialError(
                 "OAuth flow did not grant required YouTube scopes: " + ", ".join(missing_scopes)
@@ -244,7 +256,7 @@ class YouTubeCredentialManager:
         return {
             "status": "token_saved",
             "token_path": str(self.token_path),
-            "scopes": list(YOUTUBE_REQUIRED_SCOPES),
+            "scopes": list(requested_scopes),
             "valid": state.valid,
             "refreshable": state.refreshable,
             "secrets_printed": False,
@@ -264,6 +276,7 @@ class YouTubeCredentialManager:
             "refreshed": False,
             "youtube_upload_scope": False,
             "youtube_readonly_scope": False,
+            "youtube_analytics_readonly_scope": False,
             "expires_at": None,
         }
         channel: dict[str, Any] = {"status": "not_checked", "id": None, "title": None}
@@ -304,6 +317,7 @@ class YouTubeCredentialManager:
                     "refreshed": state.refreshed,
                     "youtube_upload_scope": YOUTUBE_UPLOAD_SCOPE in state.scopes,
                     "youtube_readonly_scope": YOUTUBE_READONLY_SCOPE in state.scopes,
+                    "youtube_analytics_readonly_scope": YOUTUBE_ANALYTICS_READONLY_SCOPE in state.scopes,
                     "expires_at": state.expires_at,
                 }
                 add(
@@ -320,6 +334,11 @@ class YouTubeCredentialManager:
                     "youtube_readonly_scope",
                     YOUTUBE_READONLY_SCOPE in state.scopes,
                     "YouTube readonly scope is granted for channel identity preflight",
+                )
+                add(
+                    "youtube_analytics_readonly_scope",
+                    YOUTUBE_ANALYTICS_READONLY_SCOPE in state.scopes,
+                    "optional YouTube Analytics readonly scope is granted",
                 )
                 has_required_scopes = all(scope in state.scopes for scope in YOUTUBE_REQUIRED_SCOPES)
                 if state.valid and has_required_scopes:
@@ -370,6 +389,7 @@ class YouTubeCredentialManager:
                 "quota_console_confirmation": confirm_quota_ready,
                 "policy_approval_confirmation": confirm_policy_ready,
                 "ready_for_future_supervised_upload": ready,
+                "analytics_scope_ready": token_summary["youtube_analytics_readonly_scope"],
                 "full_autopilot_enabled": False,
                 "supervised_autopilot_enabled": False,
                 "quota_note": "Confirm current upload quota in Google Cloud Console before a future upload.",
@@ -501,6 +521,7 @@ def build_parser() -> argparse.ArgumentParser:
     bootstrap = subparsers.add_parser("bootstrap", help="Run the local installed-app OAuth browser flow")
     add_path_options(bootstrap)
     bootstrap.add_argument("--no-browser", action="store_true", help="Print the authorization URL instead of opening it")
+    bootstrap.add_argument("--include-analytics-scope", action="store_true")
     preflight = subparsers.add_parser("preflight", help="Validate local credentials and read channel identity")
     add_path_options(preflight)
     preflight.add_argument("--confirm-quota-ready", action="store_true")
@@ -521,7 +542,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     try:
         if args.command == "bootstrap":
-            result = manager.bootstrap(open_browser=not args.no_browser)
+            result = manager.bootstrap(
+                open_browser=not args.no_browser,
+                include_analytics_scope=args.include_analytics_scope,
+            )
         elif args.command == "preflight":
             result = manager.preflight(
                 confirm_quota_ready=args.confirm_quota_ready,

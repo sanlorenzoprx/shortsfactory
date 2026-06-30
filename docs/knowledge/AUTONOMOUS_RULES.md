@@ -90,3 +90,11 @@ JSON or create an unreferenced sidecar. Metadata output must pass the versioned
 contract, contain no secrets/authentication URLs, and be valid UTF-8 without a
 BOM. Website and CTA text may enter upload metadata only through this validated
 composer. Metadata hardening never authorizes or invokes an upload.
+
+Phase 5B.4 verification and analytics are read-only and may run only through
+their explicit local CLIs. Verification may call `videos.list`; analytics may
+call YouTube Analytics `reports.query` only when the optional analytics scope
+is present. Neither path may import or call `videos.insert`, and neither may be
+wired into Phase 5A batch autopilot. Performance and country reports write
+separate receipts; an unsupported metric/dimension combination must soft-block
+only that report with a redacted reason.

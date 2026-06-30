@@ -12,6 +12,7 @@ from content_factory.autopilot.youtube_credentials import (
     main,
 )
 from content_factory.autopilot.youtube_publisher import (
+    YOUTUBE_ANALYTICS_READONLY_SCOPE,
     YOUTUBE_READONLY_SCOPE,
     YOUTUBE_REQUIRED_SCOPES,
     YOUTUBE_UPLOAD_SCOPE,
@@ -28,6 +29,7 @@ class FakeBackend:
 
     def __init__(self) -> None:
         self.bootstrap_calls = 0
+        self.bootstrap_scopes: tuple[str, ...] = ()
         self.inspect_calls = 0
         self.channel_calls = 0
 
@@ -40,8 +42,9 @@ class FakeBackend:
             "google-auth-httplib2": True,
         }
 
-    def bootstrap(self, *, client_secret_path, token_path, open_browser):
+    def bootstrap(self, *, client_secret_path, token_path, open_browser, scopes):
         self.bootstrap_calls += 1
+        self.bootstrap_scopes = tuple(scopes)
         token_path.parent.mkdir(parents=True, exist_ok=True)
         token_path.write_text(
             json.dumps({"token": "secret-token", "scopes": list(YOUTUBE_REQUIRED_SCOPES)}),
@@ -104,6 +107,19 @@ class UploadOnlyBackend(FakeBackend):
             refreshable=True,
             refreshed=False,
             scopes=(YOUTUBE_UPLOAD_SCOPE,),
+            expires_at="2026-06-30T12:00:00+00:00",
+        )
+
+
+class AnalyticsScopeBackend(FakeBackend):
+    @staticmethod
+    def _state():
+        return TokenInspection(
+            credentials=object(),
+            valid=True,
+            refreshable=True,
+            refreshed=False,
+            scopes=(*YOUTUBE_REQUIRED_SCOPES, YOUTUBE_ANALYTICS_READONLY_SCOPE),
             expires_at="2026-06-30T12:00:00+00:00",
         )
 
@@ -317,6 +333,33 @@ def test_bootstrap_uses_installed_app_backend_and_required_scopes(tmp_path):
     assert result["status"] == "token_saved"
     assert result["scopes"] == [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_READONLY_SCOPE]
     assert result["upload_attempted"] is False
+
+
+def test_bootstrap_can_optionally_request_analytics_scope(tmp_path):
+    backend = AnalyticsScopeBackend()
+    manager = _manager(tmp_path, backend)
+    manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
+    result = manager.bootstrap(open_browser=False, include_analytics_scope=True)
+    assert YOUTUBE_ANALYTICS_READONLY_SCOPE in result["scopes"]
+    assert YOUTUBE_ANALYTICS_READONLY_SCOPE in backend.bootstrap_scopes
+
+
+def test_preflight_reports_optional_analytics_scope_without_requiring_it_for_upload(tmp_path):
+    manager = _manager(tmp_path)
+    manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
+    manager.token_path.write_text("{}", encoding="utf-8")
+    result = manager.preflight()
+    assert result["status"] == "passed"
+    assert result["token"]["youtube_analytics_readonly_scope"] is False
+    assert result["readiness"]["analytics_scope_ready"] is False
+
+    analytics_manager = _manager(tmp_path, AnalyticsScopeBackend())
+    analytics_manager.client_secret_path.write_text(json.dumps(_installed_client()), encoding="utf-8")
+    analytics_manager.token_path.write_text("{}", encoding="utf-8")
+    analytics = analytics_manager.preflight()
+    assert analytics["status"] == "passed"
+    assert analytics["token"]["youtube_analytics_readonly_scope"] is True
+    assert analytics["readiness"]["analytics_scope_ready"] is True
 
 
 def test_environment_live_policy_requires_passed_confirmed_preflight_receipt(tmp_path, monkeypatch):

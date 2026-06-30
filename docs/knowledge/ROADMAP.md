@@ -28,14 +28,15 @@
 - Phase 5B.1 YouTube credential bootstrap and preflight
 - Phase 5B.2 supervised first YouTube upload gate
 - Phase 5B.3 YouTube upload hardening and metadata contract
+- Phase 5B.4 YouTube upload verification and analytics snapshots
 
 ## Current checkpoint
 
-Phase 5B.3 metadata hardening complete. The first manual supervised upload to
-Ghost Town Test succeeded, and future jobs receive versioned, UTF-8-safe,
-publisher-plan-bound metadata through a dedicated composer before the unchanged
-supervised gate. Dry-run remains the default and both autopilot live modes
-remain closed. Stop before analytics connectors, TikTok, Instagram, or any
+Phase 5B.4 verification and measurement layer complete. Successful supervised
+uploads can be indexed, verified through `videos.list`, and measured with
+separate performance and country receipts when analytics scope is authorized.
+Dry-run remains the default and both autopilot live modes remain closed. Stop
+before an automated analytics learning loop, TikTok, Instagram, or any
 unsupervised upload.
 
 ## Recommended next options
@@ -70,8 +71,8 @@ Make installation, setup, and one-command local running easier.
 - monetization/payment workflow
 - public multi-user SaaS
 - packaging/demo-mode work
-- automated analytics or metric synchronization
+- scheduled or automatic analytics synchronization
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
-- official analytics connectors
+- automated YouTube analytics learning loop and recommendation feedback
 - Phase 5C or later work
