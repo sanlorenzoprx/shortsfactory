@@ -29,15 +29,16 @@
 - Phase 5B.2 supervised first YouTube upload gate
 - Phase 5B.3 YouTube upload hardening and metadata contract
 - Phase 5B.4 YouTube upload verification and analytics snapshots
+- Phase 5B.5 online-capable creative angle packs and long-form assembly
 
 ## Current checkpoint
 
-Phase 5B.4 verification and measurement layer complete. Successful supervised
-uploads can be indexed, verified through `videos.list`, and measured with
-separate performance and country receipts when analytics scope is authorized.
-Dry-run remains the default and both autopilot live modes remain closed. Stop
-before an automated analytics learning loop, TikTok, Instagram, or any
-unsupervised upload.
+Phase 5B.5 creative generation layer complete. One LIT-tested idea becomes five
+gated short-form experiments and one long-form assembly plan. Deterministic and
+fixture providers stay offline; `online_llm` is optional, explicit, structured,
+and fail-closed. Dry-run remains the default and both autopilot live modes remain
+closed. Stop before feeding analytics into generation automatically, TikTok,
+Instagram, or any unsupervised upload.
 
 ## Recommended next options
 
@@ -75,4 +76,5 @@ Make installation, setup, and one-command local running easier.
 - local experiment planning/backlog automation
 - live/paid AI verdict provider activation
 - automated YouTube analytics learning loop and recommendation feedback
+- automatic creative-learning feedback into future batches
 - Phase 5C or later work

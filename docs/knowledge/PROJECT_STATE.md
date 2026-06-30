@@ -2,12 +2,12 @@
 
 ## Current status
 
-Phase 5B.4 adds a durable upload index, explicit read-only `videos.list`
-verification, and separate video-performance and country analytics snapshots.
-Unsupported metric/dimension combinations soft-block only their own receipt.
-Two supervised uploads have succeeded on Ghost Town Test (`rnPTrNn2bgc` and
-`sa1FZFgUgIQ`), but Phase 5B.4 itself never publishes. Phase 5A `dry_run`
-remains unchanged; `supervised_autopilot` and `full_autopilot` remain refused.
+Phase 5B.5 adds deterministic, fixture, and explicitly selected online-LLM
+creative providers. One stored LIT-tested idea becomes five gated short-form
+jobs, YouTube metadata drafts, analytics placeholders, and one long-form
+assembly plan. Online output is structured, validated, and fail-closed; it does
+not orchestrate or publish. Phase 5A `dry_run` remains unchanged;
+`supervised_autopilot` and `full_autopilot` remain refused.
 
 ## Last known remote HEAD
 
@@ -78,6 +78,12 @@ Phase 5B.4 dry-run smoke: 1 job, 3 simulated attempts, 0 credential reads,
 Phase 5B.4 local index rebuild: 2 successful uploads indexed idempotently
 Phase 5B.4 current analytics preflight: optional scope missing; performance and
 country receipts both blocked safely with 0 API calls and 0 `videos.insert`
+Phase 5B.5 focused suite: 11 passed
+Phase 5B.5 YouTube regression suite: 68 passed
+Phase 5B.5 Phase 5A/CLI regression suite: 18 passed
+Phase 5B.5 final `pytest -q`: 306 passed in 110.38s
+Phase 5B.5 deterministic smoke: 5 angles, 5 short jobs, 5 long-form chapters,
+0 credential reads, 0 network calls, and 0 publish attempts
 ```
 
 ## Known working capabilities
@@ -177,6 +183,11 @@ country receipts both blocked safely with 0 API calls and 0 `videos.insert`
 - Optional `yt-analytics.readonly` scope reporting without breaking upload preflight
 - Independent video-performance and top-25 country analytics snapshot receipts
 - Soft `blocked_or_unsupported` analytics outcomes without pipeline failure
+- Five-angle creative packs from one stored idea and LIT verdict
+- Deterministic and checked-in fixture creative providers with no network use
+- Optional explicit structured-JSON online LLM provider with redacted receipts
+- Five traceable short jobs plus one long-form assembly plan per passing pack
+- Pending offline analytics mappings for every short and long-form plan
 - Receipt JSON tracking
 - Green-gate autonomous phase process
 
@@ -241,6 +252,10 @@ country receipts both blocked safely with 0 API calls and 0 `videos.insert`
 - The current preflight receipt does not report the optional analytics scope.
   Analytics remains blocked until an explicitly expanded token is bootstrapped
   and preflight is rerun.
+- Creative generation defaults to deterministic local output. Online generation
+  requires an explicit provider flag and ignored local/environment config.
+- Creative analytics fields are placeholders only; no automatic learning feeds
+  into future batches in Phase 5B.5.
 
 ## Current risk
 
@@ -249,5 +264,5 @@ The authenticated credential preflight identifies `Ghost Town Test` as channel
 `sa1FZFgUgIQ`; tests still use only injected fake transports. The current token
 preflight lacks analytics-scope evidence, so real analytics snapshots remain
 blocked until Hector explicitly expands authorization and reruns preflight.
-Automated analytics learning, TikTok, Instagram, remote trend connectors, and
-automatic live publishing remain out of scope.
+Automated analytics/creative learning, TikTok, Instagram, remote trend
+connectors, and automatic live publishing remain out of scope.

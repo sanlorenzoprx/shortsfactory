@@ -772,3 +772,41 @@ Evidence:
 Notes:
 Existing upload-only `.local/youtube/token.json` must be deleted and recreated.
 Supervised/full autopilot remain disabled; no upload capability was enabled.
+
+## Phase 5B.5 — Online-Capable Creative Angle Pack + Long-Form Assembly
+
+Status: complete
+
+Commit:
+`Add Phase 5B.5 creative angle packs with optional LLM provider`
+
+Implemented:
+- `CreativeGenerationProvider` with deterministic, fixture, and explicit
+  `online_llm` modes
+- Versioned creative angle, short job, long-form plan, and receipt contracts
+- Exactly five rubric-bound angles and five traceable short content packages
+- YouTube-only metadata drafts with canonical GhostTownTest.com CTA
+- One ordered long-form assembly plan and local Markdown script
+- Per-short and long-form analytics mapping placeholders
+- Content, claim, CTA, metadata, secret, traceability, and publishing gates
+- Fail-closed blocked receipts without creative artifacts for invalid output
+- Ignored local online-provider configuration and redacted online provenance
+- Checked-in offline verdict/generated-output regression fixture
+
+Evidence:
+- Creative focused suite: 11 passed
+- YouTube credential/publisher/upload/metadata/analytics regressions: 68 passed
+- Phase 5A and autopilot CLI regressions: 18 passed
+- Final `pytest -q`: 306 passed in 110.38s
+- Python compile check and Ruff check passed
+- Deterministic fixture smoke created exactly 5 angles, 5 short jobs, and 1
+  long-form plan with 5 chapters
+- Smoke receipt recorded 0 credentials, 0 network calls, 0 secrets, and 0
+  publish attempts
+
+Notes:
+Deterministic generation remains the default and core offline path. Online LLM
+generation is optional, explicit, and was not called during tests or smoke
+validation. Creative analytics mappings remain pending placeholders; no
+automatic learning feeds into the next batch. Phase 5A dry-run is unchanged,
+and both supervised and full autopilot remain refused.

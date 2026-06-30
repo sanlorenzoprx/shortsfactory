@@ -98,3 +98,13 @@ is present. Neither path may import or call `videos.insert`, and neither may be
 wired into Phase 5A batch autopilot. Performance and country reports write
 separate receipts; an unsupported metric/dimension combination must soft-block
 only that report with a redacted reason.
+
+Phase 5B.5 creative generation defaults to the deterministic provider. Fixture
+mode may read only checked-in fixture input/output. `online_llm` requires an
+explicit CLI provider flag plus ignored local/environment configuration. Before
+any online call, reject secrets and authentication URLs in provider input.
+Never persist an API key, raw provider response, or unsafe prompt. Every provider
+output must pass the same contracts and creative gates; invalid online output
+writes only a blocked redacted receipt. Creative metadata remains a draft and
+must not invoke credentials, uploads, verification, analytics, supervised
+autopilot, or full autopilot.

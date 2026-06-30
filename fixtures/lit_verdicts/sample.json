@@ -1,0 +1,200 @@
+{
+  "idea": {
+    "idea_id": "idea_fixture_proof_workflow",
+    "source_trend_id": "trend_fixture_contractors",
+    "name": "Contractor Proof Workflow",
+    "description": "A focused proof collection workflow that helps small specialty contractors document completed work and speed up customer handoffs before testing broader automation.",
+    "target_user": "small specialty contractors",
+    "market": "US",
+    "locale": "en-US",
+    "angle": "proof gaps delay handoffs and payment",
+    "why_now": "The stored fixture trend shows repeated proof and handoff friction.",
+    "constraints": [
+      "do not invent market-size claims",
+      "validate willingness to pay before building"
+    ],
+    "created_at": "2026-06-30T00:00:00+00:00"
+  },
+  "verdict": {
+    "verdict_headline": "Test one paid proof workflow",
+    "lit_score": 82,
+    "risk_level": "medium",
+    "top_reason": "The buyer and pain are plausible, but payment urgency still needs proof.",
+    "next_step": "Pre-sell one manual proof package to a specialty contractor.",
+    "source": "fixture",
+    "ghost_town_risk": "Contractors may accept the pain but refuse another standalone tool.",
+    "buyer_pain_clarity": "The buyer is the contractor owner losing time when proof is incomplete.",
+    "willingness_to_pay_signal": "A paid manual proof package is the required signal.",
+    "distribution_difficulty": "Reach owners through direct trade relationships before paid acquisition.",
+    "unfair_advantage_check": "A narrow trade-specific workflow is more credible than a generic platform.",
+    "business_model_weakness": "A low-frequency workflow may not support recurring software pricing.",
+    "why_it_might_work": "Completed proof can unblock a customer handoff and payment conversation.",
+    "why_it_might_fail": "The buyer may tolerate the pain instead of changing the workflow.",
+    "killer_question": "Will one contractor pay for the manual outcome now?",
+    "mvp_test": "Offer one manually delivered proof package before writing software.",
+    "provenance": {
+      "source": "checked_in_fixture",
+      "validated": true
+    },
+    "warnings": []
+  },
+  "creative_output": {
+    "angles": [
+      {
+        "angle_id": "ghost_town_risk",
+        "angle_name": "Ghost Town Risk",
+        "purpose": "explain why the idea may fail",
+        "hook_style": "warning / risk / painful truth",
+        "target_emotion": "caution",
+        "viewer_question": "What could make this idea fail?",
+        "expected_behavior_signal": "viewer tests the risk with a buyer"
+      },
+      {
+        "angle_id": "buyer_reality",
+        "angle_name": "Buyer Reality",
+        "purpose": "identify who actually pays and why",
+        "hook_style": "buyer truth / market reality",
+        "target_emotion": "recognition",
+        "viewer_question": "Who owns this pain strongly enough to pay?",
+        "expected_behavior_signal": "viewer identifies the budget owner"
+      },
+      {
+        "angle_id": "fast_validation_test",
+        "angle_name": "Fast Validation Test",
+        "purpose": "give the smallest test before building",
+        "hook_style": "action / experiment / proof",
+        "target_emotion": "agency",
+        "viewer_question": "What is the smallest paid test?",
+        "expected_behavior_signal": "viewer runs the validation experiment"
+      },
+      {
+        "angle_id": "contrarian_opportunity",
+        "angle_name": "Contrarian Opportunity",
+        "purpose": "show the better wedge or hidden opportunity",
+        "hook_style": "contrarian / reframing",
+        "target_emotion": "curiosity",
+        "viewer_question": "Is the narrow wedge better?",
+        "expected_behavior_signal": "viewer reframes the offer"
+      },
+      {
+        "angle_id": "builder_action_plan",
+        "angle_name": "Builder Action Plan",
+        "purpose": "explain what to build first if the idea is still worth testing",
+        "hook_style": "practical / next step / MVP",
+        "target_emotion": "clarity",
+        "viewer_question": "What should be built first?",
+        "expected_behavior_signal": "viewer scopes a narrow MVP"
+      }
+    ],
+    "shorts": {
+      "ghost_town_risk": {
+        "title_variants": ["Why This Contractor Proof Idea Could Fail"],
+        "hook": "Painful truth: this contractor proof idea can fail before a buyer pays.",
+        "script": "Painful truth: this contractor proof idea can fail before a buyer pays. The customer may tolerate incomplete proof instead of changing the workflow. Ask the contractor owner to pay for one manual test before building. Test your business idea at GhostTownTest.com.",
+        "caption": "The buyer may tolerate this painful workflow instead of paying to change it. Run one paid test. Test your business idea at GhostTownTest.com.",
+        "thumbnail_text": "WHY THIS MAY FAIL",
+        "cta": "Test your business idea at GhostTownTest.com.",
+        "youtube_metadata_draft": {
+          "angle_id": "ghost_town_risk",
+          "cta": "Test your business idea at GhostTownTest.com.",
+          "tags": ["business ideas", "startup validation"],
+          "hashtags": ["#BusinessIdeas", "#GhostTownTest"],
+          "status": "draft_not_upload_ready",
+          "live_publish_enabled": false
+        }
+      },
+      "buyer_reality": {
+        "title_variants": ["Who Pays for Contractor Proof?"],
+        "hook": "Buyer reality: the user is not enough; find the contractor owner who pays.",
+        "script": "Buyer reality: the user is not enough; find the contractor owner who pays. The pain belongs to the owner losing time during customer handoff. Ask that buyer for a paid manual test. Test your business idea at GhostTownTest.com.",
+        "caption": "Name the buyer, painful handoff, and budget before building. Ask for a paid test. Test your business idea at GhostTownTest.com.",
+        "thumbnail_text": "WHO ACTUALLY PAYS?",
+        "cta": "Test your business idea at GhostTownTest.com.",
+        "youtube_metadata_draft": {
+          "angle_id": "buyer_reality",
+          "cta": "Test your business idea at GhostTownTest.com.",
+          "tags": ["business ideas", "buyer validation"],
+          "hashtags": ["#BusinessIdeas", "#GhostTownTest"],
+          "status": "draft_not_upload_ready",
+          "live_publish_enabled": false
+        }
+      },
+      "fast_validation_test": {
+        "title_variants": ["Run This Contractor Proof Test First"],
+        "hook": "Before building, test whether one contractor buyer pays for proof help.",
+        "script": "Before building, test whether one contractor buyer pays for proof help. Offer one manual package tied to the painful customer handoff. Ask for payment and use that action as evidence. Test your business idea at GhostTownTest.com.",
+        "caption": "Test the painful outcome with one buyer before software. Ask for payment. Test your business idea at GhostTownTest.com.",
+        "thumbnail_text": "RUN THIS TEST FIRST",
+        "cta": "Test your business idea at GhostTownTest.com.",
+        "youtube_metadata_draft": {
+          "angle_id": "fast_validation_test",
+          "cta": "Test your business idea at GhostTownTest.com.",
+          "tags": ["business ideas", "validation test"],
+          "hashtags": ["#BusinessIdeas", "#GhostTownTest"],
+          "status": "draft_not_upload_ready",
+          "live_publish_enabled": false
+        }
+      },
+      "contrarian_opportunity": {
+        "title_variants": ["The Better Contractor Proof Wedge"],
+        "hook": "The broad platform may be wrong; the buyer needs one painful proof outcome.",
+        "script": "The broad platform may be wrong; the buyer needs one painful proof outcome. Sell the customer handoff result manually, then test which repeated step deserves automation. Build around evidence, not feature guesses. Test your business idea at GhostTownTest.com.",
+        "caption": "The opportunity is a narrow painful outcome for one buyer. Sell it before automating. Test your business idea at GhostTownTest.com.",
+        "thumbnail_text": "THE BETTER WEDGE",
+        "cta": "Test your business idea at GhostTownTest.com.",
+        "youtube_metadata_draft": {
+          "angle_id": "contrarian_opportunity",
+          "cta": "Test your business idea at GhostTownTest.com.",
+          "tags": ["business ideas", "market wedge"],
+          "hashtags": ["#BusinessIdeas", "#GhostTownTest"],
+          "status": "draft_not_upload_ready",
+          "live_publish_enabled": false
+        }
+      },
+      "builder_action_plan": {
+        "title_variants": ["Build This Contractor Proof MVP First"],
+        "hook": "Build this first: one manual proof package for one contractor buyer.",
+        "script": "Build this first: one manual proof package for one contractor buyer. Solve the painful customer handoff and track the result. Ask the buyer to repeat or pay again before automating the workflow. Test your business idea at GhostTownTest.com.",
+        "caption": "Build one buyer outcome, test the painful handoff, and ask for repeat payment. Test your business idea at GhostTownTest.com.",
+        "thumbnail_text": "BUILD THIS FIRST",
+        "cta": "Test your business idea at GhostTownTest.com.",
+        "youtube_metadata_draft": {
+          "angle_id": "builder_action_plan",
+          "cta": "Test your business idea at GhostTownTest.com.",
+          "tags": ["business ideas", "MVP plan"],
+          "hashtags": ["#BusinessIdeas", "#GhostTownTest"],
+          "status": "draft_not_upload_ready",
+          "live_publish_enabled": false
+        }
+      }
+    },
+    "longform": {
+      "longform_title": "Contractor Proof Workflow: Five Angles Before You Build",
+      "intro_script": "We will test the failure risk, buyer, experiment, hidden wedge, and first MVP.",
+      "ordered_chapters": [
+        {"angle_id": "ghost_town_risk", "chapter_title": "Ghost Town Risk", "chapter_script": "Start with the failure risk."},
+        {"angle_id": "buyer_reality", "chapter_title": "Buyer Reality", "chapter_script": "Identify who pays."},
+        {"angle_id": "fast_validation_test", "chapter_title": "Fast Validation Test", "chapter_script": "Run the smallest paid test."},
+        {"angle_id": "contrarian_opportunity", "chapter_title": "Contrarian Opportunity", "chapter_script": "Find the narrower wedge."},
+        {"angle_id": "builder_action_plan", "chapter_title": "Builder Action Plan", "chapter_script": "Build the smallest useful outcome."}
+      ],
+      "transition_lines": [
+        "Now move from risk to the real buyer.",
+        "Turn that buyer hypothesis into a test.",
+        "Use the test to expose the better wedge.",
+        "Translate the wedge into a first build."
+      ],
+      "conclusion": "Validate the paid customer outcome before expanding the product.",
+      "cta_to_ghosttowntest_com": "Test your business idea at GhostTownTest.com.",
+      "suggested_description": "Five evidence-grounded angles for validating a contractor proof workflow. Test your business idea at GhostTownTest.com.",
+      "suggested_chapters_timestamps": [
+        {"timestamp": "00:00", "label": "Introduction"},
+        {"timestamp": "00:30", "label": "Ghost Town Risk"},
+        {"timestamp": "01:45", "label": "Buyer Reality"},
+        {"timestamp": "03:00", "label": "Fast Validation Test"},
+        {"timestamp": "04:15", "label": "Contrarian Opportunity"},
+        {"timestamp": "05:30", "label": "Builder Action Plan"}
+      ]
+    }
+  }
+}

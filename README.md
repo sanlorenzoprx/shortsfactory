@@ -963,6 +963,59 @@ rejects a metric/dimension combination, only that receipt records
 report still runs and the command does not invoke any upload API. New or private
 videos may legitimately produce `empty` receipts.
 
+## Phase 5B.5: online-capable creative angle packs
+
+Turn one stored trending idea and its LIT verdict into five distinct short-form
+creative experiments plus one long-form YouTube assembly plan:
+
+```powershell
+python creative_angle_pack.py generate `
+  --idea-id <idea_id> `
+  --provider deterministic
+```
+
+The deterministic provider is the default. It uses no credentials or network,
+and writes a gated pack under `output/creative_angle_packs/<angle_pack_id>/`.
+Each pack contains `creative_angle_pack.json`, five angle-specific job/script/
+caption/thumbnail packages, analytics mapping placeholders, a long-form plan
+and script, and `ANGLE_PACK_RECEIPT.json`.
+
+Checked-in LIT verdict and creative-output fixtures exercise regression behavior
+without a network call:
+
+```powershell
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider fixture
+```
+
+Online generation is optional and must be selected explicitly. Configure the
+ignored `.local/creative_llm/config.json` or the environment with
+`CREATIVE_LLM_API_URL`, `CREATIVE_LLM_API_KEY`, and a model, then run:
+
+```powershell
+python creative_angle_pack.py generate `
+  --lit-verdict-file fixtures/lit_verdicts/sample.json `
+  --provider online_llm `
+  --model <model_id>
+```
+
+The online adapter requests structured JSON only. It stores validated output,
+hashes, token/cost summaries when supplied, and redacted receipts—never API
+keys, prompts containing detected secrets, or raw provider responses. Missing
+configuration refuses before a network call. Invalid schemas or failed quality
+gates write a blocked receipt without creating short or long-form artifacts.
+
+Every provider remains subordinate to orchestration and gates. The five required
+angles are `ghost_town_risk`, `buyer_reality`, `fast_validation_test`,
+`contrarian_opportunity`, and `builder_action_plan`. Metadata stays
+`draft_not_upload_ready`; analytics fields remain null/pending until separately
+mapped to existing offline receipts. Creative generation does not publish,
+collect analytics, or change Phase 5A `dry_run`. Both `supervised_autopilot` and
+`full_autopilot` remain refused. See
+`docs/architecture/CREATIVE_ANGLE_PACKS.md` and
+`docs/architecture/ONLINE_LLM_GENERATION_PROVIDER.md`.
+
 ## Rules
 
 Do not activate unsupervised live publishing or add TikTok, Instagram, real
