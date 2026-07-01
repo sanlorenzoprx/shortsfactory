@@ -54,6 +54,8 @@ class CreativeAnglePack:
     input_hash: str
     output_hash: str
     angles: tuple[CreativeAngleSpec, ...]
+    idea_summary: str | None = None
+    verdict_summary: str | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -65,6 +67,10 @@ class CreativeAnglePack:
             raise CreativeAngleContractError("a creative angle pack must contain exactly five angles")
         if len({angle.angle_id for angle in self.angles}) != 5:
             raise CreativeAngleContractError("creative angle IDs must be unique")
+        for name in ("idea_summary", "verdict_summary"):
+            value = getattr(self, name)
+            if value is not None:
+                _required(value, name)
 
     def to_dict(self) -> JsonDict:
         return asdict(self)
@@ -226,6 +232,7 @@ class CreativeAnglePackReceipt:
     youtube_api_called: bool
     videos_insert_called: bool
     schema_valid: bool
+    provider_diagnostics: JsonDict
     redacted_error: str | None
     status: str
     artifacts: dict[str, str] = field(default_factory=dict)
@@ -249,6 +256,20 @@ class CreativeAnglePackReceipt:
             raise CreativeAngleContractError("creative generation cannot publish")
         if self.youtube_api_called is not False or self.videos_insert_called is not False:
             raise CreativeAngleContractError("creative generation cannot call YouTube APIs")
+        allowed_diagnostics = {
+            "provider_http_status", "provider_selected_model", "provider_selected_provider",
+            "content_present", "content_length", "content_starts_with_json",
+            "content_starts_with_markdown_fence", "json_extraction_used", "parse_error_type",
+            "compact_schema_valid", "internal_schema_valid", "missing_required_fields",
+            "schema_error_count",
+        }
+        if set(self.provider_diagnostics) - allowed_diagnostics:
+            raise CreativeAngleContractError("provider diagnostics contain unsafe fields")
+        missing_paths = self.provider_diagnostics.get("missing_required_fields", [])
+        if not isinstance(missing_paths, list) or any(
+            not isinstance(path, str) or not path.startswith("$") for path in missing_paths
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe schema paths")
         if self.provider_type == "online_llm" and self.status not in {"passed", "blocked", "failed"}:
             raise CreativeAngleContractError("online LLM receipt status must be passed, blocked, or failed")
         if self.safety.get("full_autopilot_enabled") is not False:
@@ -265,6 +286,7 @@ class CreativeAnglePackReceipt:
             "provider_reported_cost": None,
             "reasoning_details_stored": False,
             "stream_enabled": False,
+            "provider_diagnostics": {},
             **value,
             "gates": tuple(value.get("gates", [])),
         })

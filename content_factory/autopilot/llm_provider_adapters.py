@@ -10,6 +10,12 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from .llm_model_registry import LLMModelProfile
+from .json_extraction import (
+    extract_first_complete_json_object,
+    extract_openrouter_message_content,
+    extract_response_value,
+)
+from .provider_diagnostics import ProviderContentDiagnostics
 
 
 DEFAULT_CREATIVE_FIXTURE = Path("fixtures/lit_verdicts/sample.json")
@@ -17,6 +23,7 @@ SECRET_PATTERN = re.compile(
     r"(?i)(bearer\s+\S+|(?:access|refresh)[_-]?token\s*[:=]\s*\S+|client[_-]?secret\s*[:=]\s*\S+|api[_-]?key\s*[:=]\s*\S+)"
 )
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
+SAFE_PROVIDER_IDENTIFIER = re.compile(r"^[A-Za-z0-9._:/-]{1,200}$")
 
 
 class LLMAdapterError(RuntimeError):
@@ -34,6 +41,7 @@ class LLMProviderAdapter(ABC):
         self.tokens_used: int | None = None
         self.provider_reported_cost: float | None = None
         self.raw_response_stored = False
+        self.provider_diagnostics = ProviderContentDiagnostics()
 
     @abstractmethod
     def generate_json(
@@ -373,10 +381,17 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             raise LLMAdapterError("selected model does not support required JSON schema output")
         if self._estimate_tokens(prompt) > model_profile.max_input_tokens:
             raise LLMAdapterError("prompt exceeds the selected model input-token limit")
+        self.provider_diagnostics = ProviderContentDiagnostics(
+            provider_selected_model=model_profile.provider_model,
+            provider_selected_provider=model_profile.provider,
+        )
         body = {
             "model": model_profile.provider_model,
             "messages": [
-                {"role": "system", "content": "Return strict JSON only. No markdown. No explanation."},
+                {
+                    "role": "system",
+                    "content": "Return one JSON object only. No markdown. No explanation. No reasoning. No comments.",
+                },
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
@@ -401,17 +416,27 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                     json=body,
                     timeout=self.timeout_seconds,
                 )
+            status = getattr(response, "status_code", None)
+            if isinstance(status, int):
+                self.provider_diagnostics.provider_http_status = status
             if hasattr(response, "raise_for_status"):
                 response.raise_for_status()
             raw = response.json() if hasattr(response, "json") else response
-            value = self._structured_value(raw)
+            selected_model = extract_response_value(raw, "model")
+            selected_provider = extract_response_value(raw, "provider")
+            if isinstance(selected_model, str) and SAFE_PROVIDER_IDENTIFIER.fullmatch(selected_model.strip()):
+                self.provider_diagnostics.provider_selected_model = selected_model.strip()
+            if isinstance(selected_provider, str) and SAFE_PROVIDER_IDENTIFIER.fullmatch(selected_provider.strip()):
+                self.provider_diagnostics.provider_selected_provider = selected_provider.strip()
+            value = self._structured_value(raw, model_profile)
             self.validate_json_schema(value, schema)
-            usage = raw.get("usage", {}) if isinstance(raw, dict) else {}
-            if isinstance(usage, dict) and isinstance(usage.get("total_tokens"), int):
-                self.tokens_used = usage["total_tokens"]
-            reported_cost = usage.get("cost") if isinstance(usage, dict) else None
-            if reported_cost is None and isinstance(raw, dict):
-                reported_cost = raw.get("cost")
+            usage = extract_response_value(raw, "usage")
+            total_tokens = extract_response_value(usage, "total_tokens")
+            if isinstance(total_tokens, int):
+                self.tokens_used = total_tokens
+            reported_cost = extract_response_value(usage, "cost")
+            if reported_cost is None:
+                reported_cost = extract_response_value(raw, "cost")
             if isinstance(reported_cost, (int, float)) and not isinstance(reported_cost, bool) and reported_cost >= 0:
                 self.provider_reported_cost = float(reported_cost)
             self._record_usage(prompt, value, model_profile)
@@ -419,6 +444,14 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         except LLMAdapterError:
             raise
         except Exception as exc:
+            if self.provider_diagnostics.provider_http_status == 429:
+                self.provider_diagnostics.parse_error_type = "rate_limited"
+            elif self.provider_diagnostics.provider_http_status and self.provider_diagnostics.provider_http_status >= 500:
+                self.provider_diagnostics.parse_error_type = "provider_unavailable"
+            elif "timeout" in type(exc).__name__.casefold():
+                self.provider_diagnostics.parse_error_type = "timeout"
+            else:
+                self.provider_diagnostics.parse_error_type = "provider_unavailable"
             raise LLMAdapterError(f"generic HTTP LLM request failed: {type(exc).__name__}") from exc
 
     def _request_url(self) -> str:
@@ -426,27 +459,37 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             return self.endpoint_url.rstrip("/") + "/chat/completions"
         return self.endpoint_url
 
-    @staticmethod
-    def _structured_value(raw: Any) -> Any:
-        if not isinstance(raw, dict):
-            raise LLMAdapterError("LLM response is not a JSON object")
-        value: Any = raw.get("result", raw.get("output"))
+    def _structured_value(self, raw: Any, model_profile: LLMModelProfile) -> Any:
+        if model_profile.provider == "openrouter":
+            content = extract_openrouter_message_content(raw)
+            self.provider_diagnostics.record_content(content)
+            if not self.provider_diagnostics.content_present:
+                raise LLMAdapterError("empty_provider_content")
+            value, extraction = extract_first_complete_json_object(content or "")
+            self.provider_diagnostics.json_extraction_used = extraction.json_extraction_used
+            self.provider_diagnostics.parse_error_type = extraction.parse_error_type
+            if value is None:
+                raise LLMAdapterError(extraction.parse_error_type or "malformed_json")
+        else:
+            value = extract_response_value(raw, "result")
+            if value is None:
+                value = extract_response_value(raw, "output")
         if value is None:
-            choices = raw.get("choices")
-            if isinstance(choices, list) and choices and isinstance(choices[0], dict):
-                message = choices[0].get("message", {})
-                value = message.get("content") if isinstance(message, dict) else None
+            value = extract_openrouter_message_content(raw)
         if value is None:
-            value = raw.get("output_text")
+            value = extract_response_value(raw, "output_text")
         if isinstance(value, str):
             try:
                 value = json.loads(value)
             except json.JSONDecodeError as exc:
+                self.provider_diagnostics.parse_error_type = "malformed_json"
                 raise LLMAdapterError("LLM response contains malformed JSON") from exc
         if not isinstance(value, (dict, list)):
+            self.provider_diagnostics.parse_error_type = "json_object_not_found"
             raise LLMAdapterError("LLM response has no structured JSON output")
         encoded = json.dumps(value, ensure_ascii=False)
         if SECRET_PATTERN.search(encoded) or AUTH_URL_PATTERN.search(encoded):
+            self.provider_diagnostics.parse_error_type = "unsafe_provider_content"
             raise LLMAdapterError("LLM response contains secrets or authentication URLs")
         return value
 

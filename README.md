@@ -1153,6 +1153,19 @@ and user-provided or self-hosted HTTPS endpoints remain future profiles.
 Each attempt is one non-streaming strict-JSON request. `reasoning.enabled` is
 never sent, and raw responses and `reasoning_details` are never stored.
 
+OpenRouter produces the compact `LLMCreativeBundleV1` shape: idea/verdict
+summaries, five canonical angle text records, CTA, and a compact long-form plan.
+Code validates and normalizes that bundle, then creates trusted IDs, metadata,
+timestamps, analytics placeholders, hashes, receipts, and safety fields before
+running the unchanged internal schema and quality gates. Fenced or surrounded
+JSON is extracted with a quote-aware brace scanner; arbitrary text is never
+evaluated.
+
+Attempt receipts store diagnostics only: HTTP status, selected model/provider,
+content presence and length, JSON/fence indicators, extraction use, stable
+failure code, compact/internal schema status, missing field paths, and error
+count. They never store full provider content, raw responses, headers, or keys.
+
 Free routes may be rate-limited or unavailable, and free/open models may have
 weaker JSON reliability. All output still must pass strict local schema and
 quality gates. Remote HTTP is refused; loopback HTTP is allowed only for the

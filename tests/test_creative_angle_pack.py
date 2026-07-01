@@ -23,7 +23,9 @@ from content_factory.autopilot.creative_providers import (
     OnlineLLMCreativeGenerationProvider,
 )
 from content_factory.autopilot.llm_model_registry import LLMModelRegistry
-from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter, build_llm_adapter
+from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter, GenericHTTPAdapter, build_llm_adapter
+from content_factory.autopilot.llm_bundle_normalizer import normalize_llm_creative_bundle
+from content_factory.autopilot.llm_bundle_schema import LLMBundleValidationError, LLMCreativeBundleV1
 
 
 FIXTURE = Path("fixtures/lit_verdicts/sample.json")
@@ -60,6 +62,48 @@ def _artifacts(output: Path, receipt: CreativeAnglePackReceipt):
         json.loads((output / receipt.artifacts["longform_plan"]).read_text(encoding="utf-8"))
     )
     return pack, jobs, longform
+
+
+def _compact_bundle():
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    creative = fixture["creative_output"]
+    angles = []
+    for spec in creative["angles"]:
+        angle_id = spec["angle_id"]
+        short = creative["shorts"][angle_id]
+        metadata = short["youtube_metadata_draft"]
+        angles.append({
+            "angle_id": angle_id,
+            "title": short["title_variants"][0],
+            "hook": short["hook"],
+            "script": short["script"],
+            "caption": short["caption"],
+            "thumbnail_text": short["thumbnail_text"],
+            "tags": metadata["tags"],
+            "hashtags": metadata["hashtags"],
+        })
+    longform = creative["longform"]
+    return {
+        "idea_summary": fixture["idea"]["description"],
+        "verdict_summary": fixture["verdict"]["top_reason"],
+        "cta": "Run your idea through the Ghost Town Test at GhostTownTest.com",
+        "angles": angles,
+        "longform": {
+            "title": longform["longform_title"],
+            "intro": longform["intro_script"],
+            "chapters": [
+                {
+                    "angle_id": chapter["angle_id"],
+                    "title": chapter["chapter_title"],
+                    "summary": chapter["chapter_script"],
+                }
+                for chapter in longform["ordered_chapters"]
+            ],
+            "transitions": longform["transition_lines"],
+            "conclusion": longform["conclusion"],
+            "description": longform["suggested_description"],
+        },
+    }
 
 
 def test_deterministic_provider_generates_exactly_five_unique_angles(tmp_path):
@@ -169,7 +213,7 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require(
         "openrouter-free-router", require_json_schema=True,
     )
-    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    compact = _compact_bundle()
     exposed_marker = "reasoning-must-not-be-stored"
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-openrouter-key")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
@@ -180,10 +224,12 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
         return {
             "choices": [{
                 "message": {
-                    "content": json.dumps(fixture["creative_output"]),
+                    "content": json.dumps(compact),
                     "reasoning_details": [{"text": exposed_marker}],
                 },
             }],
+            "model": "google/gemma-4-26b-a4b-it:free",
+            "provider": "openrouter",
         }
 
     adapter = build_llm_adapter(
@@ -194,17 +240,30 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     )
     provider = OnlineLLMCreativeGenerationProvider(profile, adapter)
     output, generator, receipt = _generate(tmp_path, provider, online_explicit=True)
-    _, jobs, _ = _artifacts(output, receipt)
+    pack, jobs, _ = _artifacts(output, receipt)
     persisted = generator.receipt_path(receipt.angle_pack_id).read_text(encoding="utf-8")
 
     assert receipt.status == "passed"
     assert receipt.model_provider == "openrouter"
     assert receipt.short_jobs_created == 5
     assert len(jobs) == 5
+    assert pack.idea_summary == compact["idea_summary"]
+    assert pack.verdict_summary == compact["verdict_summary"]
     assert {job.angle_id for job in jobs} == EXPECTED_ANGLES
     assert receipt.raw_response_stored is False
     assert receipt.reasoning_details_stored is False
     assert receipt.stream_enabled is False
+    diagnostics = receipt.provider_diagnostics
+    assert diagnostics["provider_selected_model"] == "google/gemma-4-26b-a4b-it:free"
+    assert diagnostics["provider_selected_provider"] == "openrouter"
+    assert diagnostics["content_present"] is True
+    assert diagnostics["content_length"] > 0
+    assert diagnostics["content_starts_with_json"] is True
+    assert diagnostics["content_starts_with_markdown_fence"] is False
+    assert diagnostics["json_extraction_used"] is False
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert diagnostics["schema_error_count"] == 0
     assert receipt.secrets_recorded is False
     assert receipt.publish_attempted is False
     assert receipt.youtube_api_called is False
@@ -212,6 +271,43 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert calls[0]["json"]["stream"] is False
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
+
+
+def test_compact_bundle_normalizer_builds_internal_scaffolding_without_trusting_ids():
+    from content_factory.autopilot.creative_providers import ANGLE_RUBRIC, CTA
+
+    compact = LLMCreativeBundleV1.validate(_compact_bundle())
+    normalized = normalize_llm_creative_bundle(
+        compact, angle_rubric=ANGLE_RUBRIC, canonical_cta=CTA,
+    )
+    assert len(normalized["angles"]) == 5
+    assert set(normalized["shorts"]) == EXPECTED_ANGLES
+    assert all(value["cta"] == CTA for value in normalized["shorts"].values())
+    assert all(value["youtube_metadata_draft"]["live_publish_enabled"] is False for value in normalized["shorts"].values())
+    assert len(normalized["longform"]["ordered_chapters"]) == 5
+    assert len(normalized["longform"]["suggested_chapters_timestamps"]) == 6
+
+
+@pytest.mark.parametrize(
+    "mutation, expected_path",
+    [
+        (lambda value: value.pop("idea_summary"), "$.idea_summary"),
+        (lambda value: value["angles"].pop(), "$.angles"),
+        (lambda value: value["angles"].__setitem__(1, dict(value["angles"][0])), "$.angles[].angle_id"),
+        (lambda value: value["angles"][0].__setitem__("angle_id", "unknown"), "$.angles[].angle_id"),
+        (lambda value: value["angles"][0].pop("hook"), "$.angles[0].hook"),
+        (lambda value: value.__setitem__("cta", "No website"), "$.cta"),
+        (lambda value: value["angles"][0].__setitem__("tags", []), "$.angles[0].tags"),
+        (lambda value: value["angles"][0].__setitem__("hashtags", []), "$.angles[0].hashtags"),
+        (lambda value: value["longform"]["chapters"][0].__setitem__("angle_id", "unknown"), "$.longform.chapters[].angle_id"),
+    ],
+)
+def test_compact_bundle_semantic_validation_blocks_invalid_shapes(mutation, expected_path):
+    value = _compact_bundle()
+    mutation(value)
+    with pytest.raises(LLMBundleValidationError) as error:
+        LLMCreativeBundleV1.validate(value)
+    assert expected_path in error.value.paths
 
 
 def _fallback_runner(tmp_path, adapter_factory):
@@ -222,6 +318,138 @@ def _fallback_runner(tmp_path, adapter_factory):
         adapter_factory=adapter_factory,
         now=lambda: NOW,
     )
+
+
+def _openrouter_adapter_factory(response_for_profile):
+    def factory(profile):
+        def transport(**request):
+            return response_for_profile(profile)
+
+        return GenericHTTPAdapter(
+            endpoint_url="https://openrouter.ai/api/v1",
+            api_key="test-only-key",
+            allow_network=True,
+            endpoint_type="chat_json",
+            transport=transport,
+        )
+    return factory
+
+
+@pytest.mark.parametrize(
+    "first_response, expected_error",
+    [
+        ({"choices": [{"message": {"content": "  "}}]}, "empty_provider_content"),
+        ({}, "empty_provider_content"),
+        ({"choices": [{"message": {"content": '{"broken":'}}]}, "malformed_json"),
+        ({"choices": [{"message": {"content": json.dumps({"idea_summary": "missing fields"})}}]}, "compact_schema_invalid"),
+    ],
+)
+def test_compact_openrouter_fallback_records_safe_failure_then_stops_on_normalized_pass(
+    tmp_path, first_response, expected_error,
+):
+    valid_content = json.dumps(_compact_bundle())
+
+    def response_for_profile(profile):
+        if profile.model_id == "openrouter-gemma-4-26b-free":
+            return first_response
+        return {
+            "choices": [{"message": {"content": valid_content}}],
+            "model": profile.provider_model,
+            "provider": "openrouter",
+        }
+
+    runner = _fallback_runner(tmp_path, _openrouter_adapter_factory(response_for_profile))
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+
+    assert fallback["status"] == "passed"
+    assert fallback["total_attempts"] == 2
+    assert fallback["selected_model_id"] == "openrouter-gemma-4-31b-free"
+    first_diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    assert first_diagnostics["parse_error_type"] == expected_error
+    assert first_diagnostics["internal_schema_valid"] is False
+    selected_diagnostics = fallback["attempts"][1]["provider_diagnostics"]
+    assert selected_diagnostics["compact_schema_valid"] is True
+    assert selected_diagnostics["internal_schema_valid"] is True
+    assert selected_diagnostics["schema_error_count"] == 0
+    assert receipt is not None and generator is not None
+    assert fallback_path.is_file()
+    first_receipt_path = runner.output_root / fallback["attempts"][0]["receipt"]
+    assert not first_receipt_path.parent.joinpath("creative_angle_pack.json").exists()
+    first_receipt = json.loads(first_receipt_path.read_text(encoding="utf-8"))
+    assert first_receipt["output_hash"] == "not_available"
+    assert all(path.startswith("$") for path in first_diagnostics["missing_required_fields"])
+    persisted = fallback_path.read_text(encoding="utf-8")
+    assert valid_content not in persisted
+    assert "test-only-key" not in persisted
+
+
+def test_fenced_compact_openrouter_json_records_extraction_without_storing_content(tmp_path):
+    compact_content = json.dumps(_compact_bundle())
+    fenced = f"```json\n{compact_content}\n```"
+    factory = _openrouter_adapter_factory(
+        lambda profile: {"choices": [{"message": {"content": fenced}}]},
+    )
+    fallback, fallback_path, receipt, _ = _fallback_runner(tmp_path, factory).run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "passed"
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    assert diagnostics["content_starts_with_markdown_fence"] is True
+    assert diagnostics["json_extraction_used"] is True
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert receipt is not None
+    assert compact_content not in fallback_path.read_text(encoding="utf-8")
+
+
+def test_compact_openrouter_fallback_continues_on_internal_normalization_failure(tmp_path, monkeypatch):
+    import content_factory.autopilot.creative_providers as provider_module
+
+    original_normalizer = provider_module.normalize_llm_creative_bundle
+
+    def conditional_normalizer(bundle, **kwargs):
+        if bundle.value["idea_summary"] == "trigger internal failure":
+            raise ValueError("test-only internal failure")
+        return original_normalizer(bundle, **kwargs)
+
+    monkeypatch.setattr(provider_module, "normalize_llm_creative_bundle", conditional_normalizer)
+    invalid = _compact_bundle()
+    invalid["idea_summary"] = "trigger internal failure"
+    valid = _compact_bundle()
+
+    def response_for_profile(profile):
+        content = invalid if profile.model_id == "openrouter-gemma-4-26b-free" else valid
+        return {"choices": [{"message": {"content": json.dumps(content)}}]}
+
+    fallback, _, receipt, _ = _fallback_runner(
+        tmp_path, _openrouter_adapter_factory(response_for_profile),
+    ).run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "passed"
+    assert fallback["total_attempts"] == 2
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is False
+    assert diagnostics["parse_error_type"] == "internal_schema_invalid"
+    assert receipt is not None
+
+
+def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp_path):
+    invalid = _compact_bundle()
+    invalid["angles"][0]["hook"] = "Seven generic words avoid every expected angle signal"
+    valid = _compact_bundle()
+
+    def response_for_profile(profile):
+        content = invalid if profile.model_id == "openrouter-gemma-4-26b-free" else valid
+        return {"choices": [{"message": {"content": json.dumps(content)}}]}
+
+    fallback, _, receipt, _ = _fallback_runner(
+        tmp_path, _openrouter_adapter_factory(response_for_profile),
+    ).run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "passed"
+    assert fallback["total_attempts"] == 2
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert diagnostics["parse_error_type"] == "quality_invalid"
+    assert receipt is not None
 
 
 @pytest.mark.parametrize("first_mode", ["malformed_json", "schema_invalid"])

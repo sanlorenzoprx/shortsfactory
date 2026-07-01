@@ -214,7 +214,7 @@ class CreativeAnglePackGenerator:
                 angle_pack_id=angle_pack_id,
                 prompt_prefix_hash=prompt_prefix_hash,
                 input_hash=input_hash,
-                output_hash=_sha256(raw_output),
+                output_hash="not_available",
                 gates=({
                     "gate_name": "online_provider_explicit",
                     "status": "fail",
@@ -240,7 +240,7 @@ class CreativeAnglePackGenerator:
                 context, [job.to_dict() for job in short_jobs],
             )
             raw_output["longform"] = raw_longform
-            output_hash = _sha256(raw_output)
+            output_hash = _sha256(raw_output) if raw_output else "not_available"
             pack = CreativeAnglePack(
                 angle_pack_id=angle_pack_id,
                 idea_id=idea.idea_id,
@@ -253,8 +253,12 @@ class CreativeAnglePackGenerator:
                 input_hash=input_hash,
                 output_hash=output_hash,
                 angles=angles,
+                idea_summary=getattr(self.provider, "idea_summary", None),
+                verdict_summary=getattr(self.provider, "verdict_summary", None),
             )
             longform = self._build_longform(raw_longform, short_jobs, angle_pack_id)
+            if self.provider.provider_type == "online_llm" and hasattr(self.provider, "mark_internal_schema_valid"):
+                self.provider.mark_internal_schema_valid()
             gates = evaluate_creative_pack(
                 pack=pack,
                 short_jobs=short_jobs,
@@ -263,7 +267,15 @@ class CreativeAnglePackGenerator:
                 online_provider_explicit=self.online_provider_explicit,
             )
         except (CreativeAngleContractError, CreativeProviderError, KeyError, TypeError, ValueError) as exc:
-            output_hash = _sha256(raw_output)
+            diagnostics = getattr(self.provider, "provider_diagnostics", {})
+            if (
+                self.provider.provider_type == "online_llm"
+                and diagnostics.get("compact_schema_valid")
+                and not diagnostics.get("internal_schema_valid")
+                and hasattr(self.provider, "mark_internal_schema_invalid")
+            ):
+                self.provider.mark_internal_schema_invalid(["$"])
+            output_hash = _sha256(raw_output) if raw_output else "not_available"
             error_text = str(exc).casefold()
             gate_name = (
                 "secret_redaction"
@@ -302,6 +314,13 @@ class CreativeAnglePackGenerator:
                 redacted_error=f"{type(exc).__name__}: provider output or transport failed validation",
             )
         if any(gate["blocking"] for gate in gates):
+            fatal_gate_names = {"secret_redaction", "no_platform_actions", "publishing_closed"}
+            if (
+                self.provider.provider_type == "online_llm"
+                and not any(gate["gate_name"] in fatal_gate_names and gate["status"] == "fail" for gate in gates)
+                and hasattr(self.provider, "mark_quality_invalid")
+            ):
+                self.provider.mark_quality_invalid()
             return self._write_receipt(
                 timestamp=timestamp,
                 angle_pack_id=angle_pack_id,
@@ -526,6 +545,7 @@ class CreativeAnglePackGenerator:
             youtube_api_called=False,
             videos_insert_called=False,
             schema_valid=schema_valid,
+            provider_diagnostics=dict(getattr(self.provider, "provider_diagnostics", {})),
             redacted_error=redacted_error,
             status=status,
             artifacts=artifacts,

@@ -69,13 +69,21 @@ through a direct `result`/`output`, an OpenAI-compatible
 `choices[0].message.content`, or `output_text` envelope. Provider-specific
 capabilities beyond the adapter contract are not assumed.
 
-Phase 5B.5B uses one `generate_creative_bundle` request per pack. Its prompt
-contains only the stable prefix, one LIT verdict object, required five-angle
-rubric, Ghost Town Test brand/audience context, and constraints requiring five
-shorts, one long-form plan, draft metadata, the canonical CTA, no publishing,
-and no invented claims. The output schema covers the complete bundle. Source
-receipt paths, local files, environment files, YouTube credentials, upload
-receipts, and repository secrets are never included.
+Phase 5B.5B.2 uses one compact `LLMCreativeBundleV1` request per attempt. The
+model supplies only idea/verdict summaries, five canonical angle text records,
+CTA text containing `GhostTownTest.com`, and a compact long-form plan. A safe
+quote-aware scanner accepts direct, fenced, or surrounded JSON. Deterministic
+code then supplies canonical CTA, internal IDs, metadata defaults, timestamps,
+analytics placeholders, receipt references, hashes, and safety flags. The
+existing internal schema and quality gates still decide whether the attempt is
+accepted.
+
+Receipts record safe diagnostics only: HTTP status, selected model/provider,
+whether content exists, trimmed length, JSON/fence prefixes, extraction use,
+stable parse error code, compact/internal schema status, missing field paths,
+and schema error count. Full content, raw envelopes, headers, API keys, and
+reasoning details are not persisted. Failed attempts use `output_hash:
+not_available` until sanitized internal output exists.
 
 ## Fail-closed behavior
 

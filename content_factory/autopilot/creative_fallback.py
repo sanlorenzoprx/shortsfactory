@@ -152,6 +152,7 @@ class CreativeFallbackRunner:
             "raw_response_stored": False,
             "reasoning_details_stored": False,
             "stream_enabled": False,
+            "provider_diagnostics": dict(receipt.provider_diagnostics),
         }
 
     @staticmethod
@@ -180,6 +181,11 @@ class CreativeFallbackRunner:
             row["provider_reported_cost"] for row in attempts
             if isinstance(row["provider_reported_cost"], (int, float))
         ]
+        diagnostics = (
+            dict(selected_receipt.provider_diagnostics)
+            if selected_receipt is not None
+            else dict(attempts[-1]["provider_diagnostics"]) if attempts else {}
+        )
         return {
             "receipt_version": FALLBACK_RECEIPT_VERSION,
             "timestamp": timestamp,
@@ -202,5 +208,7 @@ class CreativeFallbackRunner:
             "raw_response_stored": False,
             "reasoning_details_stored": False,
             "stream_enabled": False,
+            "provider_diagnostics": diagnostics,
+            **diagnostics,
             "configuration_error": configuration_error,
         }

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,6 +17,10 @@ from content_factory.autopilot.llm_provider_adapters import (
     LLMAdapterError,
     LocalFixtureLLMAdapter,
     build_llm_adapter,
+)
+from content_factory.autopilot.json_extraction import (
+    extract_first_complete_json_object,
+    extract_openrouter_message_content,
 )
 
 
@@ -311,23 +316,143 @@ def test_chat_json_adapter_expands_base_url_without_network():
     assert adapter.network_called is False
 
 
+@pytest.mark.parametrize(
+    "response",
+    [
+        {"choices": [{"message": {"content": '{"ok": true}'}}]},
+        SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='{"ok": true}'))]),
+        SimpleNamespace(choices=[{"message": {"content": '{"ok": true}'}}]),
+        {"choices": [SimpleNamespace(message=SimpleNamespace(content='{"ok": true}'))]},
+    ],
+)
+def test_openrouter_message_content_extraction_supports_dict_and_sdk_shapes(response):
+    assert extract_openrouter_message_content(response) == '{"ok": true}'
+
+
+@pytest.mark.parametrize(
+    "content, extraction_used",
+    [
+        ('{"outer":{"text":"brace } in string","items":[1,2]}}', False),
+        ('```json\n{"ok":true}\n```', True),
+        ('```\n{"ok":true}\n```', True),
+        ('Here is JSON: {"ok":true} Thanks.', True),
+    ],
+)
+def test_safe_json_object_extraction_handles_direct_fenced_surrounded_and_nested(content, extraction_used):
+    value, diagnostics = extract_first_complete_json_object(content)
+    assert isinstance(value, dict)
+    assert diagnostics.json_extraction_used is extraction_used
+    assert diagnostics.parse_error_type is None
+
+
+@pytest.mark.parametrize(
+    "content, error_type",
+    [
+        ('{"ok":', "malformed_json"),
+        ('[{"ok": true}]', "malformed_json"),
+        ("No JSON here", "json_object_not_found"),
+        ("   ", "empty_provider_content"),
+    ],
+)
+def test_safe_json_object_extraction_blocks_invalid_content(content, error_type):
+    value, diagnostics = extract_first_complete_json_object(content)
+    assert value is None
+    assert diagnostics.parse_error_type == error_type
+
+
+def test_openrouter_empty_message_content_records_safe_diagnostics(monkeypatch):
+    profile = _registry().require("openrouter-free-router", require_json_schema=True)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    adapter = build_llm_adapter(
+        profile,
+        allow_network=True,
+        require_config=True,
+        transport=lambda **request: {"choices": [{"message": {"content": "  "}}]},
+    )
+    with pytest.raises(LLMAdapterError, match="empty_provider_content"):
+        adapter.generate_json("prompt", {"type": "object"}, profile)
+    diagnostics = adapter.provider_diagnostics.to_dict()
+    assert diagnostics["content_present"] is False
+    assert diagnostics["content_length"] == 0
+    assert diagnostics["parse_error_type"] == "empty_provider_content"
+    assert "content" not in diagnostics
+
+
+def test_openrouter_rate_limit_records_stable_safe_error(monkeypatch):
+    profile = _registry().require("openrouter-free-router", require_json_schema=True)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+
+    class RateLimitedResponse:
+        status_code = 429
+
+        def raise_for_status(self):
+            raise RuntimeError("provider detail must not be persisted")
+
+    adapter = build_llm_adapter(
+        profile,
+        allow_network=True,
+        require_config=True,
+        transport=lambda **request: RateLimitedResponse(),
+    )
+    with pytest.raises(LLMAdapterError, match="generic HTTP LLM request failed"):
+        adapter.generate_json("prompt", {"type": "object"}, profile)
+    diagnostics = adapter.provider_diagnostics.to_dict()
+    assert diagnostics["provider_http_status"] == 429
+    assert diagnostics["parse_error_type"] == "rate_limited"
+    assert "detail" not in json.dumps(diagnostics)
+
+
+def test_openrouter_diagnostics_refuse_unsafe_provider_identifiers(monkeypatch):
+    profile = _registry().require("openrouter-free-router", require_json_schema=True)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    adapter = build_llm_adapter(
+        profile,
+        allow_network=True,
+        require_config=True,
+        transport=lambda **request: {
+            "choices": [{"message": {"content": '{"ok": true}'}}],
+            "model": "api_key=must-not-store",
+            "provider": "openrouter\r\nunsafe",
+        },
+    )
+    assert adapter.generate_json("prompt", {"type": "object"}, profile) == {"ok": True}
+    diagnostics = adapter.provider_diagnostics.to_dict()
+    assert diagnostics["provider_selected_model"] == profile.provider_model
+    assert diagnostics["provider_selected_provider"] == profile.provider
+    assert "must-not-store" not in json.dumps(diagnostics)
+
+
 def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(monkeypatch):
     profile = _registry().require("openrouter-free-router", require_json_schema=True)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     requests = []
 
+    class FakeResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": '{"ok": true}',
+                        "reasoning_details": [{"type": "hidden", "text": "do not retain"}],
+                    },
+                }],
+                "model": "openrouter/free",
+                "provider": "openrouter",
+                "usage": {"total_tokens": 12, "cost": 0.00125},
+            }
+
     def transport(**request):
         requests.append(request)
-        return {
-            "choices": [{
-                "message": {
-                    "content": '{"ok": true}',
-                    "reasoning_details": [{"type": "hidden", "text": "do not retain"}],
-                },
-            }],
-            "usage": {"total_tokens": 12, "cost": 0.00125},
-        }
+        return FakeResponse()
 
     adapter = build_llm_adapter(
         profile,
@@ -355,10 +480,15 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
     assert request["json"]["max_tokens"] == 4000
     assert request["json"]["stream"] is False
     assert request["json"]["messages"][0] == {
-        "role": "system", "content": "Return strict JSON only. No markdown. No explanation.",
+        "role": "system",
+        "content": "Return one JSON object only. No markdown. No explanation. No reasoning. No comments.",
     }
     assert "reasoning" not in request["json"]
     assert "response_format" not in request["json"]
     assert "reasoning_details" not in json.dumps(result)
     assert adapter.raw_response_stored is False
     assert adapter.provider_reported_cost == 0.00125
+    diagnostics = adapter.provider_diagnostics.to_dict()
+    assert diagnostics["provider_http_status"] == 200
+    assert diagnostics["provider_selected_model"] == "openrouter/free"
+    assert diagnostics["provider_selected_provider"] == "openrouter"

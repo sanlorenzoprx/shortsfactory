@@ -40,6 +40,7 @@ class CreativeGenerationProvider(ABC):
     estimated_cost: float | None = None
     provider_reported_cost: float | None = None
     raw_response_stored: bool = False
+    provider_diagnostics: dict[str, Any] = {}
 
     @abstractmethod
     def generate_angle_pack(self, context: CreativeGenerationContext) -> list[JsonDict]:

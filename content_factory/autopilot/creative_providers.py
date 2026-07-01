@@ -7,6 +7,13 @@ from typing import Any
 from .creative_generation_provider import CreativeGenerationContext, CreativeGenerationProvider, JsonDict
 from .llm_model_registry import LLMModelProfile
 from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter
+from .llm_bundle_normalizer import normalize_llm_creative_bundle
+from .llm_bundle_schema import (
+    LLM_CREATIVE_BUNDLE_V1_JSON_SCHEMA,
+    LLMBundleValidationError,
+    LLMCreativeBundleV1,
+    REQUIRED_ANGLE_IDS,
+)
 
 
 CTA = "Test your business idea at GhostTownTest.com."
@@ -317,6 +324,8 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         self.model_profile_hash = profile.profile_hash
         self.adapter_type = adapter.adapter_type
         self._bundle: JsonDict | None = None
+        self.idea_summary: str | None = None
+        self.verdict_summary: str | None = None
 
     @property
     def network_called(self) -> bool:
@@ -349,6 +358,23 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
     @property
     def provider_reported_cost(self) -> float | None:
         return self.adapter.provider_reported_cost
+
+    @property
+    def provider_diagnostics(self) -> JsonDict:
+        return self.adapter.provider_diagnostics.to_dict()
+
+    def mark_internal_schema_valid(self) -> None:
+        self.adapter.provider_diagnostics.internal_schema_valid = True
+        self.adapter.provider_diagnostics.parse_error_type = None
+        self.adapter.provider_diagnostics.missing_required_fields = []
+        self.adapter.provider_diagnostics.schema_error_count = 0
+
+    def mark_internal_schema_invalid(self, paths: list[str] | None = None) -> None:
+        self.adapter.provider_diagnostics.internal_schema_valid = False
+        self.adapter.provider_diagnostics.record_schema_failure("internal_schema_invalid", paths or ["$"])
+
+    def mark_quality_invalid(self) -> None:
+        self.adapter.provider_diagnostics.parse_error_type = "quality_invalid"
 
     def _call(self, task: str, payload: JsonDict, schema: JsonDict) -> Any:
         prompt = json.dumps(
@@ -407,9 +433,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
 
     def _ensure_bundle(self, context: CreativeGenerationContext) -> JsonDict:
         if self._bundle is None:
-            value = self._call(
-                "generate_creative_bundle",
-                {
+            payload = {
                     "lit_verdict_id": context.lit_verdict_id,
                     "lit_verdict": context.verdict_record.verdict,
                     "required_angles": list(ANGLE_RUBRIC),
@@ -429,13 +453,89 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
                         "external_claims_allowed": False,
                         "invented_facts_allowed": False,
                     },
-                },
-                self._bundle_schema(),
-            )
+                }
+            if self.profile.provider == "openrouter" and self.adapter.adapter_type == "generic_http":
+                try:
+                    compact_value = self.adapter.generate_json(
+                        self._compact_prompt(context),
+                        LLM_CREATIVE_BUNDLE_V1_JSON_SCHEMA,
+                        self.profile,
+                    )
+                    compact = LLMCreativeBundleV1.validate(compact_value)
+                    self.idea_summary = compact.value["idea_summary"]
+                    self.verdict_summary = compact.value["verdict_summary"]
+                    self.adapter.provider_diagnostics.compact_schema_valid = True
+                    value = normalize_llm_creative_bundle(
+                        compact,
+                        angle_rubric=ANGLE_RUBRIC,
+                        canonical_cta=CTA,
+                    )
+                    self.adapter.validate_json_schema(value, self._bundle_schema())
+                except LLMBundleValidationError as exc:
+                    self.adapter.provider_diagnostics.compact_schema_valid = False
+                    self.adapter.provider_diagnostics.record_schema_failure("compact_schema_invalid", exc.paths)
+                    raise CreativeProviderError("LLM compact creative bundle is invalid") from exc
+                except LLMAdapterError as exc:
+                    if self.adapter.provider_diagnostics.compact_schema_valid:
+                        self.mark_internal_schema_invalid(["$"])
+                    elif (
+                        self.adapter.provider_diagnostics.content_present
+                        and self.adapter.provider_diagnostics.parse_error_type is None
+                    ):
+                        self.adapter.provider_diagnostics.record_schema_failure(
+                            "compact_schema_invalid", ["$"],
+                        )
+                    raise CreativeProviderError(f"LLM adapter rejected generate_creative_bundle: {exc}") from exc
+                except (KeyError, TypeError, ValueError) as exc:
+                    self.mark_internal_schema_invalid(["$"])
+                    raise CreativeProviderError("LLM compact bundle normalization failed") from exc
+            else:
+                value = self._call("generate_creative_bundle", payload, self._bundle_schema())
             if not isinstance(value, dict):
                 raise CreativeProviderError("online creative bundle is invalid")
             self._bundle = value
         return self._bundle
+
+    @staticmethod
+    def _compact_prompt(context: CreativeGenerationContext) -> str:
+        required_ids = "\n".join(f"- {angle_id}" for angle_id in REQUIRED_ANGLE_IDS)
+        schema_example = {
+            "idea_summary": "...",
+            "verdict_summary": "...",
+            "cta": "Run your idea through the Ghost Town Test at GhostTownTest.com",
+            "angles": [{
+                "angle_id": "ghost_town_risk",
+                "title": "...",
+                "hook": "...",
+                "script": "...",
+                "caption": "...",
+                "thumbnail_text": "...",
+                "tags": ["..."],
+                "hashtags": ["..."],
+            }],
+            "longform": {
+                "title": "...",
+                "intro": "...",
+                "chapters": [{"angle_id": "ghost_town_risk", "title": "...", "summary": "..."}],
+                "transitions": ["..."],
+                "conclusion": "...",
+                "description": "...",
+            },
+        }
+        return (
+            "Generate a Ghost Town Test creative bundle for this LIT verdict using exactly the compact schema.\n\n"
+            "Rules:\n"
+            "- exactly five angles\n"
+            "- required angle IDs only\n"
+            "- include GhostTownTest.com CTA\n"
+            "- no external facts beyond the LIT verdict\n"
+            "- no publishing instructions\n"
+            "- no YouTube API instructions\n"
+            "- JSON only\n\n"
+            f"Required angle IDs:\n{required_ids}\n\n"
+            f"Compact schema:\n{json.dumps(schema_example, ensure_ascii=False, indent=2)}\n\n"
+            f"LIT verdict:\n{json.dumps(context.verdict_record.verdict, ensure_ascii=False, sort_keys=True)}"
+        )
 
     def _short(self, context: CreativeGenerationContext, angle: JsonDict) -> JsonDict:
         shorts = self._ensure_bundle(context).get("shorts", {})
