@@ -343,6 +343,8 @@ def test_safe_json_object_extraction_handles_direct_fenced_surrounded_and_nested
     assert isinstance(value, dict)
     assert diagnostics.json_extraction_used is extraction_used
     assert diagnostics.parse_error_type is None
+    assert diagnostics.parse_stage == "json_loads"
+    assert diagnostics.extracted_json_length > 0
 
 
 @pytest.mark.parametrize(
@@ -350,7 +352,7 @@ def test_safe_json_object_extraction_handles_direct_fenced_surrounded_and_nested
     [
         ('{"ok":', "malformed_json"),
         ('[{"ok": true}]', "malformed_json"),
-        ("No JSON here", "json_object_not_found"),
+        ("No JSON here", "malformed_json"),
         ("   ", "empty_provider_content"),
     ],
 )
@@ -358,6 +360,49 @@ def test_safe_json_object_extraction_blocks_invalid_content(content, error_type)
     value, diagnostics = extract_first_complete_json_object(content)
     assert value is None
     assert diagnostics.parse_error_type == error_type
+
+
+def test_json_loads_failure_records_safe_parser_location_and_trailing_comma():
+    value, diagnostics = extract_first_complete_json_object('{\n  "ok": true,\n}')
+
+    assert value is None
+    assert diagnostics.parse_error_type == "malformed_json"
+    assert diagnostics.parse_stage == "json_loads"
+    assert diagnostics.json_parse_error_type == "trailing_comma"
+    assert diagnostics.json_parse_error_line == 3
+    assert diagnostics.json_parse_error_column == 1
+    assert isinstance(diagnostics.json_parse_error_position, int)
+    assert diagnostics.extracted_json_starts_with_object is True
+    assert diagnostics.extracted_json_ends_with_object is True
+    assert diagnostics.likely_truncated is False
+
+
+def test_json_extraction_failure_and_truncation_are_classified_without_content():
+    value, extraction = extract_first_complete_json_object("plain text only")
+    truncated_value, truncated = extract_first_complete_json_object('{"script":"private marker"')
+
+    assert value is None
+    assert extraction.parse_error_type == "malformed_json"
+    assert extraction.parse_stage == "json_extraction"
+    assert extraction.json_parse_error_type == "extraction_failed"
+    assert extraction.extracted_json_length == 0
+    assert truncated_value is None
+    assert truncated.parse_stage == "json_loads"
+    assert truncated.json_parse_error_type == "unexpected_end_of_json"
+    assert truncated.likely_truncated is True
+    assert truncated.json_parse_error_line == 1
+    assert truncated.json_parse_error_column > 0
+    assert "private marker" not in json.dumps(truncated.__dict__)
+
+
+def test_multiple_json_objects_and_markdown_fences_are_detected_safely():
+    value, diagnostics = extract_first_complete_json_object('```json\n{"ok":true}\n``` {"second":true}')
+
+    assert value == {"ok": True}
+    assert diagnostics.json_extraction_used is True
+    assert diagnostics.markdown_fence_detected is True
+    assert diagnostics.multiple_json_objects_detected is True
+    assert diagnostics.trailing_text_after_json_detected is True
 
 
 def test_openrouter_empty_message_content_records_safe_diagnostics(monkeypatch):
@@ -376,6 +421,7 @@ def test_openrouter_empty_message_content_records_safe_diagnostics(monkeypatch):
     assert diagnostics["content_present"] is False
     assert diagnostics["content_length"] == 0
     assert diagnostics["parse_error_type"] == "empty_provider_content"
+    assert diagnostics["parse_stage"] == "content_extraction"
     assert "content" not in diagnostics
 
 
@@ -480,10 +526,22 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
     assert request["json"]["temperature"] == 0.2
     assert request["json"]["max_tokens"] == 4000
     assert request["json"]["stream"] is False
-    assert request["json"]["messages"][0] == {
-        "role": "system",
-        "content": "Return one JSON object only. No markdown. No explanation. No reasoning. No comments.",
-    }
+    system_prompt = request["json"]["messages"][0]
+    assert system_prompt["role"] == "system"
+    for instruction in (
+        "Return exactly one valid JSON object.",
+        "No markdown.",
+        "No comments.",
+        "No trailing commas.",
+        "No extra text before or after JSON.",
+        "Use double quotes for every key and string.",
+        "Escape all quotes inside string values.",
+        "Do not use literal newlines inside string values.",
+        "Use \\n inside strings if needed.",
+        "Do not include code fences.",
+        "Do not include reasoning.",
+    ):
+        assert instruction in system_prompt["content"]
     assert "reasoning" not in request["json"]
     assert "response_format" not in request["json"]
     assert "reasoning_details" not in json.dumps(result)

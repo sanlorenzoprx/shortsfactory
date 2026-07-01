@@ -279,6 +279,11 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert receipt.youtube_api_called is False
     assert len(calls) == 1
     assert calls[0]["json"]["stream"] is False
+    compact_prompt = calls[0]["json"]["messages"][1]["content"]
+    assert "Keep each script under 900 characters." in compact_prompt
+    assert "Keep each caption under 280 characters." in compact_prompt
+    assert "Keep each longform chapter summary under 300 characters." in compact_prompt
+    assert "Return compact JSON only using the LLMCreativeBundleV1 schema." in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
 
@@ -378,6 +383,8 @@ def test_compact_openrouter_fallback_records_safe_failure_then_stops_on_normaliz
     if expected_error == "compact_schema_invalid":
         assert first_diagnostics["schema_error_type"] == expected_error
         assert first_diagnostics["parse_error_type"] is None
+        assert first_diagnostics["parse_stage"] == "compact_schema"
+        assert first_diagnostics["json_parse_error_type"] is None
     else:
         assert first_diagnostics["parse_error_type"] == expected_error
     assert first_diagnostics["internal_schema_valid"] is False
@@ -407,11 +414,59 @@ def test_fenced_compact_openrouter_json_records_extraction_without_storing_conte
     assert fallback["status"] == "passed"
     diagnostics = fallback["attempts"][0]["provider_diagnostics"]
     assert diagnostics["content_starts_with_markdown_fence"] is True
+    assert diagnostics["markdown_fence_detected"] is True
     assert diagnostics["json_extraction_used"] is True
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is True
     assert receipt is not None
     assert compact_content not in fallback_path.read_text(encoding="utf-8")
+
+
+def test_malformed_json_receipt_records_safe_parse_diagnostics_without_content(tmp_path):
+    markers = (
+        "private-script-marker-must-not-store",
+        "private-caption-marker-must-not-store",
+        "private-longform-marker-must-not-store",
+    )
+    malformed = (
+        '{\n  "script": "' + markers[0] + '",\n'
+        '  "caption": "' + markers[1] + '",\n'
+        '  "longform": "' + markers[2] + '",\n}'
+    )
+    runner = _fallback_runner(
+        tmp_path,
+        _openrouter_adapter_factory(
+            lambda profile: {"choices": [{"message": {"content": malformed}}]},
+        ),
+    )
+
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    persisted = fallback_path.read_text(encoding="utf-8")
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 5
+    assert receipt is None and generator is None
+    assert diagnostics["parse_error_type"] == "malformed_json"
+    assert diagnostics["parse_stage"] == "json_loads"
+    assert diagnostics["json_parse_error_type"] == "trailing_comma"
+    assert diagnostics["json_parse_error_line"] == 5
+    assert diagnostics["json_parse_error_column"] == 1
+    assert isinstance(diagnostics["json_parse_error_position"], int)
+    assert diagnostics["extracted_json_length"] == len(malformed)
+    assert diagnostics["likely_truncated"] is False
+    assert diagnostics["compact_schema_valid"] is False
+    assert diagnostics["internal_schema_valid"] is False
+    assert diagnostics["quality_valid"] is False
+    assert '"content_snippet"' not in persisted
+    assert '"raw_content"' not in persisted
+    assert '"extracted_json"' not in persisted
+    assert all(marker not in persisted for marker in markers)
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
 
 
 def test_compact_openrouter_fallback_continues_on_internal_normalization_failure(tmp_path, monkeypatch):

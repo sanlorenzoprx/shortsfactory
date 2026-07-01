@@ -576,9 +576,12 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             "- no external facts beyond the LIT verdict\n"
             "- no publishing instructions\n"
             "- no YouTube API instructions\n"
-            "- JSON only\n\n"
+            "- Keep each script under 900 characters.\n"
+            "- Keep each caption under 280 characters.\n"
+            "- Keep each longform chapter summary under 300 characters.\n"
+            "- Return compact JSON only using the LLMCreativeBundleV1 schema.\n\n"
             f"Required angle IDs:\n{required_ids}\n\n"
-            f"Compact schema:\n{json.dumps(schema_example, ensure_ascii=False, indent=2)}\n\n"
+            f"Compact schema:\n{json.dumps(schema_example, ensure_ascii=False, separators=(',', ':'))}\n\n"
             f"LIT verdict:\n{json.dumps(context.verdict_record.verdict, ensure_ascii=False, sort_keys=True)}"
         )
 

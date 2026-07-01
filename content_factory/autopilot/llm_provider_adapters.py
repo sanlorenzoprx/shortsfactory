@@ -24,6 +24,19 @@ SECRET_PATTERN = re.compile(
 )
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
 SAFE_PROVIDER_IDENTIFIER = re.compile(r"^[A-Za-z0-9._:/-]{1,200}$")
+STRICT_JSON_SYSTEM_PROMPT = (
+    "Return exactly one valid JSON object.\n"
+    "No markdown.\n"
+    "No comments.\n"
+    "No trailing commas.\n"
+    "No extra text before or after JSON.\n"
+    "Use double quotes for every key and string.\n"
+    "Escape all quotes inside string values.\n"
+    "Do not use literal newlines inside string values.\n"
+    "Use \\n inside strings if needed.\n"
+    "Do not include code fences.\n"
+    "Do not include reasoning."
+)
 
 
 class LLMAdapterError(RuntimeError):
@@ -390,7 +403,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             "messages": [
                 {
                     "role": "system",
-                    "content": "Return one JSON object only. No markdown. No explanation. No reasoning. No comments.",
+                    "content": STRICT_JSON_SYSTEM_PROMPT,
                 },
                 {"role": "user", "content": prompt},
             ],
@@ -466,9 +479,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             if not self.provider_diagnostics.content_present:
                 raise LLMAdapterError("empty_provider_content")
             value, extraction = extract_first_complete_json_object(content or "")
-            self.provider_diagnostics.json_extraction_used = extraction.json_extraction_used
-            if extraction.parse_error_type is not None:
-                self.provider_diagnostics.record_parse_failure(extraction.parse_error_type)
+            self.provider_diagnostics.record_json_extraction(extraction)
             if value is None:
                 raise LLMAdapterError(extraction.parse_error_type or "malformed_json")
         else:

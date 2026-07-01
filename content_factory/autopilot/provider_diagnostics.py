@@ -16,6 +16,22 @@ class ProviderContentDiagnostics:
     content_starts_with_markdown_fence: bool = False
     json_extraction_used: bool = False
     parse_error_type: str | None = None
+    json_parse_error_type: str | None = None
+    json_parse_error_line: int | None = None
+    json_parse_error_column: int | None = None
+    json_parse_error_position: int | None = None
+    extracted_json_length: int = 0
+    extracted_json_starts_with_object: bool = False
+    extracted_json_ends_with_object: bool = False
+    brace_balance_delta: int = 0
+    bracket_balance_delta: int = 0
+    quote_count_parity_even: bool = True
+    contains_control_characters: bool = False
+    likely_truncated: bool = False
+    multiple_json_objects_detected: bool = False
+    trailing_text_after_json_detected: bool = False
+    markdown_fence_detected: bool = False
+    parse_stage: str | None = None
     schema_error_type: str | None = None
     compact_schema_valid: bool = False
     internal_schema_valid: bool = False
@@ -46,6 +62,7 @@ class ProviderContentDiagnostics:
         self.content_starts_with_json = trimmed.startswith("{")
         self.content_starts_with_markdown_fence = trimmed.startswith("```")
         if not trimmed:
+            self.parse_stage = "content_extraction"
             self.record_parse_failure("empty_provider_content")
 
     def record_provider_failure(self, error_type: str) -> None:
@@ -53,6 +70,13 @@ class ProviderContentDiagnostics:
         self.final_block_reason = error_type
 
     def record_schema_failure(self, error_type: str, paths: list[str]) -> None:
+        if error_type == "compact_schema_invalid":
+            self.parse_error_type = None
+            self.json_parse_error_type = None
+            self.json_parse_error_line = None
+            self.json_parse_error_column = None
+            self.json_parse_error_position = None
+            self.parse_stage = "compact_schema"
         self.schema_error_type = error_type
         self.missing_required_fields = sorted(set(paths))
         self.schema_error_count = len(paths)
@@ -61,6 +85,20 @@ class ProviderContentDiagnostics:
     def record_parse_failure(self, error_type: str) -> None:
         self.parse_error_type = error_type
         self.final_block_reason = error_type
+
+    def record_json_extraction(self, diagnostics: Any) -> None:
+        for name in (
+            "json_extraction_used", "parse_error_type", "json_parse_error_type",
+            "json_parse_error_line", "json_parse_error_column", "json_parse_error_position",
+            "extracted_json_length", "extracted_json_starts_with_object",
+            "extracted_json_ends_with_object", "brace_balance_delta", "bracket_balance_delta",
+            "quote_count_parity_even", "contains_control_characters", "likely_truncated",
+            "multiple_json_objects_detected", "trailing_text_after_json_detected",
+            "markdown_fence_detected", "parse_stage",
+        ):
+            setattr(self, name, getattr(diagnostics, name))
+        if self.parse_error_type is not None:
+            self.final_block_reason = self.parse_error_type
 
     def record_quality_result(
         self,
