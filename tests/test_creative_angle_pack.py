@@ -27,6 +27,12 @@ from content_factory.autopilot.llm_model_registry import LLMModelRegistry
 from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter, GenericHTTPAdapter, build_llm_adapter
 from content_factory.autopilot.llm_bundle_normalizer import normalize_llm_creative_bundle
 from content_factory.autopilot.llm_bundle_schema import LLMBundleValidationError, LLMCreativeBundleV1
+from content_factory.autopilot.verdict_grounding import (
+    EXTERNAL_FACT_CATEGORIES,
+    build_verdict_grounding_packet,
+    classify_external_fact_signals,
+    grounding_packet_diagnostics,
+)
 
 
 FIXTURE = Path("fixtures/lit_verdicts/sample.json")
@@ -170,6 +176,74 @@ def _compact_bundle_with_verdict_grounding_failure(mode: str):
     else:
         raise AssertionError(f"unsupported grounding test mode: {mode}")
     return value, angle["angle_id"]
+
+
+def test_grounding_packet_is_compact_verdict_derived_and_safely_counted():
+    verdict = json.loads(FIXTURE.read_text(encoding="utf-8"))["verdict"]
+    packet = build_verdict_grounding_packet(verdict)
+    diagnostics = grounding_packet_diagnostics(packet)
+    verdict_text = json.dumps(verdict, ensure_ascii=False).casefold()
+
+    assert packet["idea_label"] is None
+    assert packet["idea_summary"] is None
+    assert packet["verdict_label"] == verdict["verdict_headline"]
+    assert packet["verdict_summary"] == verdict["top_reason"]
+    for field in (
+        "target_buyer_terms", "problem_terms", "pain_terms", "risk_terms",
+        "validation_action_terms", "opportunity_terms", "verdict_signal_terms",
+    ):
+        assert packet[field]
+        assert all(term in verdict_text for term in packet[field])
+    assert packet["forbidden_external_fact_categories"] == list(EXTERNAL_FACT_CATEGORIES)
+    assert diagnostics["grounding_packet_present"] is True
+    assert diagnostics["grounding_packet_field_count"] == len(packet)
+    assert diagnostics["grounding_packet_missing_fields"] == ["idea_label", "idea_summary"]
+    assert diagnostics["grounding_terms_count"] > 0
+    assert diagnostics["target_buyer_terms_count"] == len(packet["target_buyer_terms"])
+    assert diagnostics["pain_terms_count"] == len(packet["pain_terms"])
+    assert diagnostics["validation_action_terms_count"] == len(packet["validation_action_terms"])
+    assert verdict["top_reason"] not in json.dumps(diagnostics, ensure_ascii=False)
+    assert all(
+        value is None or not isinstance(value, str) or len(value) <= 240
+        for value in packet.values()
+    )
+
+
+@pytest.mark.parametrize(
+    "claim, expected_category",
+    [
+        ("The market size is a billion-dollar opportunity.", "unsupported_market_claim"),
+        ("Fortune 500 teams are the ideal customers.", "unsupported_buyer_claim"),
+        ("The conversion rate will reach 40%.", "unsupported_metric_claim"),
+        ("This will produce $50000 in revenue.", "unsupported_revenue_claim"),
+        ("Launch this through TikTok immediately.", "unsupported_platform_claim"),
+        ("Demand will be proven within 30 days.", "unsupported_timing_claim"),
+        ("Unlike Acme, this competitor cannot respond.", "unsupported_competitor_claim"),
+        ("This idea is guaranteed to work.", "unsupported_guarantee_claim"),
+        ("This already has proven demand.", "unsupported_outcome_claim"),
+        ("Acme Corp will become the buyer.", "unknown_entity_signal"),
+    ],
+)
+def test_external_fact_classifier_returns_allowlisted_categories_only(claim, expected_category):
+    verdict = json.loads(FIXTURE.read_text(encoding="utf-8"))["verdict"]
+    packet = build_verdict_grounding_packet(verdict)
+
+    categories = classify_external_fact_signals(claim, packet)
+
+    assert expected_category in categories
+    assert set(categories).issubset(EXTERNAL_FACT_CATEGORIES)
+
+
+def test_external_fact_classifier_allows_verdict_and_required_project_terms():
+    verdict = json.loads(FIXTURE.read_text(encoding="utf-8"))["verdict"]
+    packet = build_verdict_grounding_packet(verdict)
+    supported = (
+        "The LIT verdict says contractor owners may refuse another standalone tool. "
+        "A builder can run a Ghost Town Test validation test for the buyer, market, idea, risk, demand signal, and MVP. "
+        "Visit GhostTownTest.com."
+    )
+
+    assert classify_external_fact_signals(supported, packet) == []
 
 
 def test_deterministic_provider_generates_exactly_five_unique_angles(tmp_path):
@@ -330,6 +404,18 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is True
     assert diagnostics["schema_error_count"] == 0
+    assert diagnostics["grounding_packet_present"] is True
+    assert diagnostics["grounding_packet_field_count"] == 12
+    assert diagnostics["grounding_packet_missing_fields"] == ["idea_label", "idea_summary"]
+    assert diagnostics["grounding_terms_count"] > 0
+    assert diagnostics["target_buyer_terms_count"] > 0
+    assert diagnostics["pain_terms_count"] > 0
+    assert diagnostics["risk_terms_count"] > 0
+    assert diagnostics["validation_action_terms_count"] > 0
+    assert diagnostics["verdict_signal_terms_count"] > 0
+    assert diagnostics["opportunity_terms_count"] > 0
+    assert diagnostics["external_fact_error_type"] is None
+    assert diagnostics["external_fact_failed_angle_ids"] == []
     assert receipt.secrets_recorded is False
     assert receipt.publish_attempted is False
     assert receipt.youtube_api_called is False
@@ -359,6 +445,11 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert "fast_validation_test: name one fast test before building more and what result would prove interest" in compact_prompt
     assert "contrarian_opportunity: identify the narrow buyer/user/use case" in compact_prompt
     assert "builder_action_plan: state the next concrete builder action" in compact_prompt
+    assert "Use only the grounding packet and the supplied LIT verdict." in compact_prompt
+    assert "Do not add industries, platforms, metrics, examples, customer segments, revenue, competitors, geography, market size, timing claims, or external facts unless they appear in the LIT verdict." in compact_prompt
+    assert "If a detail is missing, speak generally using buyer, market, validation test, builder action, idea, risk, or demand signal." in compact_prompt
+    assert "Do not invent specifics." in compact_prompt
+    assert "Grounding packet:" in compact_prompt
     assert "no external facts beyond the LIT verdict" in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
@@ -739,6 +830,19 @@ def test_verdict_grounding_failure_records_safe_angle_diagnostics(
     assert failed_angle_id not in diagnostics["verdict_grounding_passed_angle_ids"]
     assert len(diagnostics["verdict_grounding_passed_angle_ids"]) == 4
     assert diagnostics[count_field] == 1
+    if mode in {"generic_claim", "external_fact"}:
+        expected_category = (
+            "unsupported_guarantee_claim"
+            if mode == "generic_claim"
+            else "unsupported_metric_claim"
+        )
+        assert diagnostics["external_fact_error_type"] == expected_category
+        assert diagnostics["external_fact_failed_angle_ids"] == [failed_angle_id]
+        assert diagnostics["external_fact_signal_categories"] == [expected_category]
+        assert diagnostics["external_fact_category_counts"] == {expected_category: 1}
+    else:
+        assert diagnostics["external_fact_error_type"] is None
+        assert diagnostics["external_fact_failed_angle_ids"] == []
     assert failed_angle["hook"] not in diagnostics_json
     assert failed_angle["script"] not in diagnostics_json
     assert failed_angle["caption"] not in diagnostics_json

@@ -41,6 +41,7 @@ from .creative_providers import (
 )
 from .llm_model_registry import DEFAULT_LOCAL_PATH, LLMModelRegistry, LLMModelRegistryError
 from .llm_provider_adapters import LLMAdapterError, build_llm_adapter
+from .verdict_grounding import build_verdict_grounding_packet
 
 
 RECEIPT_VERSION = "phase5b.5b.real-online-llm-generation.v1"
@@ -491,6 +492,7 @@ class CreativeAnglePackGenerator:
         short_jobs: tuple[AngleShortJob, ...], source_verdict: dict[str, Any],
     ) -> list[dict[str, Any]]:
         summaries: list[dict[str, Any]] = []
+        grounding_packet = build_verdict_grounding_packet(source_verdict)
         for job in short_jobs:
             metadata_cta = str(job.youtube_metadata_draft.get("cta", ""))
             cta_values = (job.cta, job.script, job.caption, metadata_cta)
@@ -506,7 +508,7 @@ class CreativeAnglePackGenerator:
                     and all(job.cta in str(value) for value in cta_values)
                 ),
                 **buyer_pain_action_signals(job),
-                **verdict_grounding_signals(job, source_verdict),
+                **verdict_grounding_signals(job, source_verdict, grounding_packet),
                 **hook_specificity_signals(job, source_verdict),
             })
         return summaries

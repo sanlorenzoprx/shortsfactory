@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .verdict_grounding import EXTERNAL_FACT_CATEGORIES, GROUNDING_PACKET_FIELDS
+
 
 JsonDict = dict[str, Any]
 SAFE_DIAGNOSTIC_ANGLE_IDS = {
@@ -34,6 +36,7 @@ SAFE_HOOK_SPECIFICITY_ERRORS = {
     "missing_verdict_signal",
     "missing_hook_specificity",
 }
+SAFE_EXTERNAL_FACT_ERRORS = {None, "external_fact_signal", *EXTERNAL_FACT_CATEGORIES}
 
 
 class CreativeAngleContractError(ValueError):
@@ -314,6 +317,13 @@ class CreativeAnglePackReceipt:
             "hook_specificity_error_type", "hook_specificity_failed_angle_ids",
             "hook_specificity_passed_angle_ids", "generic_hook_count",
             "angle_mismatch_hook_count", "verdict_signal_missing_hook_count",
+            "grounding_packet_present", "grounding_packet_field_count",
+            "grounding_packet_missing_fields", "grounding_terms_count",
+            "target_buyer_terms_count", "pain_terms_count", "risk_terms_count",
+            "validation_action_terms_count", "verdict_signal_terms_count",
+            "opportunity_terms_count", "external_fact_error_type",
+            "external_fact_failed_angle_ids", "external_fact_signal_categories",
+            "external_fact_category_counts",
             "final_block_reason",
         }
         if set(self.provider_diagnostics) - allowed_diagnostics:
@@ -340,6 +350,7 @@ class CreativeAnglePackReceipt:
             "verdict_grounding_passed_angle_ids",
             "hook_specificity_failed_angle_ids",
             "hook_specificity_passed_angle_ids",
+            "external_fact_failed_angle_ids",
         ):
             angle_ids = self.provider_diagnostics.get(field_name, [])
             if not isinstance(angle_ids, list) or any(
@@ -352,6 +363,25 @@ class CreativeAnglePackReceipt:
             raise CreativeAngleContractError("provider diagnostics contain an unsafe verdict grounding error")
         if self.provider_diagnostics.get("hook_specificity_error_type") not in SAFE_HOOK_SPECIFICITY_ERRORS:
             raise CreativeAngleContractError("provider diagnostics contain an unsafe hook specificity error")
+        if self.provider_diagnostics.get("external_fact_error_type") not in SAFE_EXTERNAL_FACT_ERRORS:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe external fact error")
+        missing_packet_fields = self.provider_diagnostics.get("grounding_packet_missing_fields", [])
+        if not isinstance(missing_packet_fields, list) or any(
+            field_name not in GROUNDING_PACKET_FIELDS for field_name in missing_packet_fields
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe grounding packet fields")
+        external_categories = self.provider_diagnostics.get("external_fact_signal_categories", [])
+        if not isinstance(external_categories, list) or any(
+            category not in EXTERNAL_FACT_CATEGORIES for category in external_categories
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe external fact categories")
+        external_counts = self.provider_diagnostics.get("external_fact_category_counts", {})
+        if not isinstance(external_counts, dict) or any(
+            category not in EXTERNAL_FACT_CATEGORIES
+            or not isinstance(count, int) or isinstance(count, bool) or count < 0
+            for category, count in external_counts.items()
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe external fact counts")
         for field_name in (
             "buyer_signal_missing_count",
             "pain_signal_missing_count",
@@ -365,6 +395,14 @@ class CreativeAnglePackReceipt:
             "generic_hook_count",
             "angle_mismatch_hook_count",
             "verdict_signal_missing_hook_count",
+            "grounding_packet_field_count",
+            "grounding_terms_count",
+            "target_buyer_terms_count",
+            "pain_terms_count",
+            "risk_terms_count",
+            "validation_action_terms_count",
+            "verdict_signal_terms_count",
+            "opportunity_terms_count",
         ):
             count = self.provider_diagnostics.get(field_name, 0)
             if not isinstance(count, int) or isinstance(count, bool) or count < 0:

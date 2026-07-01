@@ -6,6 +6,7 @@ from typing import Any
 
 from .creative_angle_models import AngleShortJob, CreativeAnglePack, LongFormAssemblyPlan
 from .creative_providers import ANGLE_RUBRIC
+from .verdict_grounding import build_verdict_grounding_packet, classify_external_fact_signals
 
 
 SECRET_PATTERN = re.compile(
@@ -15,9 +16,6 @@ SECRET_PATTERN = re.compile(
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
 GENERIC_CLAIM_SIGNAL = re.compile(
     r"(?i)\b(guaranteed|definitely works?|risk[- ]free|everyone needs|will make money|proven revenue)\b"
-)
-EXTERNAL_FACT_SIGNAL = re.compile(
-    r"(?i)\$\s*\d|\b\d+(?:\.\d+)?%|\b(?:according to|research shows|studies show)\b"
 )
 FORBIDDEN_PLATFORM_ACTION = re.compile(
     r"(?i)(youtube\.googleapis\.com|videos\.insert|call\s+the\s+youtube\s+api|"
@@ -81,12 +79,13 @@ def _verdict_specific_tokens(source_verdict: dict[str, Any]) -> set[str]:
 
 
 def _job_grounding_text(job: AngleShortJob) -> str:
-    combined = f"{job.hook} {job.script} {job.caption} {job.thumbnail_text}".casefold()
-    canonical_cta = job.cta.strip().casefold()
-    return combined.replace(canonical_cta, " ") if canonical_cta else combined
+    combined = f"{job.hook} {job.script} {job.caption} {job.thumbnail_text}"
+    canonical_cta = job.cta.strip()
+    return re.sub(re.escape(canonical_cta), " ", combined, flags=re.IGNORECASE) if canonical_cta else combined
 
 
 def _angle_intent_present(job: AngleShortJob, text: str) -> bool:
+    text = text.casefold()
     buyer_present = any(signal in text for signal in BUYER_SIGNALS)
     pain_present = any(signal in text for signal in PAIN_SIGNALS)
     action_present = any(signal in text for signal in ACTION_SIGNALS)
@@ -107,16 +106,22 @@ def _angle_intent_present(job: AngleShortJob, text: str) -> bool:
     return False
 
 
-def verdict_grounding_signals(job: AngleShortJob, source_verdict: dict[str, Any]) -> dict[str, bool]:
+def verdict_grounding_signals(
+    job: AngleShortJob, source_verdict: dict[str, Any], grounding_packet: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     text = _job_grounding_text(job)
-    generated_tokens = set(WORD_PATTERN.findall(text)) - GENERIC_GROUNDING_TOKENS
+    folded = text.casefold()
+    generated_tokens = set(WORD_PATTERN.findall(folded)) - GENERIC_GROUNDING_TOKENS
     overlap = generated_tokens & _verdict_specific_tokens(source_verdict)
+    packet = grounding_packet or build_verdict_grounding_packet(source_verdict)
+    external_categories = classify_external_fact_signals(text, packet)
     return {
         "verdict_signal_present": len(overlap) >= 2,
-        "generic_claim_signal_present": bool(GENERIC_CLAIM_SIGNAL.search(text)),
-        "external_fact_signal_present": bool(EXTERNAL_FACT_SIGNAL.search(text)),
+        "generic_claim_signal_present": bool(GENERIC_CLAIM_SIGNAL.search(folded)),
+        "external_fact_signal_present": bool(external_categories),
+        "external_fact_signal_categories": external_categories,
         "idea_specificity_present": bool(overlap),
-        "angle_specificity_present": _angle_intent_present(job, text),
+        "angle_specificity_present": _angle_intent_present(job, folded),
     }
 
 
@@ -149,6 +154,7 @@ def evaluate_creative_pack(
 ) -> tuple[dict[str, Any], ...]:
     angle_ids = [angle.angle_id for angle in pack.angles]
     jobs_by_angle = {job.angle_id: job for job in short_jobs}
+    grounding_packet = build_verdict_grounding_packet(source_verdict)
     gates = [
         _gate(
             "exact_five_unique_angles",
@@ -198,7 +204,10 @@ def evaluate_creative_pack(
         "every short names buyer reality, pain/risk, and a concrete action",
         "missing buyer, pain, or action specificity: " + ", ".join(content_failures),
     ))
-    verdict_analyses = {job.angle_id: verdict_grounding_signals(job, source_verdict) for job in short_jobs}
+    verdict_analyses = {
+        job.angle_id: verdict_grounding_signals(job, source_verdict, grounding_packet)
+        for job in short_jobs
+    }
     claim_failures = [
         job.angle_id for job in short_jobs
         if not verdict_analyses[job.angle_id]["verdict_signal_present"]

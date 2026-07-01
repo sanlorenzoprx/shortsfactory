@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
+from .verdict_grounding import grounding_packet_diagnostics
+
 
 @dataclass
 class ProviderContentDiagnostics:
@@ -74,6 +76,20 @@ class ProviderContentDiagnostics:
     generic_hook_count: int = 0
     angle_mismatch_hook_count: int = 0
     verdict_signal_missing_hook_count: int = 0
+    grounding_packet_present: bool = False
+    grounding_packet_field_count: int = 0
+    grounding_packet_missing_fields: list[str] = field(default_factory=list)
+    grounding_terms_count: int = 0
+    target_buyer_terms_count: int = 0
+    pain_terms_count: int = 0
+    risk_terms_count: int = 0
+    validation_action_terms_count: int = 0
+    verdict_signal_terms_count: int = 0
+    opportunity_terms_count: int = 0
+    external_fact_error_type: str | None = None
+    external_fact_failed_angle_ids: list[str] = field(default_factory=list)
+    external_fact_signal_categories: list[str] = field(default_factory=list)
+    external_fact_category_counts: dict[str, int] = field(default_factory=dict)
     final_block_reason: str | None = None
 
     def record_content(self, content: str | None) -> None:
@@ -121,6 +137,10 @@ class ProviderContentDiagnostics:
         if self.parse_error_type is not None:
             self.final_block_reason = self.parse_error_type
 
+    def record_grounding_packet(self, packet: dict[str, Any]) -> None:
+        for name, value in grounding_packet_diagnostics(packet).items():
+            setattr(self, name, value)
+
     def record_quality_result(
         self,
         *,
@@ -166,6 +186,9 @@ class ProviderContentDiagnostics:
         generic_hooks = 0
         angle_mismatch_hooks = 0
         verdict_signal_missing_hooks = 0
+        external_fact_failed: list[str] = []
+        external_fact_categories: set[str] = set()
+        external_fact_category_counts: dict[str, int] = {}
         for summary in short_summaries:
             angle_id = str(summary.get("angle_id", "unknown"))
             if summary.get("script_present"):
@@ -204,11 +227,22 @@ class ProviderContentDiagnostics:
             verdict_present = bool(summary.get("verdict_signal_present"))
             generic_claim = bool(summary.get("generic_claim_signal_present"))
             external_fact = bool(summary.get("external_fact_signal_present"))
+            angle_external_categories = summary.get("external_fact_signal_categories", [])
+            angle_external_categories = (
+                angle_external_categories if isinstance(angle_external_categories, list) else []
+            )
             idea_specific = bool(summary.get("idea_specificity_present"))
             angle_specific = bool(summary.get("angle_specificity_present"))
             verdict_signal_missing += int(not verdict_present)
             generic_claim_signals += int(generic_claim)
             external_fact_signals += int(external_fact)
+            if angle_external_categories:
+                external_fact_failed.append(angle_id)
+            for category in angle_external_categories:
+                if not isinstance(category, str):
+                    continue
+                external_fact_categories.add(category)
+                external_fact_category_counts[category] = external_fact_category_counts.get(category, 0) + 1
             idea_specificity_missing += int(not idea_specific)
             angle_specificity_missing += int(not angle_specific)
             if verdict_present and not generic_claim and not external_fact and idea_specific and angle_specific:
@@ -275,6 +309,19 @@ class ProviderContentDiagnostics:
             generic_hooks=generic_hooks,
             angle_mismatch_hooks=angle_mismatch_hooks,
             verdict_signal_missing_hooks=verdict_signal_missing_hooks,
+        )
+        self.external_fact_failed_angle_ids = external_fact_failed
+        self.external_fact_signal_categories = sorted(external_fact_categories)
+        self.external_fact_category_counts = {
+            category: external_fact_category_counts[category]
+            for category in sorted(external_fact_category_counts)
+        }
+        self.external_fact_error_type = (
+            None
+            if not external_fact_categories
+            else next(iter(external_fact_categories))
+            if len(external_fact_categories) == 1
+            else "external_fact_signal"
         )
         self.quality_error_type = None if quality_valid else self._quality_error_type(
             failed_checks,
@@ -353,10 +400,10 @@ class ProviderContentDiagnostics:
     ) -> str | None:
         if failed_count == 0:
             return None
-        if external_fact_signals:
-            return "external_fact_signal"
         if generic_claim_signals:
             return "generic_claim_signal"
+        if external_fact_signals:
+            return "external_fact_signal"
         if verdict_signal_missing:
             return "missing_verdict_grounding"
         if idea_specificity_missing:

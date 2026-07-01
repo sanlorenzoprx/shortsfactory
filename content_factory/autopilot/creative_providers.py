@@ -14,6 +14,7 @@ from .llm_bundle_schema import (
     LLMCreativeBundleV1,
     REQUIRED_ANGLE_IDS,
 )
+from .verdict_grounding import build_verdict_grounding_packet
 
 
 CTA = "Test your business idea at GhostTownTest.com."
@@ -326,6 +327,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         self._bundle: JsonDict | None = None
         self.idea_summary: str | None = None
         self.verdict_summary: str | None = None
+        self._grounding_packet: JsonDict = {}
 
     @property
     def network_called(self) -> bool:
@@ -386,6 +388,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         longform_cta_present: bool,
         longform_ghosttowntest_cta_present: bool,
     ) -> None:
+        self.adapter.provider_diagnostics.record_grounding_packet(self._grounding_packet)
         self.adapter.provider_diagnostics.record_quality_result(
             quality_valid=quality_valid,
             gates=gates,
@@ -498,9 +501,10 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
                     },
                 }
             if self.profile.provider == "openrouter" and self.adapter.adapter_type == "generic_http":
+                self._grounding_packet = build_verdict_grounding_packet(context.verdict_record.verdict)
                 try:
                     compact_value = self.adapter.generate_json(
-                        self._compact_prompt(context),
+                        self._compact_prompt(context, self._grounding_packet),
                         LLM_CREATIVE_BUNDLE_V1_JSON_SCHEMA,
                         self.profile,
                     )
@@ -542,7 +546,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         return self._bundle
 
     @staticmethod
-    def _compact_prompt(context: CreativeGenerationContext) -> str:
+    def _compact_prompt(context: CreativeGenerationContext, grounding_packet: JsonDict) -> str:
         required_ids = "\n".join(f"- {angle_id}" for angle_id in REQUIRED_ANGLE_IDS)
         schema_example = {
             "idea_summary": "...",
@@ -588,6 +592,10 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             "- Every hook must connect to the verdict.\n"
             "- Every script must include buyer + pain + action.\n"
             "- Every thumbnail must be specific to the angle and verdict.\n"
+            "- Use only the grounding packet and the supplied LIT verdict.\n"
+            "- Do not add industries, platforms, metrics, examples, customer segments, revenue, competitors, geography, market size, timing claims, or external facts unless they appear in the LIT verdict.\n"
+            "- If a detail is missing, speak generally using buyer, market, validation test, builder action, idea, risk, or demand signal.\n"
+            "- Do not invent specifics.\n"
             "Angle intent:\n"
             "- ghost_town_risk: name the risk of building for people who may not care and include the verdict's market/buyer uncertainty\n"
             "- buyer_reality: confront whether a real buyer would pay, reply, book, switch, or act and name the buyer decision\n"
@@ -603,6 +611,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             "- Return compact JSON only using the LLMCreativeBundleV1 schema.\n\n"
             f"Required angle IDs:\n{required_ids}\n\n"
             f"Compact schema:\n{json.dumps(schema_example, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            f"Grounding packet:\n{json.dumps(grounding_packet, ensure_ascii=False, separators=(',', ':'))}\n\n"
             f"LIT verdict:\n{json.dumps(context.verdict_record.verdict, ensure_ascii=False, sort_keys=True)}"
         )
 
