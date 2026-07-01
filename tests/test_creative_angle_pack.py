@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -667,7 +668,7 @@ def test_openrouter_fallback_stops_on_secret_detection(tmp_path):
 
 
 def test_openrouter_fallback_missing_credentials_fails_closed_without_network(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-openrouter-key-must-not-store")
     monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
     calls = []
     monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
@@ -678,14 +679,162 @@ def test_openrouter_fallback_missing_credentials_fails_closed_without_network(tm
         now=lambda: NOW,
     )
     fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    persisted = fallback_path.read_text(encoding="utf-8")
 
     assert fallback["status"] == "blocked"
+    assert fallback["final_block_reason"] == "configuration_error"
     assert fallback["total_attempts"] == 0
     assert fallback["configuration_error"]
+    assert fallback["configuration_error_type"] == "missing_environment_variables"
+    assert fallback["configuration_error_stage"] == "environment_validation"
+    assert fallback["missing_environment_variable_names"] == ["OPENROUTER_BASE_URL"]
+    assert fallback["fallback_group_found"] is True
+    assert fallback["fallback_profile_count"] == 5
+    assert fallback["provider_profile_ids"] == [
+        "openrouter-gemma-4-26b-free",
+        "openrouter-gemma-4-31b-free",
+        "openrouter-llama-3-3-70b-free",
+        "openrouter-gpt-oss-120b-free",
+        "openrouter-free-router",
+    ]
+    assert fallback["online_provider_selected"] is True
+    assert fallback["remote_provider_allowed"] is True
+    assert fallback["local_provider_required"] is False
+    assert fallback["attempted_before_config_error"] is False
     assert fallback["network_called"] is False
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["videos_insert_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert fallback["supervised_autopilot_enabled"] is False
+    assert fallback["live_publishing_enabled"] is False
+    assert "test-only-openrouter-key-must-not-store" not in persisted
+    assert "Authorization" not in persisted
     assert fallback_path.is_file()
     assert receipt is None and generator is None
     assert calls == []
+
+
+def test_fallback_group_missing_is_diagnosed_safely_before_attempts(tmp_path):
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="missing-openrouter-chain",
+        output_root=tmp_path / "fallback output",
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    persisted = fallback_path.read_text(encoding="utf-8")
+
+    assert fallback["status"] == "blocked"
+    assert fallback["final_block_reason"] == "configuration_error"
+    assert fallback["total_attempts"] == 0
+    assert fallback["configuration_error_type"] == "fallback_group_not_found"
+    assert fallback["configuration_error_stage"] == "fallback_group_lookup"
+    assert fallback["missing_environment_variable_names"] == []
+    assert fallback["fallback_group_found"] is False
+    assert fallback["fallback_profile_count"] == 0
+    assert fallback["provider_profile_ids"] == []
+    assert fallback["attempted_before_config_error"] is False
+    assert fallback["network_called"] is False
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert "api_key" not in persisted.casefold()
+    assert receipt is None and generator is None
+
+
+def test_fallback_group_found_but_empty_is_diagnosed_safely(tmp_path):
+    class EmptyGroupRegistry:
+        def get_fallback_group(self, fallback_group_id):
+            return SimpleNamespace(fallback_group_id=fallback_group_id, model_ids=())
+
+        def require(self, model_id, *, require_json_schema=True):
+            raise AssertionError("empty fallback group must not require profiles")
+
+    runner = CreativeFallbackRunner(
+        registry=EmptyGroupRegistry(),
+        fallback_group_id="empty-openrouter-chain",
+        output_root=tmp_path / "fallback output",
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+
+    assert fallback["status"] == "blocked"
+    assert fallback["final_block_reason"] == "configuration_error"
+    assert fallback["total_attempts"] == 0
+    assert fallback["configuration_error_type"] == "fallback_group_empty"
+    assert fallback["configuration_error_stage"] == "fallback_group_lookup"
+    assert fallback["fallback_group_found"] is True
+    assert fallback["fallback_profile_count"] == 0
+    assert fallback["provider_profile_ids"] == []
+    assert fallback["missing_environment_variable_names"] == []
+    assert fallback["attempted_before_config_error"] is False
+    assert fallback["network_called"] is False
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert fallback_path.is_file()
+    assert receipt is None and generator is None
+
+
+def test_valid_openrouter_config_proceeds_to_attempts_without_local_only_guard(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-openrouter-key-must-not-store")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    calls = []
+
+    class MalformedResponse:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"broken":'}}]}
+
+    def fake_post(*args, **kwargs):
+        calls.append((args, kwargs))
+        return MalformedResponse()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / "fallback output",
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    persisted = fallback_path.read_text(encoding="utf-8")
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 5
+    assert fallback["configuration_error"] is None
+    assert fallback["configuration_error_type"] is None
+    assert fallback["configuration_error_stage"] is None
+    assert fallback["missing_environment_variable_names"] == []
+    assert fallback["fallback_group_found"] is True
+    assert fallback["fallback_profile_count"] == 5
+    assert fallback["remote_provider_allowed"] is True
+    assert fallback["local_provider_required"] is False
+    assert fallback["attempted_before_config_error"] is False
+    assert fallback["attempts"][0]["stage_reached"] == "malformed_json"
+    assert fallback["attempts"][0]["network_called"] is True
+    assert len(calls) == 5
+    assert all(call[1]["json"]["stream"] is False for call in calls)
+    assert "test-only-openrouter-key-must-not-store" not in persisted
+    assert "Authorization" not in persisted
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["videos_insert_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert receipt is None and generator is None
 
 
 def test_model_and_fallback_group_cli_options_are_mutually_exclusive():

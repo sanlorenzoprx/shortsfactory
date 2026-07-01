@@ -11,7 +11,7 @@ from typing import Any, Callable
 from .creative_angle_models import CreativeAnglePackReceipt
 from .creative_angle_pack import CreativeAnglePackGenerator
 from .creative_providers import OnlineLLMCreativeGenerationProvider
-from .llm_model_registry import LLMFallbackGroup, LLMModelProfile, LLMModelRegistry
+from .llm_model_registry import LLMModelProfile, LLMModelRegistry, LLMModelRegistryError
 from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter, build_llm_adapter
 
 
@@ -27,6 +27,33 @@ STAGE_RANK = {
     "quality_invalid": 6,
     "passed": 7,
 }
+
+
+def _configuration_diagnostics(
+    *,
+    error_type: str | None = None,
+    error_stage: str | None = None,
+    missing_environment_variable_names: list[str] | None = None,
+    fallback_group_found: bool = False,
+    fallback_profile_count: int = 0,
+    provider_profile_ids: list[str] | None = None,
+    online_provider_selected: bool = True,
+    remote_provider_allowed: bool = False,
+    local_provider_required: bool = False,
+    attempted_before_config_error: bool = False,
+) -> dict[str, Any]:
+    return {
+        "configuration_error_type": error_type,
+        "configuration_error_stage": error_stage,
+        "missing_environment_variable_names": sorted(set(missing_environment_variable_names or [])),
+        "fallback_group_found": fallback_group_found,
+        "fallback_profile_count": fallback_profile_count,
+        "provider_profile_ids": list(provider_profile_ids or []),
+        "online_provider_selected": online_provider_selected,
+        "remote_provider_allowed": remote_provider_allowed,
+        "local_provider_required": local_provider_required,
+        "attempted_before_config_error": attempted_before_config_error,
+    }
 
 
 def _utc_now() -> datetime:
@@ -59,10 +86,14 @@ class CreativeFallbackRunner:
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
         self.registry = registry
-        self.group, self.profiles = registry.require_fallback_group(fallback_group_id)
+        self.fallback_group_id = fallback_group_id
+        self.group = None
+        self.profiles: tuple[LLMModelProfile, ...] = ()
         self.output_root = Path(output_root).expanduser().resolve()
+        self.uses_live_adapter = adapter_factory is None
         self.adapter_factory = adapter_factory or self._live_adapter
         self.now = now
+        self.configuration_diagnostics = self._resolve_group_and_profiles()
 
     @staticmethod
     def _live_adapter(profile: LLMModelProfile) -> LLMProviderAdapter:
@@ -77,22 +108,41 @@ class CreativeFallbackRunner:
     ) -> tuple[dict[str, Any], Path, CreativeAnglePackReceipt | None, CreativeAnglePackGenerator | None]:
         timestamp = self.now().astimezone(timezone.utc).isoformat()
         fallback_attempt_id = "fba_" + hashlib.sha256(
-            f"{self.group.fallback_group_id}|{timestamp}|{idea_id}|{lit_verdict_file}".encode("utf-8")
+            f"{self.fallback_group_id}|{timestamp}|{idea_id}|{lit_verdict_file}".encode("utf-8")
         ).hexdigest()[:12]
         path = self.fallback_receipt_path(fallback_attempt_id)
         relative_path = path.relative_to(self.output_root).as_posix()
         attempts: list[dict[str, Any]] = []
         selected_receipt: CreativeAnglePackReceipt | None = None
         selected_generator: CreativeAnglePackGenerator | None = None
-        configuration_error: str | None = None
+        configuration_error: str | None = (
+            "LLMAdapterError: fallback configuration refused"
+            if self.configuration_diagnostics["configuration_error_type"] else None
+        )
 
-        try:
-            adapters = tuple(self.adapter_factory(profile) for profile in self.profiles)
-        except LLMAdapterError as exc:
-            adapters = ()
-            configuration_error = f"{type(exc).__name__}: fallback configuration refused"
+        if configuration_error is None and self.uses_live_adapter:
+            missing = self._missing_environment_variable_names(self.profiles)
+            if missing:
+                self.configuration_diagnostics.update({
+                    "configuration_error_type": "missing_environment_variables",
+                    "configuration_error_stage": "environment_validation",
+                    "missing_environment_variable_names": missing,
+                    "attempted_before_config_error": False,
+                })
+                configuration_error = "LLMAdapterError: fallback configuration refused"
 
-        for profile, adapter in zip(self.profiles, adapters):
+        profiles_to_attempt = self.profiles if configuration_error is None else ()
+        for profile in profiles_to_attempt:
+            try:
+                adapter = self.adapter_factory(profile)
+            except LLMAdapterError:
+                self.configuration_diagnostics.update({
+                    "configuration_error_type": "provider_adapter_configuration_refused",
+                    "configuration_error_stage": "adapter_configuration",
+                    "attempted_before_config_error": bool(attempts),
+                })
+                configuration_error = "LLMAdapterError: fallback configuration refused"
+                break
             provider = OnlineLLMCreativeGenerationProvider(profile, adapter)
             generator = CreativeAnglePackGenerator(
                 provider=provider,
@@ -133,6 +183,54 @@ class CreativeFallbackRunner:
         _atomic_json(path, result)
         return result, path, selected_receipt, selected_generator
 
+    def _resolve_group_and_profiles(self) -> dict[str, Any]:
+        group = self.registry.get_fallback_group(self.fallback_group_id)
+        if group is None:
+            return _configuration_diagnostics(
+                error_type="fallback_group_not_found",
+                error_stage="fallback_group_lookup",
+                fallback_group_found=False,
+            )
+        self.group = group
+        provider_profile_ids = list(getattr(group, "model_ids", ()))
+        if not provider_profile_ids:
+            return _configuration_diagnostics(
+                error_type="fallback_group_empty",
+                error_stage="fallback_group_lookup",
+                fallback_group_found=True,
+                fallback_profile_count=0,
+                provider_profile_ids=[],
+            )
+        try:
+            self.profiles = tuple(
+                self.registry.require(model_id, require_json_schema=True)
+                for model_id in provider_profile_ids
+            )
+        except LLMModelRegistryError:
+            return _configuration_diagnostics(
+                error_type="provider_profile_lookup_failed",
+                error_stage="provider_profile_lookup",
+                fallback_group_found=True,
+                fallback_profile_count=0,
+                provider_profile_ids=provider_profile_ids,
+            )
+        return _configuration_diagnostics(
+            fallback_group_found=True,
+            fallback_profile_count=len(self.profiles),
+            provider_profile_ids=[profile.model_id for profile in self.profiles],
+            remote_provider_allowed=any(not profile.allow_localhost for profile in self.profiles),
+            local_provider_required=any(profile.allow_localhost for profile in self.profiles),
+        )
+
+    @staticmethod
+    def _missing_environment_variable_names(profiles: tuple[LLMModelProfile, ...]) -> list[str]:
+        names: list[str] = []
+        for profile in profiles:
+            for env_name in (profile.api_key_env, profile.base_url_env):
+                if env_name and not os.getenv(env_name):
+                    names.append(env_name)
+        return sorted(set(names))
+
     def fallback_receipt_path(self, fallback_attempt_id: str) -> Path:
         return self.output_root / "creative_angle_fallbacks" / fallback_attempt_id / "FALLBACK_ATTEMPT_RECEIPT.json"
 
@@ -162,6 +260,9 @@ class CreativeFallbackRunner:
             "publish_attempted": False,
             "youtube_api_called": False,
             "videos_insert_called": False,
+            "full_autopilot_enabled": False,
+            "supervised_autopilot_enabled": False,
+            "live_publishing_enabled": False,
             "secrets_recorded": False,
             "raw_response_stored": False,
             "reasoning_details_stored": False,
@@ -206,11 +307,15 @@ class CreativeFallbackRunner:
             if configuration_error and not attempts
             else best_attempt.get("stage_reached") if best_attempt else None
         )
+        configuration_diagnostics = {
+            **self.configuration_diagnostics,
+            "attempted_before_config_error": bool(attempts) if configuration_error else False,
+        }
         return {
             "receipt_version": FALLBACK_RECEIPT_VERSION,
             "timestamp": timestamp,
             "fallback_attempt_id": fallback_attempt_id,
-            "fallback_group_id": self.group.fallback_group_id,
+            "fallback_group_id": self.fallback_group_id,
             "status": "passed" if selected_receipt is not None else "blocked",
             "final_block_reason": final_block_reason,
             "best_attempt_number": best_attempt.get("attempt_number") if best_attempt else None,
@@ -229,10 +334,14 @@ class CreativeFallbackRunner:
             "publish_attempted": False,
             "youtube_api_called": False,
             "videos_insert_called": False,
+            "full_autopilot_enabled": False,
+            "supervised_autopilot_enabled": False,
+            "live_publishing_enabled": False,
             "secrets_recorded": False,
             "raw_response_stored": False,
             "reasoning_details_stored": False,
             "stream_enabled": False,
+            **configuration_diagnostics,
             "provider_diagnostics": diagnostics,
             **diagnostics,
             "final_block_reason": final_block_reason,
