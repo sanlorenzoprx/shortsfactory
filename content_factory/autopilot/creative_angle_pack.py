@@ -18,6 +18,8 @@ from .creative_angle_gates import (
     assert_safe_provider_input,
     buyer_pain_action_signals,
     evaluate_creative_pack,
+    hook_specificity_signals,
+    verdict_grounding_signals,
 )
 from .creative_angle_models import (
     AngleShortJob,
@@ -282,7 +284,7 @@ class CreativeAnglePackGenerator:
                     gates=gates,
                     required_angle_ids=self._required_angle_ids(),
                     angle_ids=[angle.angle_id for angle in angles],
-                    short_summaries=self._quality_short_summaries(short_jobs),
+                    short_summaries=self._quality_short_summaries(short_jobs, verdict_record.verdict),
                     longform_present=True,
                     longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
                     longform_ghosttowntest_cta_present=(
@@ -347,7 +349,7 @@ class CreativeAnglePackGenerator:
                     gates=gates,
                     required_angle_ids=self._required_angle_ids(),
                     angle_ids=[angle.angle_id for angle in angles],
-                    short_summaries=self._quality_short_summaries(short_jobs),
+                    short_summaries=self._quality_short_summaries(short_jobs, verdict_record.verdict),
                     longform_present=True,
                     longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
                     longform_ghosttowntest_cta_present=(
@@ -485,7 +487,9 @@ class CreativeAnglePackGenerator:
         return [str(row["angle_id"]) for row in ANGLE_RUBRIC]
 
     @staticmethod
-    def _quality_short_summaries(short_jobs: tuple[AngleShortJob, ...]) -> list[dict[str, Any]]:
+    def _quality_short_summaries(
+        short_jobs: tuple[AngleShortJob, ...], source_verdict: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         summaries: list[dict[str, Any]] = []
         for job in short_jobs:
             metadata_cta = str(job.youtube_metadata_draft.get("cta", ""))
@@ -502,6 +506,8 @@ class CreativeAnglePackGenerator:
                     and all(job.cta in str(value) for value in cta_values)
                 ),
                 **buyer_pain_action_signals(job),
+                **verdict_grounding_signals(job, source_verdict),
+                **hook_specificity_signals(job, source_verdict),
             })
         return summaries
 

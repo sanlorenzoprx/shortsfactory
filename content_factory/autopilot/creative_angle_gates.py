@@ -13,8 +13,11 @@ SECRET_PATTERN = re.compile(
     r"client[_-]?secret\s*[:=]\s*\S+|api[_-]?key\s*[:=]\s*\S+)"
 )
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
-UNSUPPORTED_CERTAINTY = re.compile(
-    r"(?i)\b(guaranteed|definitely works?|risk[- ]free|everyone needs|will make money|proven revenue)\b|\$\s*\d|\b\d+(?:\.\d+)?%"
+GENERIC_CLAIM_SIGNAL = re.compile(
+    r"(?i)\b(guaranteed|definitely works?|risk[- ]free|everyone needs|will make money|proven revenue)\b"
+)
+EXTERNAL_FACT_SIGNAL = re.compile(
+    r"(?i)\$\s*\d|\b\d+(?:\.\d+)?%|\b(?:according to|research shows|studies show)\b"
 )
 FORBIDDEN_PLATFORM_ACTION = re.compile(
     r"(?i)(youtube\.googleapis\.com|videos\.insert|call\s+the\s+youtube\s+api|"
@@ -36,6 +39,11 @@ HOOK_SIGNALS = {
 BUYER_SIGNALS = ("buyer", "customer", "pay", "budget", "target")
 PAIN_SIGNALS = ("pain", "risk", "fail", "problem", "urgent", "outcome")
 ACTION_SIGNALS = ("test", "ask", "prove", "sell", "build", "identify", "run", "validate", "cut", "decide")
+GENERIC_GROUNDING_TOKENS = GROUNDING_STOPWORDS | {
+    "idea", "startup", "builder", "build", "building", "buyer", "buyers", "customer", "customers",
+    "market", "pain", "risk", "problem", "urgent", "outcome", "test", "validate", "validation",
+    "action", "target", "before", "after", "first", "next", "pay", "pays", "paid",
+}
 
 
 class CreativeGateError(ValueError):
@@ -61,6 +69,64 @@ def buyer_pain_action_signals(job: AngleShortJob) -> dict[str, bool]:
         "buyer_signal_present": any(signal in combined for signal in BUYER_SIGNALS),
         "pain_signal_present": any(signal in combined for signal in PAIN_SIGNALS),
         "action_signal_present": any(signal in combined for signal in ACTION_SIGNALS),
+    }
+
+
+def _verdict_specific_tokens(source_verdict: dict[str, Any]) -> set[str]:
+    return {
+        token.casefold()
+        for token in WORD_PATTERN.findall(json.dumps(source_verdict, ensure_ascii=False))
+        if token.casefold() not in GENERIC_GROUNDING_TOKENS
+    }
+
+
+def _job_grounding_text(job: AngleShortJob) -> str:
+    combined = f"{job.hook} {job.script} {job.caption} {job.thumbnail_text}".casefold()
+    canonical_cta = job.cta.strip().casefold()
+    return combined.replace(canonical_cta, " ") if canonical_cta else combined
+
+
+def _angle_intent_present(job: AngleShortJob, text: str) -> bool:
+    buyer_present = any(signal in text for signal in BUYER_SIGNALS)
+    pain_present = any(signal in text for signal in PAIN_SIGNALS)
+    action_present = any(signal in text for signal in ACTION_SIGNALS)
+    if job.angle_id == "ghost_town_risk":
+        return pain_present and any(signal in text for signal in ("market", "buyer", "people", "care", "demand"))
+    if job.angle_id == "buyer_reality":
+        return buyer_present and any(signal in text for signal in ("pay", "reply", "book", "switch", "decide", "decision", "act"))
+    if job.angle_id == "fast_validation_test":
+        return action_present and any(signal in text for signal in (
+            "result", "prove", "interest", "signal", "reply", "pay", "paid", "evidence",
+        ))
+    if job.angle_id == "contrarian_opportunity":
+        narrow = any(signal in text for signal in ("narrow", "specific", "wedge", "use case", "workflow"))
+        return narrow and buyer_present and pain_present
+    if job.angle_id == "builder_action_plan":
+        market_signal = buyer_present or "market" in text or "demand" in text
+        return action_present and market_signal
+    return False
+
+
+def verdict_grounding_signals(job: AngleShortJob, source_verdict: dict[str, Any]) -> dict[str, bool]:
+    text = _job_grounding_text(job)
+    generated_tokens = set(WORD_PATTERN.findall(text)) - GENERIC_GROUNDING_TOKENS
+    overlap = generated_tokens & _verdict_specific_tokens(source_verdict)
+    return {
+        "verdict_signal_present": len(overlap) >= 2,
+        "generic_claim_signal_present": bool(GENERIC_CLAIM_SIGNAL.search(text)),
+        "external_fact_signal_present": bool(EXTERNAL_FACT_SIGNAL.search(text)),
+        "idea_specificity_present": bool(overlap),
+        "angle_specificity_present": _angle_intent_present(job, text),
+    }
+
+
+def hook_specificity_signals(job: AngleShortJob, source_verdict: dict[str, Any]) -> dict[str, bool]:
+    hook = job.hook.casefold()
+    hook_tokens = set(WORD_PATTERN.findall(hook)) - GENERIC_GROUNDING_TOKENS
+    return {
+        "hook_generic": len(job.hook.split()) < 7,
+        "hook_angle_match": any(signal in hook for signal in HOOK_SIGNALS.get(job.angle_id, ())),
+        "hook_verdict_signal_present": bool(hook_tokens & _verdict_specific_tokens(source_verdict)),
     }
 
 
@@ -108,10 +174,12 @@ def evaluate_creative_pack(
             "each angle requires a complete title, hook, script, caption, thumbnail text, and CTA",
         ),
     ]
+    hook_analyses = {job.angle_id: hook_specificity_signals(job, source_verdict) for job in short_jobs}
     hook_failures = [
         job.angle_id for job in short_jobs
-        if len(job.hook.split()) < 7
-        or not any(signal in job.hook.casefold() for signal in HOOK_SIGNALS.get(job.angle_id, ()))
+        if hook_analyses[job.angle_id]["hook_generic"]
+        or not hook_analyses[job.angle_id]["hook_angle_match"]
+        or not hook_analyses[job.angle_id]["hook_verdict_signal_present"]
     ]
     gates.append(_gate(
         "specific_hooks",
@@ -130,12 +198,20 @@ def evaluate_creative_pack(
         "every short names buyer reality, pain/risk, and a concrete action",
         "missing buyer, pain, or action specificity: " + ", ".join(content_failures),
     ))
-    claim_failures = [job.angle_id for job in short_jobs if UNSUPPORTED_CERTAINTY.search(job.script)]
+    verdict_analyses = {job.angle_id: verdict_grounding_signals(job, source_verdict) for job in short_jobs}
+    claim_failures = [
+        job.angle_id for job in short_jobs
+        if not verdict_analyses[job.angle_id]["verdict_signal_present"]
+        or verdict_analyses[job.angle_id]["generic_claim_signal_present"]
+        or verdict_analyses[job.angle_id]["external_fact_signal_present"]
+        or not verdict_analyses[job.angle_id]["idea_specificity_present"]
+        or not verdict_analyses[job.angle_id]["angle_specificity_present"]
+    ]
     gates.append(_gate(
         "verdict_grounded_claims",
         not claim_failures,
-        "scripts avoid unsupported numeric and certainty claims",
-        "unsupported claims require review: " + ", ".join(claim_failures),
+        "every angle is specific to the stored verdict and avoids unsupported claims",
+        "angles lack verdict grounding or contain unsupported claims: " + ", ".join(claim_failures),
     ))
     source_tokens = {
         token.casefold() for token in WORD_PATTERN.findall(json.dumps(source_verdict, ensure_ascii=False))

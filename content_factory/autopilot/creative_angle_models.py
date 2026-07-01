@@ -19,6 +19,21 @@ SAFE_BUYER_PAIN_ACTION_ERRORS = {
     "missing_action_signal",
     "missing_buyer_pain_action_specificity",
 }
+SAFE_VERDICT_GROUNDING_ERRORS = {
+    None,
+    "missing_verdict_grounding",
+    "generic_claim_signal",
+    "external_fact_signal",
+    "missing_idea_specificity",
+    "missing_angle_specificity",
+}
+SAFE_HOOK_SPECIFICITY_ERRORS = {
+    None,
+    "generic_hook",
+    "angle_mismatch_hook",
+    "missing_verdict_signal",
+    "missing_hook_specificity",
+}
 
 
 class CreativeAngleContractError(ValueError):
@@ -292,6 +307,13 @@ class CreativeAnglePackReceipt:
             "buyer_pain_action_passed_angle_ids", "buyer_signal_missing_count",
             "pain_signal_missing_count", "action_signal_missing_count",
             "buyer_pain_action_error_count",
+            "verdict_grounding_error_type", "verdict_grounding_failed_angle_ids",
+            "verdict_grounding_passed_angle_ids", "verdict_signal_missing_count",
+            "generic_claim_signal_count", "external_fact_signal_count",
+            "idea_specificity_missing_count", "angle_specificity_missing_count",
+            "hook_specificity_error_type", "hook_specificity_failed_angle_ids",
+            "hook_specificity_passed_angle_ids", "generic_hook_count",
+            "angle_mismatch_hook_count", "verdict_signal_missing_hook_count",
             "final_block_reason",
         }
         if set(self.provider_diagnostics) - allowed_diagnostics:
@@ -314,6 +336,10 @@ class CreativeAnglePackReceipt:
         for field_name in (
             "buyer_pain_action_failed_angle_ids",
             "buyer_pain_action_passed_angle_ids",
+            "verdict_grounding_failed_angle_ids",
+            "verdict_grounding_passed_angle_ids",
+            "hook_specificity_failed_angle_ids",
+            "hook_specificity_passed_angle_ids",
         ):
             angle_ids = self.provider_diagnostics.get(field_name, [])
             if not isinstance(angle_ids, list) or any(
@@ -322,11 +348,23 @@ class CreativeAnglePackReceipt:
                 raise CreativeAngleContractError("provider diagnostics contain unsafe angle IDs")
         if self.provider_diagnostics.get("buyer_pain_action_error_type") not in SAFE_BUYER_PAIN_ACTION_ERRORS:
             raise CreativeAngleContractError("provider diagnostics contain an unsafe buyer pain action error")
+        if self.provider_diagnostics.get("verdict_grounding_error_type") not in SAFE_VERDICT_GROUNDING_ERRORS:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe verdict grounding error")
+        if self.provider_diagnostics.get("hook_specificity_error_type") not in SAFE_HOOK_SPECIFICITY_ERRORS:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe hook specificity error")
         for field_name in (
             "buyer_signal_missing_count",
             "pain_signal_missing_count",
             "action_signal_missing_count",
             "buyer_pain_action_error_count",
+            "verdict_signal_missing_count",
+            "generic_claim_signal_count",
+            "external_fact_signal_count",
+            "idea_specificity_missing_count",
+            "angle_specificity_missing_count",
+            "generic_hook_count",
+            "angle_mismatch_hook_count",
+            "verdict_signal_missing_hook_count",
         ):
             count = self.provider_diagnostics.get(field_name, 0)
             if not isinstance(count, int) or isinstance(count, bool) or count < 0:

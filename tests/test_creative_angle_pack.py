@@ -120,18 +120,55 @@ def _compact_bundle_missing_buyer_pain_action_signal(signal: str):
     value = _compact_bundle()
     if signal == "buyer":
         angle = value["angles"][0]
-        angle["hook"] = "Ghost town risk reveals a painful failure before launch"
-        angle["script"] = "This urgent risk can fail. Test and validate the assumption before building."
+        angle["hook"] = "Ghost town risk reveals contractor proof failure when the market may not care"
+        angle["script"] = "This urgent contractor proof risk can fail. Test and validate the assumption before building."
     elif signal == "pain":
         angle = value["angles"][1]
-        angle["hook"] = "Buyer reality asks whether a customer will pay before launch"
-        angle["script"] = "Ask the buyer to pay or reply before you validate demand."
+        angle["hook"] = "Buyer reality asks whether a contractor customer will pay for proof"
+        angle["script"] = "Ask the contractor buyer to pay or reply before you validate proof demand."
     elif signal == "action":
         angle = value["angles"][1]
-        angle["hook"] = "Buyer reality reveals a customer budget and urgent problem"
-        angle["script"] = "The buyer has an urgent painful problem and budget risk."
+        angle["hook"] = "Buyer reality reveals a contractor proof budget and urgent decision"
+        angle["script"] = "The contractor buyer has an urgent painful proof problem and budget risk."
     else:
         raise AssertionError(f"unsupported test signal: {signal}")
+    return value, angle["angle_id"]
+
+
+def _compact_bundle_with_verdict_grounding_failure(mode: str):
+    value = _compact_bundle()
+    if mode == "missing_verdict":
+        angle = value["angles"][3]
+        angle.update({
+            "hook": "The opportunity targets a narrow buyer use case with painful constraints",
+            "script": "A buyer has urgent pain. Validate this narrow use case and decide next.",
+            "caption": "A buyer pain gets a narrow use case validation action.",
+            "thumbnail_text": "NARROW BUYER TEST",
+        })
+    elif mode == "generic_claim":
+        angle = value["angles"][0]
+        angle["script"] += " This is guaranteed to work."
+    elif mode == "external_fact":
+        angle = value["angles"][0]
+        angle["script"] += " Research shows 93% demand."
+    elif mode == "contrarian_angle":
+        angle = value["angles"][3]
+        angle.update({
+            "hook": "The opportunity gives contractor buyers painful proof constraints to validate",
+            "script": "A contractor buyer has urgent proof pain. Validate the constraint and decide next.",
+            "caption": "Contractor proof pain gives the buyer a validation decision.",
+            "thumbnail_text": "CONTRACTOR PROOF BET",
+        })
+    elif mode == "builder_action":
+        angle = value["angles"][4]
+        angle.update({
+            "hook": "First, contractor buyers face urgent proof pain and budget risk",
+            "script": "The contractor buyer has urgent proof pain and a budget problem.",
+            "caption": "Contractor proof pain leaves the buyer with a budget decision.",
+            "thumbnail_text": "CONTRACTOR PROOF DECISION",
+        })
+    else:
+        raise AssertionError(f"unsupported grounding test mode: {mode}")
     return value, angle["angle_id"]
 
 
@@ -311,11 +348,17 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert "pain: name the costly mistake, delay, wasted build, missed demand, or invalid assumption" in compact_prompt
     assert "action: name what the builder should test, ask, validate, cut, or decide next" in compact_prompt
     assert "avoid generic startup language" in compact_prompt
-    assert "ghost_town_risk: expose the risk of building for a market that may not care" in compact_prompt
-    assert "buyer_reality: confront whether real buyers would act, pay, reply, book, or switch" in compact_prompt
-    assert "fast_validation_test: give a fast test before building more" in compact_prompt
-    assert "contrarian_opportunity: show the narrow opportunity hidden inside a weak or risky idea" in compact_prompt
-    assert "builder_action_plan: give the next concrete builder move" in compact_prompt
+    assert "No generic hooks." in compact_prompt
+    assert "No generic builder advice." in compact_prompt
+    assert "No external facts." in compact_prompt
+    assert "Every hook must connect to the verdict." in compact_prompt
+    assert "Every script must include buyer + pain + action." in compact_prompt
+    assert "Every thumbnail must be specific to the angle and verdict." in compact_prompt
+    assert "ghost_town_risk: name the risk of building for people who may not care" in compact_prompt
+    assert "buyer_reality: confront whether a real buyer would pay, reply, book, switch, or act" in compact_prompt
+    assert "fast_validation_test: name one fast test before building more and what result would prove interest" in compact_prompt
+    assert "contrarian_opportunity: identify the narrow buyer/user/use case" in compact_prompt
+    assert "builder_action_plan: state the next concrete builder action" in compact_prompt
     assert "no external facts beyond the LIT verdict" in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
@@ -573,7 +616,9 @@ def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is True
     assert diagnostics["parse_error_type"] is None
-    assert diagnostics["quality_error_type"] == "weak_or_mismatched_hooks"
+    assert diagnostics["quality_error_type"] == "missing_hook_specificity"
+    assert diagnostics["hook_specificity_error_type"] == "angle_mismatch_hook"
+    assert diagnostics["hook_specificity_failed_angle_ids"] == ["ghost_town_risk"]
     assert diagnostics["quality_failed_checks"] == ["specific_hooks"]
     assert diagnostics["ghosttowntest_cta_present"] is True
     assert not any(path.endswith(".ghosttowntest_cta") for path in diagnostics["quality_missing_fields"])
@@ -649,6 +694,109 @@ def test_buyer_pain_action_failure_records_safe_signal_diagnostics(
     assert fallback["youtube_api_called"] is False
     assert fallback["full_autopilot_enabled"] is False
     assert all(str(value) not in persisted for value in (failed_angle["hook"], failed_angle["script"]))
+    assert receipt is None and generator is None
+
+
+@pytest.mark.parametrize(
+    "mode, expected_error_type, count_field",
+    [
+        ("missing_verdict", "missing_verdict_grounding", "verdict_signal_missing_count"),
+        ("generic_claim", "generic_claim_signal", "generic_claim_signal_count"),
+        ("external_fact", "external_fact_signal", "external_fact_signal_count"),
+        ("contrarian_angle", "missing_angle_specificity", "angle_specificity_missing_count"),
+        ("builder_action", "missing_angle_specificity", "angle_specificity_missing_count"),
+    ],
+)
+def test_verdict_grounding_failure_records_safe_angle_diagnostics(
+    tmp_path, mode, expected_error_type, count_field,
+):
+    invalid, failed_angle_id = _compact_bundle_with_verdict_grounding_failure(mode)
+    runner = _fallback_runner(
+        tmp_path,
+        _openrouter_adapter_factory(
+            lambda profile: {"choices": [{"message": {"content": json.dumps(invalid)}}]},
+        ),
+    )
+
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    diagnostics_json = json.dumps(diagnostics, ensure_ascii=False)
+    persisted = fallback_path.read_text(encoding="utf-8")
+    failed_angle = next(angle for angle in invalid["angles"] if angle["angle_id"] == failed_angle_id)
+
+    assert fallback["status"] == "blocked"
+    assert fallback["final_block_reason"] == "quality_invalid"
+    assert fallback["best_attempt_stage_reached"] == "quality_invalid"
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert diagnostics["cta_present"] is True
+    assert diagnostics["ghosttowntest_cta_present"] is True
+    assert diagnostics["quality_valid"] is False
+    assert "verdict_grounded_claims" in diagnostics["quality_failed_checks"]
+    assert diagnostics["quality_error_type"] == "missing_verdict_grounding"
+    assert diagnostics["verdict_grounding_error_type"] == expected_error_type
+    assert diagnostics["verdict_grounding_failed_angle_ids"] == [failed_angle_id]
+    assert failed_angle_id not in diagnostics["verdict_grounding_passed_angle_ids"]
+    assert len(diagnostics["verdict_grounding_passed_angle_ids"]) == 4
+    assert diagnostics[count_field] == 1
+    assert failed_angle["hook"] not in diagnostics_json
+    assert failed_angle["script"] not in diagnostics_json
+    assert failed_angle["caption"] not in diagnostics_json
+    assert failed_angle["thumbnail_text"] not in diagnostics_json
+    assert '"hook"' not in diagnostics_json
+    assert '"script"' not in diagnostics_json
+    assert '"caption"' not in diagnostics_json
+    assert '"thumbnail_text"' not in diagnostics_json
+    assert '"longform"' not in diagnostics_json
+    assert all(
+        failed_angle[field] not in persisted
+        for field in ("hook", "script", "caption", "thumbnail_text")
+    )
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert receipt is None and generator is None
+
+
+def test_hook_specificity_diagnostics_do_not_store_hook_text(tmp_path):
+    invalid = _compact_bundle()
+    private_hook = "The opportunity gives every buyer a painful action before launch"
+    invalid["angles"][3]["hook"] = private_hook
+    runner = _fallback_runner(
+        tmp_path,
+        _openrouter_adapter_factory(
+            lambda profile: {"choices": [{"message": {"content": json.dumps(invalid)}}]},
+        ),
+    )
+
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    diagnostics_json = json.dumps(diagnostics, ensure_ascii=False)
+
+    assert fallback["status"] == "blocked"
+    assert diagnostics["quality_failed_checks"] == ["specific_hooks"]
+    assert diagnostics["quality_error_type"] == "missing_hook_specificity"
+    assert diagnostics["hook_specificity_error_type"] == "missing_verdict_signal"
+    assert diagnostics["hook_specificity_failed_angle_ids"] == ["contrarian_opportunity"]
+    assert diagnostics["hook_specificity_passed_angle_ids"] == [
+        "ghost_town_risk",
+        "buyer_reality",
+        "fast_validation_test",
+        "builder_action_plan",
+    ]
+    assert diagnostics["verdict_signal_missing_hook_count"] == 1
+    assert diagnostics["generic_hook_count"] == 0
+    assert diagnostics["angle_mismatch_hook_count"] == 0
+    assert private_hook not in diagnostics_json
+    assert private_hook not in fallback_path.read_text(encoding="utf-8")
+    assert '"hook"' not in diagnostics_json
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
     assert receipt is None and generator is None
 
 

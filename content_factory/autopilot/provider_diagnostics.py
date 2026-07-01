@@ -60,6 +60,20 @@ class ProviderContentDiagnostics:
     pain_signal_missing_count: int = 0
     action_signal_missing_count: int = 0
     buyer_pain_action_error_count: int = 0
+    verdict_grounding_error_type: str | None = None
+    verdict_grounding_failed_angle_ids: list[str] = field(default_factory=list)
+    verdict_grounding_passed_angle_ids: list[str] = field(default_factory=list)
+    verdict_signal_missing_count: int = 0
+    generic_claim_signal_count: int = 0
+    external_fact_signal_count: int = 0
+    idea_specificity_missing_count: int = 0
+    angle_specificity_missing_count: int = 0
+    hook_specificity_error_type: str | None = None
+    hook_specificity_failed_angle_ids: list[str] = field(default_factory=list)
+    hook_specificity_passed_angle_ids: list[str] = field(default_factory=list)
+    generic_hook_count: int = 0
+    angle_mismatch_hook_count: int = 0
+    verdict_signal_missing_hook_count: int = 0
     final_block_reason: str | None = None
 
     def record_content(self, content: str | None) -> None:
@@ -140,6 +154,18 @@ class ProviderContentDiagnostics:
         buyer_missing = 0
         pain_missing = 0
         action_missing = 0
+        verdict_grounding_failed: list[str] = []
+        verdict_grounding_passed: list[str] = []
+        verdict_signal_missing = 0
+        generic_claim_signals = 0
+        external_fact_signals = 0
+        idea_specificity_missing = 0
+        angle_specificity_missing = 0
+        hook_specificity_failed: list[str] = []
+        hook_specificity_passed: list[str] = []
+        generic_hooks = 0
+        angle_mismatch_hooks = 0
+        verdict_signal_missing_hooks = 0
         for summary in short_summaries:
             angle_id = str(summary.get("angle_id", "unknown"))
             if summary.get("script_present"):
@@ -175,6 +201,30 @@ class ProviderContentDiagnostics:
                 buyer_pain_action_passed.append(angle_id)
             else:
                 buyer_pain_action_failed.append(angle_id)
+            verdict_present = bool(summary.get("verdict_signal_present"))
+            generic_claim = bool(summary.get("generic_claim_signal_present"))
+            external_fact = bool(summary.get("external_fact_signal_present"))
+            idea_specific = bool(summary.get("idea_specificity_present"))
+            angle_specific = bool(summary.get("angle_specificity_present"))
+            verdict_signal_missing += int(not verdict_present)
+            generic_claim_signals += int(generic_claim)
+            external_fact_signals += int(external_fact)
+            idea_specificity_missing += int(not idea_specific)
+            angle_specificity_missing += int(not angle_specific)
+            if verdict_present and not generic_claim and not external_fact and idea_specific and angle_specific:
+                verdict_grounding_passed.append(angle_id)
+            else:
+                verdict_grounding_failed.append(angle_id)
+            generic_hook = bool(summary.get("hook_generic"))
+            angle_mismatch_hook = not bool(summary.get("hook_angle_match"))
+            verdict_missing_hook = not bool(summary.get("hook_verdict_signal_present"))
+            generic_hooks += int(generic_hook)
+            angle_mismatch_hooks += int(angle_mismatch_hook)
+            verdict_signal_missing_hooks += int(verdict_missing_hook)
+            if not generic_hook and not angle_mismatch_hook and not verdict_missing_hook:
+                hook_specificity_passed.append(angle_id)
+            else:
+                hook_specificity_failed.append(angle_id)
         if not longform_present:
             missing_fields.append("$.longform")
         if not longform_cta_present:
@@ -200,9 +250,37 @@ class ProviderContentDiagnostics:
             action_missing=action_missing,
             failed_count=len(buyer_pain_action_failed),
         )
+        self.verdict_grounding_failed_angle_ids = verdict_grounding_failed
+        self.verdict_grounding_passed_angle_ids = verdict_grounding_passed
+        self.verdict_signal_missing_count = verdict_signal_missing
+        self.generic_claim_signal_count = generic_claim_signals
+        self.external_fact_signal_count = external_fact_signals
+        self.idea_specificity_missing_count = idea_specificity_missing
+        self.angle_specificity_missing_count = angle_specificity_missing
+        self.verdict_grounding_error_type = self._verdict_grounding_error_type(
+            failed_count=len(verdict_grounding_failed),
+            verdict_signal_missing=verdict_signal_missing,
+            generic_claim_signals=generic_claim_signals,
+            external_fact_signals=external_fact_signals,
+            idea_specificity_missing=idea_specificity_missing,
+            angle_specificity_missing=angle_specificity_missing,
+        )
+        self.hook_specificity_failed_angle_ids = hook_specificity_failed
+        self.hook_specificity_passed_angle_ids = hook_specificity_passed
+        self.generic_hook_count = generic_hooks
+        self.angle_mismatch_hook_count = angle_mismatch_hooks
+        self.verdict_signal_missing_hook_count = verdict_signal_missing_hooks
+        self.hook_specificity_error_type = self._hook_specificity_error_type(
+            failed_count=len(hook_specificity_failed),
+            generic_hooks=generic_hooks,
+            angle_mismatch_hooks=angle_mismatch_hooks,
+            verdict_signal_missing_hooks=verdict_signal_missing_hooks,
+        )
         self.quality_error_type = None if quality_valid else self._quality_error_type(
             failed_checks,
             buyer_pain_action_error_type=self.buyer_pain_action_error_type,
+            verdict_grounding_error_type=self.verdict_grounding_error_type,
+            hook_specificity_error_type=self.hook_specificity_error_type,
         )
         self.quality_missing_fields = sorted(set(missing_fields))
         self.quality_duplicate_fields = [f"$.angles.{angle_id}" for angle_id in duplicates]
@@ -224,10 +302,16 @@ class ProviderContentDiagnostics:
     @staticmethod
     def _quality_error_type(
         failed_checks: list[str], *, buyer_pain_action_error_type: str | None = None,
+        verdict_grounding_error_type: str | None = None,
+        hook_specificity_error_type: str | None = None,
     ) -> str | None:
         if not failed_checks:
             return None
-        if failed_checks[0] == "buyer_pain_action_specificity" and buyer_pain_action_error_type:
+        if "verdict_grounded_claims" in failed_checks and verdict_grounding_error_type:
+            return "missing_verdict_grounding"
+        if "specific_hooks" in failed_checks and hook_specificity_error_type:
+            return "missing_hook_specificity"
+        if "buyer_pain_action_specificity" in failed_checks and buyer_pain_action_error_type:
             return buyer_pain_action_error_type
         mapping = {
             "exact_five_unique_angles": "required_angles_invalid",
@@ -261,6 +345,43 @@ class ProviderContentDiagnostics:
                 return "missing_pain_signal"
             return "missing_action_signal"
         return "missing_buyer_pain_action_specificity"
+
+    @staticmethod
+    def _verdict_grounding_error_type(
+        *, failed_count: int, verdict_signal_missing: int, generic_claim_signals: int,
+        external_fact_signals: int, idea_specificity_missing: int, angle_specificity_missing: int,
+    ) -> str | None:
+        if failed_count == 0:
+            return None
+        if external_fact_signals:
+            return "external_fact_signal"
+        if generic_claim_signals:
+            return "generic_claim_signal"
+        if verdict_signal_missing:
+            return "missing_verdict_grounding"
+        if idea_specificity_missing:
+            return "missing_idea_specificity"
+        if angle_specificity_missing:
+            return "missing_angle_specificity"
+        return "missing_verdict_grounding"
+
+    @staticmethod
+    def _hook_specificity_error_type(
+        *, failed_count: int, generic_hooks: int, angle_mismatch_hooks: int,
+        verdict_signal_missing_hooks: int,
+    ) -> str | None:
+        if failed_count == 0:
+            return None
+        failure_types = sum(count > 0 for count in (
+            generic_hooks, angle_mismatch_hooks, verdict_signal_missing_hooks,
+        ))
+        if failure_types == 1:
+            if generic_hooks:
+                return "generic_hook"
+            if angle_mismatch_hooks:
+                return "angle_mismatch_hook"
+            return "missing_verdict_signal"
+        return "missing_hook_specificity"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
