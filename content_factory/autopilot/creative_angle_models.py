@@ -5,6 +5,20 @@ from typing import Any
 
 
 JsonDict = dict[str, Any]
+SAFE_DIAGNOSTIC_ANGLE_IDS = {
+    "ghost_town_risk",
+    "buyer_reality",
+    "fast_validation_test",
+    "contrarian_opportunity",
+    "builder_action_plan",
+}
+SAFE_BUYER_PAIN_ACTION_ERRORS = {
+    None,
+    "missing_buyer_signal",
+    "missing_pain_signal",
+    "missing_action_signal",
+    "missing_buyer_pain_action_specificity",
+}
 
 
 class CreativeAngleContractError(ValueError):
@@ -274,6 +288,10 @@ class CreativeAnglePackReceipt:
             "required_angle_ids_present", "required_angle_ids_missing", "cta_present",
             "ghosttowntest_cta_present", "longform_present", "scripts_present_count",
             "captions_present_count", "thumbnail_text_present_count", "hashtags_present_count",
+            "buyer_pain_action_error_type", "buyer_pain_action_failed_angle_ids",
+            "buyer_pain_action_passed_angle_ids", "buyer_signal_missing_count",
+            "pain_signal_missing_count", "action_signal_missing_count",
+            "buyer_pain_action_error_count",
             "final_block_reason",
         }
         if set(self.provider_diagnostics) - allowed_diagnostics:
@@ -293,6 +311,26 @@ class CreativeAnglePackReceipt:
             not isinstance(path, str) or not path.startswith("$") for path in duplicate_paths
         ):
             raise CreativeAngleContractError("provider diagnostics contain unsafe duplicate paths")
+        for field_name in (
+            "buyer_pain_action_failed_angle_ids",
+            "buyer_pain_action_passed_angle_ids",
+        ):
+            angle_ids = self.provider_diagnostics.get(field_name, [])
+            if not isinstance(angle_ids, list) or any(
+                angle_id not in SAFE_DIAGNOSTIC_ANGLE_IDS for angle_id in angle_ids
+            ):
+                raise CreativeAngleContractError("provider diagnostics contain unsafe angle IDs")
+        if self.provider_diagnostics.get("buyer_pain_action_error_type") not in SAFE_BUYER_PAIN_ACTION_ERRORS:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe buyer pain action error")
+        for field_name in (
+            "buyer_signal_missing_count",
+            "pain_signal_missing_count",
+            "action_signal_missing_count",
+            "buyer_pain_action_error_count",
+        ):
+            count = self.provider_diagnostics.get(field_name, 0)
+            if not isinstance(count, int) or isinstance(count, bool) or count < 0:
+                raise CreativeAngleContractError("provider diagnostics contain an unsafe signal count")
         if self.provider_type == "online_llm" and self.status not in {"passed", "blocked", "failed"}:
             raise CreativeAngleContractError("online LLM receipt status must be passed, blocked, or failed")
         if self.safety.get("full_autopilot_enabled") is not False:

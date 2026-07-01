@@ -53,6 +53,13 @@ class ProviderContentDiagnostics:
     captions_present_count: int = 0
     thumbnail_text_present_count: int = 0
     hashtags_present_count: int = 0
+    buyer_pain_action_error_type: str | None = None
+    buyer_pain_action_failed_angle_ids: list[str] = field(default_factory=list)
+    buyer_pain_action_passed_angle_ids: list[str] = field(default_factory=list)
+    buyer_signal_missing_count: int = 0
+    pain_signal_missing_count: int = 0
+    action_signal_missing_count: int = 0
+    buyer_pain_action_error_count: int = 0
     final_block_reason: str | None = None
 
     def record_content(self, content: str | None) -> None:
@@ -128,6 +135,11 @@ class ProviderContentDiagnostics:
         hashtags_present = 0
         cta_checks: list[bool] = []
         ghosttowntest_cta_checks: list[bool] = []
+        buyer_pain_action_failed: list[str] = []
+        buyer_pain_action_passed: list[str] = []
+        buyer_missing = 0
+        pain_missing = 0
+        action_missing = 0
         for summary in short_summaries:
             angle_id = str(summary.get("angle_id", "unknown"))
             if summary.get("script_present"):
@@ -153,6 +165,16 @@ class ProviderContentDiagnostics:
             if not short_ghosttowntest_cta_present:
                 missing_fields.append(f"$.shorts.{angle_id}.ghosttowntest_cta")
             ghosttowntest_cta_checks.append(short_ghosttowntest_cta_present)
+            buyer_present = bool(summary.get("buyer_signal_present"))
+            pain_present = bool(summary.get("pain_signal_present"))
+            action_present = bool(summary.get("action_signal_present"))
+            buyer_missing += int(not buyer_present)
+            pain_missing += int(not pain_present)
+            action_missing += int(not action_present)
+            if buyer_present and pain_present and action_present:
+                buyer_pain_action_passed.append(angle_id)
+            else:
+                buyer_pain_action_failed.append(angle_id)
         if not longform_present:
             missing_fields.append("$.longform")
         if not longform_cta_present:
@@ -166,7 +188,22 @@ class ProviderContentDiagnostics:
         self.quality_valid = quality_valid
         self.quality_failed_checks = failed_checks
         self.quality_error_count = len(failed_checks)
-        self.quality_error_type = None if quality_valid else self._quality_error_type(failed_checks)
+        self.buyer_pain_action_failed_angle_ids = buyer_pain_action_failed
+        self.buyer_pain_action_passed_angle_ids = buyer_pain_action_passed
+        self.buyer_signal_missing_count = buyer_missing
+        self.pain_signal_missing_count = pain_missing
+        self.action_signal_missing_count = action_missing
+        self.buyer_pain_action_error_count = len(buyer_pain_action_failed)
+        self.buyer_pain_action_error_type = self._buyer_pain_action_error_type(
+            buyer_missing=buyer_missing,
+            pain_missing=pain_missing,
+            action_missing=action_missing,
+            failed_count=len(buyer_pain_action_failed),
+        )
+        self.quality_error_type = None if quality_valid else self._quality_error_type(
+            failed_checks,
+            buyer_pain_action_error_type=self.buyer_pain_action_error_type,
+        )
         self.quality_missing_fields = sorted(set(missing_fields))
         self.quality_duplicate_fields = [f"$.angles.{angle_id}" for angle_id in duplicates]
         self.angle_count = len(angle_ids)
@@ -185,9 +222,13 @@ class ProviderContentDiagnostics:
             self.final_block_reason = "quality_invalid"
 
     @staticmethod
-    def _quality_error_type(failed_checks: list[str]) -> str | None:
+    def _quality_error_type(
+        failed_checks: list[str], *, buyer_pain_action_error_type: str | None = None,
+    ) -> str | None:
         if not failed_checks:
             return None
+        if failed_checks[0] == "buyer_pain_action_specificity" and buyer_pain_action_error_type:
+            return buyer_pain_action_error_type
         mapping = {
             "exact_five_unique_angles": "required_angles_invalid",
             "lit_verdict_traceability": "lit_verdict_traceability_invalid",
@@ -205,6 +246,21 @@ class ProviderContentDiagnostics:
             "publishing_closed": "publishing_gate_failed",
         }
         return mapping.get(failed_checks[0], "quality_gate_failed")
+
+    @staticmethod
+    def _buyer_pain_action_error_type(
+        *, buyer_missing: int, pain_missing: int, action_missing: int, failed_count: int,
+    ) -> str | None:
+        if failed_count == 0:
+            return None
+        missing_types = sum(count > 0 for count in (buyer_missing, pain_missing, action_missing))
+        if missing_types == 1:
+            if buyer_missing:
+                return "missing_buyer_signal"
+            if pain_missing:
+                return "missing_pain_signal"
+            return "missing_action_signal"
+        return "missing_buyer_pain_action_specificity"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

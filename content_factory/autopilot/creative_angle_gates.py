@@ -33,6 +33,9 @@ HOOK_SIGNALS = {
     "contrarian_opportunity": ("wrong", "wedge", "opportunity", "broad"),
     "builder_action_plan": ("build", "first", "mvp", "start"),
 }
+BUYER_SIGNALS = ("buyer", "customer", "pay", "budget", "target")
+PAIN_SIGNALS = ("pain", "risk", "fail", "problem", "urgent", "outcome")
+ACTION_SIGNALS = ("test", "ask", "prove", "sell", "build", "identify", "run", "validate", "cut", "decide")
 
 
 class CreativeGateError(ValueError):
@@ -47,6 +50,18 @@ def contains_sensitive_content(value: Any) -> bool:
 def assert_safe_provider_input(value: Any) -> None:
     if contains_sensitive_content(value):
         raise CreativeGateError("provider input contains a secret or authentication URL")
+
+
+def buyer_pain_action_signals(job: AngleShortJob) -> dict[str, bool]:
+    combined = f"{job.hook} {job.script}".casefold()
+    canonical_cta = job.cta.strip().casefold()
+    if canonical_cta:
+        combined = combined.replace(canonical_cta, " ")
+    return {
+        "buyer_signal_present": any(signal in combined for signal in BUYER_SIGNALS),
+        "pain_signal_present": any(signal in combined for signal in PAIN_SIGNALS),
+        "action_signal_present": any(signal in combined for signal in ACTION_SIGNALS),
+    }
 
 
 def _gate(name: str, passed: bool, success: str, failure: str, *, review: bool = False) -> dict[str, Any]:
@@ -104,14 +119,11 @@ def evaluate_creative_pack(
         "every hook is specific to its angle",
         "generic or mismatched hooks: " + ", ".join(hook_failures),
     ))
-    content_failures = []
-    for job in short_jobs:
-        combined = f"{job.hook} {job.script}".casefold()
-        has_buyer = any(word in combined for word in ("buyer", "customer", "pay", "budget", "target"))
-        has_pain = any(word in combined for word in ("pain", "risk", "fail", "problem", "urgent", "outcome"))
-        has_action = any(word in combined for word in ("test", "ask", "prove", "sell", "build", "identify", "run"))
-        if not (has_buyer and has_pain and has_action):
-            content_failures.append(job.angle_id)
+    content_failures = [
+        job.angle_id
+        for job in short_jobs
+        if not all(buyer_pain_action_signals(job).values())
+    ]
     gates.append(_gate(
         "buyer_pain_action_specificity",
         not content_failures,

@@ -352,9 +352,27 @@ class CreativeFallbackRunner:
     def _best_attempt(attempts: list[dict[str, Any]]) -> dict[str, Any] | None:
         if not attempts:
             return None
+
+        def rank(row: dict[str, Any]) -> tuple[int, int, int, int]:
+            stage = str(row.get("stage_reached"))
+            diagnostics = row.get("provider_diagnostics")
+            diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+            quality_error_count = diagnostics.get("quality_error_count")
+            failed_checks = diagnostics.get("quality_failed_checks")
+            error_count = quality_error_count if isinstance(quality_error_count, int) else 1_000_000
+            failed_count = len(failed_checks) if isinstance(failed_checks, list) else 1_000_000
+            if stage != "quality_invalid":
+                error_count = failed_count = 0
+            return (
+                STAGE_RANK.get(stage, -1),
+                -error_count,
+                -failed_count,
+                -int(row.get("attempt_number", 0)),
+            )
+
         return max(
             attempts,
-            key=lambda row: (STAGE_RANK.get(str(row.get("stage_reached")), -1), -int(row.get("attempt_number", 0))),
+            key=rank,
         )
 
     @staticmethod

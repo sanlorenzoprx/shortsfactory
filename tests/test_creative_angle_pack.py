@@ -116,6 +116,25 @@ def _compact_bundle_missing_script_caption_cta(marker: str = "quality-diagnostic
     return value
 
 
+def _compact_bundle_missing_buyer_pain_action_signal(signal: str):
+    value = _compact_bundle()
+    if signal == "buyer":
+        angle = value["angles"][0]
+        angle["hook"] = "Ghost town risk reveals a painful failure before launch"
+        angle["script"] = "This urgent risk can fail. Test and validate the assumption before building."
+    elif signal == "pain":
+        angle = value["angles"][1]
+        angle["hook"] = "Buyer reality asks whether a customer will pay before launch"
+        angle["script"] = "Ask the buyer to pay or reply before you validate demand."
+    elif signal == "action":
+        angle = value["angles"][1]
+        angle["hook"] = "Buyer reality reveals a customer budget and urgent problem"
+        angle["script"] = "The buyer has an urgent painful problem and budget risk."
+    else:
+        raise AssertionError(f"unsupported test signal: {signal}")
+    return value, angle["angle_id"]
+
+
 def test_deterministic_provider_generates_exactly_five_unique_angles(tmp_path):
     output, _, receipt = _generate(tmp_path)
     pack, jobs, _ = _artifacts(output, receipt)
@@ -287,6 +306,16 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert "each hook must match its angle_id" in compact_prompt
     assert "each hook must include a concrete risk, buyer action, or validation mistake" in compact_prompt
     assert "thumbnail_text must be specific to the angle, not generic" in compact_prompt
+    assert "every angle hook, script, caption, and thumbnail_text must include a concrete buyer/pain/action signal" in compact_prompt
+    assert "buyer: name who has the problem or makes the decision" in compact_prompt
+    assert "pain: name the costly mistake, delay, wasted build, missed demand, or invalid assumption" in compact_prompt
+    assert "action: name what the builder should test, ask, validate, cut, or decide next" in compact_prompt
+    assert "avoid generic startup language" in compact_prompt
+    assert "ghost_town_risk: expose the risk of building for a market that may not care" in compact_prompt
+    assert "buyer_reality: confront whether real buyers would act, pay, reply, book, or switch" in compact_prompt
+    assert "fast_validation_test: give a fast test before building more" in compact_prompt
+    assert "contrarian_opportunity: show the narrow opportunity hidden inside a weak or risky idea" in compact_prompt
+    assert "builder_action_plan: give the next concrete builder move" in compact_prompt
     assert "no external facts beyond the LIT verdict" in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
@@ -565,6 +594,64 @@ def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp
     assert receipt is not None
 
 
+@pytest.mark.parametrize(
+    "missing_signal, expected_error_type, missing_count_field",
+    [
+        ("buyer", "missing_buyer_signal", "buyer_signal_missing_count"),
+        ("pain", "missing_pain_signal", "pain_signal_missing_count"),
+        ("action", "missing_action_signal", "action_signal_missing_count"),
+    ],
+)
+def test_buyer_pain_action_failure_records_safe_signal_diagnostics(
+    tmp_path, missing_signal, expected_error_type, missing_count_field,
+):
+    invalid, failed_angle_id = _compact_bundle_missing_buyer_pain_action_signal(missing_signal)
+    runner = _fallback_runner(
+        tmp_path,
+        _openrouter_adapter_factory(
+            lambda profile: {"choices": [{"message": {"content": json.dumps(invalid)}}]},
+        ),
+    )
+
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    persisted = fallback_path.read_text(encoding="utf-8")
+    diagnostics_json = json.dumps(diagnostics, ensure_ascii=False)
+    failed_angle = next(angle for angle in invalid["angles"] if angle["angle_id"] == failed_angle_id)
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 5
+    assert fallback["final_block_reason"] == "quality_invalid"
+    assert fallback["best_attempt_stage_reached"] == "quality_invalid"
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert diagnostics["cta_present"] is True
+    assert diagnostics["ghosttowntest_cta_present"] is True
+    assert diagnostics["quality_valid"] is False
+    assert diagnostics["quality_failed_checks"] == ["buyer_pain_action_specificity"]
+    assert diagnostics["quality_error_type"] == expected_error_type
+    assert diagnostics["buyer_pain_action_error_type"] == expected_error_type
+    assert diagnostics["buyer_pain_action_failed_angle_ids"] == [failed_angle_id]
+    assert failed_angle_id not in diagnostics["buyer_pain_action_passed_angle_ids"]
+    assert len(diagnostics["buyer_pain_action_passed_angle_ids"]) == 4
+    assert diagnostics[missing_count_field] == 1
+    assert diagnostics["buyer_pain_action_error_count"] == 1
+    assert failed_angle["hook"] not in diagnostics_json
+    assert failed_angle["script"] not in diagnostics_json
+    assert '"hook"' not in diagnostics_json
+    assert '"script"' not in diagnostics_json
+    assert '"caption"' not in diagnostics_json
+    assert '"thumbnail_text"' not in diagnostics_json
+    assert '"longform"' not in diagnostics_json
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert all(str(value) not in persisted for value in (failed_angle["hook"], failed_angle["script"]))
+    assert receipt is None and generator is None
+
+
 def test_canonical_cta_propagation_clears_safe_quality_diagnostics(tmp_path):
     marker = "quality-diagnostic-marker-must-not-store"
     invalid = _compact_bundle_missing_script_caption_cta(marker)
@@ -622,8 +709,11 @@ def test_canonical_cta_propagation_clears_safe_quality_diagnostics(tmp_path):
 
 def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate_limit(tmp_path):
     marker = "best-stage-marker-must-not-store"
-    invalid = _compact_bundle_missing_script_caption_cta(marker)
-    invalid["angles"][0]["hook"] = "Seven generic words avoid every expected angle signal"
+    two_failures, _ = _compact_bundle_missing_buyer_pain_action_signal("buyer")
+    two_failures["angles"][0]["hook"] = (
+        f"Seven generic words avoid every expected angle signal {marker}"
+    )
+    one_failure, _ = _compact_bundle_missing_buyer_pain_action_signal("action")
 
     class RateLimitedResponse:
         status_code = 429
@@ -634,46 +724,56 @@ def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate
     def response_for_profile(profile):
         if profile.model_id == "openrouter-gemma-4-26b-free":
             return {"choices": [{"message": {"content": '{"broken":'}}]}
-        if profile.model_id in {
-            "openrouter-gemma-4-31b-free",
-            "openrouter-llama-3-3-70b-free",
-            "openrouter-gpt-oss-120b-free",
-        }:
+        if profile.model_id == "openrouter-gemma-4-31b-free":
+            return {"choices": [{"message": {"content": json.dumps(two_failures)}}]}
+        if profile.model_id == "openrouter-llama-3-3-70b-free":
             return RateLimitedResponse()
-        return {"choices": [{"message": {"content": json.dumps(invalid)}}]}
+        if profile.model_id == "openrouter-gpt-oss-120b-free":
+            return {"choices": [{"message": {"content": json.dumps(one_failure)}}]}
+        return {
+            "choices": [{"message": {"content": json.dumps({"idea_summary": "missing fields"})}}],
+        }
 
     runner = _fallback_runner(tmp_path, _openrouter_adapter_factory(response_for_profile))
     fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
-    fifth = fallback["attempts"][4]
-    fifth_diagnostics = fifth["provider_diagnostics"]
+    second = fallback["attempts"][1]
+    fourth = fallback["attempts"][3]
+    fourth_diagnostics = fourth["provider_diagnostics"]
 
     assert fallback["status"] == "blocked"
     assert fallback["final_block_reason"] == "quality_invalid"
-    assert fallback["best_attempt_number"] == 5
-    assert fallback["best_attempt_model_id"] == "openrouter-free-router"
-    assert fallback["best_attempt_provider_model"] == "openrouter/free"
+    assert fallback["best_attempt_number"] == 4
+    assert fallback["best_attempt_model_id"] == "openrouter-gpt-oss-120b-free"
+    assert fallback["best_attempt_provider_model"] == "openai/gpt-oss-120b:free"
     assert fallback["best_attempt_stage_reached"] == "quality_invalid"
     assert [attempt["stage_reached"] for attempt in fallback["attempts"]] == [
         "malformed_json",
-        "provider_rate_limited",
-        "provider_rate_limited",
+        "quality_invalid",
         "provider_rate_limited",
         "quality_invalid",
+        "compact_schema_invalid",
     ]
     assert fallback["attempts"][0]["provider_diagnostics"]["parse_error_type"] == "malformed_json"
-    assert fallback["attempts"][1]["provider_diagnostics"]["provider_error_type"] == "rate_limited"
-    assert fallback["attempts"][1]["provider_diagnostics"]["parse_error_type"] is None
-    assert fifth["schema_valid"] is True
-    assert fifth["quality_valid"] is False
-    assert fifth_diagnostics["compact_schema_valid"] is True
-    assert fifth_diagnostics["internal_schema_valid"] is True
-    assert fifth_diagnostics["parse_error_type"] is None
-    assert fifth_diagnostics["quality_error_type"] == "weak_or_mismatched_hooks"
-    assert fifth_diagnostics["quality_failed_checks"] == ["specific_hooks"]
-    assert fifth_diagnostics["ghosttowntest_cta_present"] is True
+    assert fallback["attempts"][2]["provider_diagnostics"]["provider_error_type"] == "rate_limited"
+    assert fallback["attempts"][2]["provider_diagnostics"]["parse_error_type"] is None
+    assert second["provider_diagnostics"]["quality_error_count"] == 2
+    assert second["provider_diagnostics"]["quality_failed_checks"] == [
+        "specific_hooks",
+        "buyer_pain_action_specificity",
+    ]
+    assert fourth["schema_valid"] is True
+    assert fourth["quality_valid"] is False
+    assert fourth_diagnostics["quality_error_count"] == 1
+    assert fourth_diagnostics["compact_schema_valid"] is True
+    assert fourth_diagnostics["internal_schema_valid"] is True
+    assert fourth_diagnostics["parse_error_type"] is None
+    assert fourth_diagnostics["quality_error_type"] == "missing_action_signal"
+    assert fourth_diagnostics["quality_failed_checks"] == ["buyer_pain_action_specificity"]
+    assert fourth_diagnostics["buyer_pain_action_error_type"] == "missing_action_signal"
+    assert fourth_diagnostics["ghosttowntest_cta_present"] is True
     assert not any(
         path.endswith(".ghosttowntest_cta")
-        for path in fifth_diagnostics["quality_missing_fields"]
+        for path in fourth_diagnostics["quality_missing_fields"]
     )
     assert fallback["raw_response_stored"] is False
     assert fallback["reasoning_details_stored"] is False
@@ -682,6 +782,29 @@ def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate
     assert fallback["videos_insert_called"] is False
     assert marker not in fallback_path.read_text(encoding="utf-8")
     assert receipt is None and generator is None
+
+
+def test_best_attempt_tie_break_prefers_fewer_failed_checks_after_error_count():
+    attempts = [
+        {
+            "attempt_number": 1,
+            "stage_reached": "quality_invalid",
+            "provider_diagnostics": {
+                "quality_error_count": 1,
+                "quality_failed_checks": ["specific_hooks", "thumbnail_specificity"],
+            },
+        },
+        {
+            "attempt_number": 2,
+            "stage_reached": "quality_invalid",
+            "provider_diagnostics": {
+                "quality_error_count": 1,
+                "quality_failed_checks": ["buyer_pain_action_specificity"],
+            },
+        },
+    ]
+
+    assert CreativeFallbackRunner._best_attempt(attempts)["attempt_number"] == 2
 
 
 @pytest.mark.parametrize("first_mode", ["malformed_json", "schema_invalid"])

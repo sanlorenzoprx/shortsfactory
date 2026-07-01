@@ -13,7 +13,12 @@ from typing import Any, Callable, Sequence
 
 from .autopilot_models import BusinessIdeaCandidate, VerdictRecord
 from .autopilot_store import AutopilotStore, AutopilotStoreError
-from .creative_angle_gates import CreativeGateError, assert_safe_provider_input, evaluate_creative_pack
+from .creative_angle_gates import (
+    CreativeGateError,
+    assert_safe_provider_input,
+    buyer_pain_action_signals,
+    evaluate_creative_pack,
+)
 from .creative_angle_models import (
     AngleShortJob,
     CreativeAngleContractError,
@@ -496,6 +501,7 @@ class CreativeAnglePackGenerator:
                     "GhostTownTest.com" in job.cta
                     and all(job.cta in str(value) for value in cta_values)
                 ),
+                **buyer_pain_action_signals(job),
             })
         return summaries
 
