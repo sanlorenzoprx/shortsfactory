@@ -258,10 +258,17 @@ class CreativeAnglePackReceipt:
             raise CreativeAngleContractError("creative generation cannot call YouTube APIs")
         allowed_diagnostics = {
             "provider_http_status", "provider_selected_model", "provider_selected_provider",
+            "provider_error_type",
             "content_present", "content_length", "content_starts_with_json",
             "content_starts_with_markdown_fence", "json_extraction_used", "parse_error_type",
-            "compact_schema_valid", "internal_schema_valid", "missing_required_fields",
-            "schema_error_count",
+            "schema_error_type", "compact_schema_valid", "internal_schema_valid",
+            "missing_required_fields", "schema_error_count", "quality_valid",
+            "quality_error_type", "quality_error_count", "quality_failed_checks",
+            "quality_missing_fields", "quality_duplicate_fields", "angle_count",
+            "required_angle_ids_present", "required_angle_ids_missing", "cta_present",
+            "ghosttowntest_cta_present", "longform_present", "scripts_present_count",
+            "captions_present_count", "thumbnail_text_present_count", "hashtags_present_count",
+            "final_block_reason",
         }
         if set(self.provider_diagnostics) - allowed_diagnostics:
             raise CreativeAngleContractError("provider diagnostics contain unsafe fields")
@@ -270,6 +277,16 @@ class CreativeAnglePackReceipt:
             not isinstance(path, str) or not path.startswith("$") for path in missing_paths
         ):
             raise CreativeAngleContractError("provider diagnostics contain unsafe schema paths")
+        quality_paths = self.provider_diagnostics.get("quality_missing_fields", [])
+        if not isinstance(quality_paths, list) or any(
+            not isinstance(path, str) or not path.startswith("$") for path in quality_paths
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe quality paths")
+        duplicate_paths = self.provider_diagnostics.get("quality_duplicate_fields", [])
+        if not isinstance(duplicate_paths, list) or any(
+            not isinstance(path, str) or not path.startswith("$") for path in duplicate_paths
+        ):
+            raise CreativeAngleContractError("provider diagnostics contain unsafe duplicate paths")
         if self.provider_type == "online_llm" and self.status not in {"passed", "blocked", "failed"}:
             raise CreativeAngleContractError("online LLM receipt status must be passed, blocked, or failed")
         if self.safety.get("full_autopilot_enabled") is not False:

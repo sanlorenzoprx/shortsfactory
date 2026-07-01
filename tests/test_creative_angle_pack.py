@@ -106,6 +106,15 @@ def _compact_bundle():
     }
 
 
+def _compact_bundle_missing_script_caption_cta(marker: str = "quality-diagnostic-marker-must-not-store"):
+    value = _compact_bundle()
+    replacement = f"Run a validation check before building. {marker}"
+    for angle in value["angles"]:
+        angle["script"] = str(angle["script"]).replace(CTA, replacement)
+        angle["caption"] = str(angle["caption"]).replace(CTA, replacement)
+    return value
+
+
 def test_deterministic_provider_generates_exactly_five_unique_angles(tmp_path):
     output, _, receipt = _generate(tmp_path)
     pack, jobs, _ = _artifacts(output, receipt)
@@ -365,7 +374,11 @@ def test_compact_openrouter_fallback_records_safe_failure_then_stops_on_normaliz
     assert fallback["total_attempts"] == 2
     assert fallback["selected_model_id"] == "openrouter-gemma-4-31b-free"
     first_diagnostics = fallback["attempts"][0]["provider_diagnostics"]
-    assert first_diagnostics["parse_error_type"] == expected_error
+    if expected_error == "compact_schema_invalid":
+        assert first_diagnostics["schema_error_type"] == expected_error
+        assert first_diagnostics["parse_error_type"] is None
+    else:
+        assert first_diagnostics["parse_error_type"] == expected_error
     assert first_diagnostics["internal_schema_valid"] is False
     selected_diagnostics = fallback["attempts"][1]["provider_diagnostics"]
     assert selected_diagnostics["compact_schema_valid"] is True
@@ -427,7 +440,8 @@ def test_compact_openrouter_fallback_continues_on_internal_normalization_failure
     diagnostics = fallback["attempts"][0]["provider_diagnostics"]
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is False
-    assert diagnostics["parse_error_type"] == "internal_schema_invalid"
+    assert diagnostics["schema_error_type"] == "internal_schema_invalid"
+    assert diagnostics["parse_error_type"] is None
     assert receipt is not None
 
 
@@ -448,8 +462,124 @@ def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp
     diagnostics = fallback["attempts"][0]["provider_diagnostics"]
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is True
-    assert diagnostics["parse_error_type"] == "quality_invalid"
+    assert diagnostics["parse_error_type"] is None
+    assert diagnostics["quality_error_type"] == "weak_or_mismatched_hooks"
+    assert diagnostics["final_block_reason"] == "quality_invalid"
+    assert fallback["attempts"][0]["stage_reached"] == "quality_invalid"
+    assert fallback["best_attempt_stage_reached"] == "passed"
     assert receipt is not None
+
+
+def test_quality_gate_diagnostics_split_parse_schema_and_safe_cta_metadata(tmp_path):
+    marker = "quality-diagnostic-marker-must-not-store"
+    invalid = _compact_bundle_missing_script_caption_cta(marker)
+
+    runner = _fallback_runner(
+        tmp_path,
+        _openrouter_adapter_factory(
+            lambda profile: {"choices": [{"message": {"content": json.dumps(invalid)}}]},
+        ),
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    diagnostics = fallback["attempts"][0]["provider_diagnostics"]
+    first_receipt = json.loads((runner.output_root / fallback["attempts"][0]["receipt"]).read_text(encoding="utf-8"))
+    persisted = fallback_path.read_text(encoding="utf-8") + json.dumps(first_receipt, ensure_ascii=False)
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 5
+    assert receipt is None and generator is None
+    assert fallback["attempts"][0]["schema_valid"] is True
+    assert fallback["attempts"][0]["quality_valid"] is False
+    assert fallback["attempts"][0]["stage_reached"] == "quality_invalid"
+    assert diagnostics["parse_error_type"] is None
+    assert diagnostics["schema_error_type"] is None
+    assert diagnostics["compact_schema_valid"] is True
+    assert diagnostics["internal_schema_valid"] is True
+    assert diagnostics["quality_valid"] is False
+    assert diagnostics["quality_error_type"] == "missing_required_cta"
+    assert diagnostics["quality_error_count"] == 1
+    assert diagnostics["quality_failed_checks"] == ["ghost_town_cta"]
+    assert diagnostics["required_angle_ids_present"] == [
+        "ghost_town_risk",
+        "buyer_reality",
+        "fast_validation_test",
+        "contrarian_opportunity",
+        "builder_action_plan",
+    ]
+    assert diagnostics["required_angle_ids_missing"] == []
+    assert diagnostics["cta_present"] is True
+    assert diagnostics["ghosttowntest_cta_present"] is False
+    assert diagnostics["longform_present"] is True
+    assert diagnostics["scripts_present_count"] == 5
+    assert diagnostics["captions_present_count"] == 5
+    assert diagnostics["thumbnail_text_present_count"] == 5
+    assert diagnostics["hashtags_present_count"] == 5
+    assert all(path.endswith(".ghosttowntest_cta") for path in diagnostics["quality_missing_fields"])
+    assert marker not in persisted
+    assert marker not in json.dumps(diagnostics)
+    assert first_receipt["raw_response_stored"] is False
+    assert first_receipt["reasoning_details_stored"] is False
+    assert first_receipt["publish_attempted"] is False
+    assert first_receipt["youtube_api_called"] is False
+    assert first_receipt["videos_insert_called"] is False
+    assert first_receipt["safety"]["full_autopilot_enabled"] is False
+
+
+def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate_limit(tmp_path):
+    marker = "best-stage-marker-must-not-store"
+    invalid = _compact_bundle_missing_script_caption_cta(marker)
+
+    class RateLimitedResponse:
+        status_code = 429
+
+        def raise_for_status(self):
+            raise RuntimeError("provider details must not be stored")
+
+    def response_for_profile(profile):
+        if profile.model_id == "openrouter-gemma-4-26b-free":
+            return {"choices": [{"message": {"content": '{"broken":'}}]}
+        if profile.model_id in {
+            "openrouter-gemma-4-31b-free",
+            "openrouter-llama-3-3-70b-free",
+            "openrouter-gpt-oss-120b-free",
+        }:
+            return RateLimitedResponse()
+        return {"choices": [{"message": {"content": json.dumps(invalid)}}]}
+
+    runner = _fallback_runner(tmp_path, _openrouter_adapter_factory(response_for_profile))
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    fifth = fallback["attempts"][4]
+    fifth_diagnostics = fifth["provider_diagnostics"]
+
+    assert fallback["status"] == "blocked"
+    assert fallback["final_block_reason"] == "quality_invalid"
+    assert fallback["best_attempt_number"] == 5
+    assert fallback["best_attempt_model_id"] == "openrouter-free-router"
+    assert fallback["best_attempt_provider_model"] == "openrouter/free"
+    assert fallback["best_attempt_stage_reached"] == "quality_invalid"
+    assert [attempt["stage_reached"] for attempt in fallback["attempts"]] == [
+        "malformed_json",
+        "provider_rate_limited",
+        "provider_rate_limited",
+        "provider_rate_limited",
+        "quality_invalid",
+    ]
+    assert fallback["attempts"][0]["provider_diagnostics"]["parse_error_type"] == "malformed_json"
+    assert fallback["attempts"][1]["provider_diagnostics"]["provider_error_type"] == "rate_limited"
+    assert fallback["attempts"][1]["provider_diagnostics"]["parse_error_type"] is None
+    assert fifth["schema_valid"] is True
+    assert fifth["quality_valid"] is False
+    assert fifth_diagnostics["compact_schema_valid"] is True
+    assert fifth_diagnostics["internal_schema_valid"] is True
+    assert fifth_diagnostics["parse_error_type"] is None
+    assert fifth_diagnostics["quality_error_type"] == "missing_required_cta"
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["videos_insert_called"] is False
+    assert marker not in fallback_path.read_text(encoding="utf-8")
+    assert receipt is None and generator is None
 
 
 @pytest.mark.parametrize("first_mode", ["malformed_json", "schema_invalid"])

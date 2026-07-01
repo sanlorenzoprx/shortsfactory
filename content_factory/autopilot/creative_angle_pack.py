@@ -25,6 +25,8 @@ from .creative_angle_models import (
 from .creative_generation_provider import CreativeGenerationContext, CreativeGenerationProvider
 from .creative_pack_comparison import CreativePackComparator, CreativePackComparisonError
 from .creative_providers import (
+    ANGLE_RUBRIC,
+    CTA,
     RUBRIC_VERSION,
     CreativeProviderError,
     DeterministicCreativeGenerationProvider,
@@ -266,6 +268,23 @@ class CreativeAnglePackGenerator:
                 source_verdict=verdict_record.verdict,
                 online_provider_explicit=self.online_provider_explicit,
             )
+            if (
+                self.provider.provider_type == "online_llm"
+                and not any(gate["blocking"] for gate in gates)
+                and hasattr(self.provider, "mark_quality_result")
+            ):
+                self.provider.mark_quality_result(
+                    quality_valid=True,
+                    gates=gates,
+                    required_angle_ids=self._required_angle_ids(),
+                    angle_ids=[angle.angle_id for angle in angles],
+                    short_summaries=self._quality_short_summaries(short_jobs),
+                    longform_present=True,
+                    longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
+                    longform_ghosttowntest_cta_present=(
+                        CTA.casefold() in longform.cta_to_ghosttowntest_com.casefold()
+                    ),
+                )
         except (CreativeAngleContractError, CreativeProviderError, KeyError, TypeError, ValueError) as exc:
             diagnostics = getattr(self.provider, "provider_diagnostics", {})
             if (
@@ -320,7 +339,17 @@ class CreativeAnglePackGenerator:
                 and not any(gate["gate_name"] in fatal_gate_names and gate["status"] == "fail" for gate in gates)
                 and hasattr(self.provider, "mark_quality_invalid")
             ):
-                self.provider.mark_quality_invalid()
+                self.provider.mark_quality_invalid(
+                    gates=gates,
+                    required_angle_ids=self._required_angle_ids(),
+                    angle_ids=[angle.angle_id for angle in angles],
+                    short_summaries=self._quality_short_summaries(short_jobs),
+                    longform_present=True,
+                    longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
+                    longform_ghosttowntest_cta_present=(
+                        CTA.casefold() in longform.cta_to_ghosttowntest_com.casefold()
+                    ),
+                )
             return self._write_receipt(
                 timestamp=timestamp,
                 angle_pack_id=angle_pack_id,
@@ -446,6 +475,29 @@ class CreativeAnglePackGenerator:
             suggested_chapters_timestamps=tuple(raw.get("suggested_chapters_timestamps", [])),
             source_short_job_ids=tuple(job.job_id for job in short_jobs),
         )
+
+    @staticmethod
+    def _required_angle_ids() -> list[str]:
+        return [str(row["angle_id"]) for row in ANGLE_RUBRIC]
+
+    @staticmethod
+    def _quality_short_summaries(short_jobs: tuple[AngleShortJob, ...]) -> list[dict[str, Any]]:
+        summaries: list[dict[str, Any]] = []
+        for job in short_jobs:
+            metadata_cta = str(job.youtube_metadata_draft.get("cta", ""))
+            cta_values = (job.cta, job.script, job.caption, metadata_cta)
+            summaries.append({
+                "angle_id": job.angle_id,
+                "script_present": bool(job.script.strip()),
+                "caption_present": bool(job.caption.strip()),
+                "thumbnail_text_present": bool(job.thumbnail_text.strip()),
+                "hashtags_present": bool(job.hashtags),
+                "cta_present": bool(job.cta.strip()),
+                "ghosttowntest_cta_present": all(
+                    CTA.casefold() in str(value).casefold() for value in cta_values
+                ),
+            })
+        return summaries
 
     def _persist_artifacts(
         self,

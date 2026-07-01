@@ -17,6 +17,16 @@ from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter, build_ll
 
 FALLBACK_RECEIPT_VERSION = "phase5b.5b.openrouter-fallback.v1"
 FATAL_GATE_NAMES = {"secret_redaction", "no_platform_actions", "publishing_closed"}
+STAGE_RANK = {
+    "network_failed": 0,
+    "provider_rate_limited": 1,
+    "empty_provider_content": 2,
+    "malformed_json": 3,
+    "compact_schema_invalid": 4,
+    "internal_schema_invalid": 5,
+    "quality_invalid": 6,
+    "passed": 7,
+}
 
 
 def _utc_now() -> datetime:
@@ -133,6 +143,8 @@ class CreativeFallbackRunner:
         receipt: CreativeAnglePackReceipt,
         number: int,
     ) -> dict[str, Any]:
+        diagnostics = dict(receipt.provider_diagnostics)
+        stage = CreativeFallbackRunner._stage_reached(receipt, diagnostics)
         return {
             "attempt_number": number,
             "model_id": profile.model_id,
@@ -140,6 +152,8 @@ class CreativeFallbackRunner:
             "status": receipt.status,
             "schema_valid": receipt.schema_valid,
             "quality_valid": receipt.status == "passed",
+            "stage_reached": stage,
+            "final_block_reason": None if stage == "passed" else stage,
             "receipt": generator.receipt_path(receipt.angle_pack_id).relative_to(generator.output_root).as_posix(),
             "tokens_used": receipt.tokens_used,
             "cost_estimate": receipt.cost_estimate,
@@ -152,7 +166,7 @@ class CreativeFallbackRunner:
             "raw_response_stored": False,
             "reasoning_details_stored": False,
             "stream_enabled": False,
-            "provider_diagnostics": dict(receipt.provider_diagnostics),
+            "provider_diagnostics": diagnostics,
         }
 
     @staticmethod
@@ -186,12 +200,23 @@ class CreativeFallbackRunner:
             if selected_receipt is not None
             else dict(attempts[-1]["provider_diagnostics"]) if attempts else {}
         )
+        best_attempt = self._best_attempt(attempts)
+        final_block_reason = None if selected_receipt is not None else (
+            "configuration_error"
+            if configuration_error and not attempts
+            else best_attempt.get("stage_reached") if best_attempt else None
+        )
         return {
             "receipt_version": FALLBACK_RECEIPT_VERSION,
             "timestamp": timestamp,
             "fallback_attempt_id": fallback_attempt_id,
             "fallback_group_id": self.group.fallback_group_id,
             "status": "passed" if selected_receipt is not None else "blocked",
+            "final_block_reason": final_block_reason,
+            "best_attempt_number": best_attempt.get("attempt_number") if best_attempt else None,
+            "best_attempt_model_id": best_attempt.get("model_id") if best_attempt else None,
+            "best_attempt_provider_model": best_attempt.get("provider_model") if best_attempt else None,
+            "best_attempt_stage_reached": best_attempt.get("stage_reached") if best_attempt else None,
             "selected_model_id": selected_receipt.model_id if selected_receipt is not None else None,
             "selected_provider_model": selected_profile.provider_model if selected_profile is not None else None,
             "selected_angle_pack_id": selected_receipt.angle_pack_id if selected_receipt is not None else None,
@@ -210,5 +235,39 @@ class CreativeFallbackRunner:
             "stream_enabled": False,
             "provider_diagnostics": diagnostics,
             **diagnostics,
+            "final_block_reason": final_block_reason,
             "configuration_error": configuration_error,
         }
+
+    @staticmethod
+    def _best_attempt(attempts: list[dict[str, Any]]) -> dict[str, Any] | None:
+        if not attempts:
+            return None
+        return max(
+            attempts,
+            key=lambda row: (STAGE_RANK.get(str(row.get("stage_reached")), -1), -int(row.get("attempt_number", 0))),
+        )
+
+    @staticmethod
+    def _stage_reached(receipt: CreativeAnglePackReceipt, diagnostics: dict[str, Any]) -> str:
+        if receipt.status == "passed":
+            return "passed"
+        if diagnostics.get("final_block_reason") == "quality_invalid" or diagnostics.get("quality_error_type"):
+            return "quality_invalid"
+        if diagnostics.get("schema_error_type") == "internal_schema_invalid":
+            return "internal_schema_invalid"
+        if diagnostics.get("schema_error_type") == "compact_schema_invalid":
+            return "compact_schema_invalid"
+        if diagnostics.get("provider_error_type") == "rate_limited":
+            return "provider_rate_limited"
+        if diagnostics.get("parse_error_type") == "empty_provider_content":
+            return "empty_provider_content"
+        if diagnostics.get("parse_error_type") in {
+            "malformed_json", "json_object_not_found", "unsafe_provider_content",
+        }:
+            return "malformed_json"
+        if diagnostics.get("provider_error_type") in {"provider_unavailable", "timeout", "network_failed"}:
+            return "network_failed"
+        if receipt.schema_valid is True and receipt.status != "passed":
+            return "quality_invalid"
+        return "network_failed"

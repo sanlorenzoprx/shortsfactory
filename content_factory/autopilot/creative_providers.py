@@ -366,6 +366,7 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
     def mark_internal_schema_valid(self) -> None:
         self.adapter.provider_diagnostics.internal_schema_valid = True
         self.adapter.provider_diagnostics.parse_error_type = None
+        self.adapter.provider_diagnostics.schema_error_type = None
         self.adapter.provider_diagnostics.missing_required_fields = []
         self.adapter.provider_diagnostics.schema_error_count = 0
 
@@ -373,8 +374,50 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
         self.adapter.provider_diagnostics.internal_schema_valid = False
         self.adapter.provider_diagnostics.record_schema_failure("internal_schema_invalid", paths or ["$"])
 
-    def mark_quality_invalid(self) -> None:
-        self.adapter.provider_diagnostics.parse_error_type = "quality_invalid"
+    def mark_quality_result(
+        self,
+        *,
+        quality_valid: bool,
+        gates: tuple[JsonDict, ...],
+        required_angle_ids: list[str],
+        angle_ids: list[str],
+        short_summaries: list[JsonDict],
+        longform_present: bool,
+        longform_cta_present: bool,
+        longform_ghosttowntest_cta_present: bool,
+    ) -> None:
+        self.adapter.provider_diagnostics.record_quality_result(
+            quality_valid=quality_valid,
+            gates=gates,
+            required_angle_ids=required_angle_ids,
+            angle_ids=angle_ids,
+            short_summaries=short_summaries,
+            longform_present=longform_present,
+            longform_cta_present=longform_cta_present,
+            longform_ghosttowntest_cta_present=longform_ghosttowntest_cta_present,
+        )
+
+    def mark_quality_invalid(
+        self,
+        *,
+        gates: tuple[JsonDict, ...],
+        required_angle_ids: list[str],
+        angle_ids: list[str],
+        short_summaries: list[JsonDict],
+        longform_present: bool,
+        longform_cta_present: bool,
+        longform_ghosttowntest_cta_present: bool,
+    ) -> None:
+        self.mark_quality_result(
+            quality_valid=False,
+            gates=gates,
+            required_angle_ids=required_angle_ids,
+            angle_ids=angle_ids,
+            short_summaries=short_summaries,
+            longform_present=longform_present,
+            longform_cta_present=longform_cta_present,
+            longform_ghosttowntest_cta_present=longform_ghosttowntest_cta_present,
+        )
 
     def _call(self, task: str, payload: JsonDict, schema: JsonDict) -> Any:
         prompt = json.dumps(
@@ -481,6 +524,8 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
                     elif (
                         self.adapter.provider_diagnostics.content_present
                         and self.adapter.provider_diagnostics.parse_error_type is None
+                        and self.adapter.provider_diagnostics.provider_error_type is None
+                        and self.adapter.provider_diagnostics.schema_error_type is None
                     ):
                         self.adapter.provider_diagnostics.record_schema_failure(
                             "compact_schema_invalid", ["$"],

@@ -400,7 +400,8 @@ def test_openrouter_rate_limit_records_stable_safe_error(monkeypatch):
         adapter.generate_json("prompt", {"type": "object"}, profile)
     diagnostics = adapter.provider_diagnostics.to_dict()
     assert diagnostics["provider_http_status"] == 429
-    assert diagnostics["parse_error_type"] == "rate_limited"
+    assert diagnostics["provider_error_type"] == "rate_limited"
+    assert diagnostics["parse_error_type"] is None
     assert "detail" not in json.dumps(diagnostics)
 
 

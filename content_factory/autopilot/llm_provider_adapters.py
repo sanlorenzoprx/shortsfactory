@@ -445,13 +445,13 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             raise
         except Exception as exc:
             if self.provider_diagnostics.provider_http_status == 429:
-                self.provider_diagnostics.parse_error_type = "rate_limited"
+                self.provider_diagnostics.record_provider_failure("rate_limited")
             elif self.provider_diagnostics.provider_http_status and self.provider_diagnostics.provider_http_status >= 500:
-                self.provider_diagnostics.parse_error_type = "provider_unavailable"
+                self.provider_diagnostics.record_provider_failure("provider_unavailable")
             elif "timeout" in type(exc).__name__.casefold():
-                self.provider_diagnostics.parse_error_type = "timeout"
+                self.provider_diagnostics.record_provider_failure("timeout")
             else:
-                self.provider_diagnostics.parse_error_type = "provider_unavailable"
+                self.provider_diagnostics.record_provider_failure("provider_unavailable")
             raise LLMAdapterError(f"generic HTTP LLM request failed: {type(exc).__name__}") from exc
 
     def _request_url(self) -> str:
@@ -467,7 +467,8 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 raise LLMAdapterError("empty_provider_content")
             value, extraction = extract_first_complete_json_object(content or "")
             self.provider_diagnostics.json_extraction_used = extraction.json_extraction_used
-            self.provider_diagnostics.parse_error_type = extraction.parse_error_type
+            if extraction.parse_error_type is not None:
+                self.provider_diagnostics.record_parse_failure(extraction.parse_error_type)
             if value is None:
                 raise LLMAdapterError(extraction.parse_error_type or "malformed_json")
         else:
@@ -482,14 +483,14 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             try:
                 value = json.loads(value)
             except json.JSONDecodeError as exc:
-                self.provider_diagnostics.parse_error_type = "malformed_json"
+                self.provider_diagnostics.record_parse_failure("malformed_json")
                 raise LLMAdapterError("LLM response contains malformed JSON") from exc
         if not isinstance(value, (dict, list)):
-            self.provider_diagnostics.parse_error_type = "json_object_not_found"
+            self.provider_diagnostics.record_parse_failure("json_object_not_found")
             raise LLMAdapterError("LLM response has no structured JSON output")
         encoded = json.dumps(value, ensure_ascii=False)
         if SECRET_PATTERN.search(encoded) or AUTH_URL_PATTERN.search(encoded):
-            self.provider_diagnostics.parse_error_type = "unsafe_provider_content"
+            self.provider_diagnostics.record_parse_failure("unsafe_provider_content")
             raise LLMAdapterError("LLM response contains secrets or authentication URLs")
         return value
 
