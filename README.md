@@ -1100,14 +1100,18 @@ live modes remain closed.
 
 ### Free/open-source model routes
 
-`openrouter-free` is the preferred first remote route. Its key and base URL stay
-in environment variables, with optional attribution headers:
+`openrouter-free` is the first recommended cloud route. Register with
+OpenRouter and create a new key; revoke any key previously pasted into chat or
+otherwise exposed. Keep the key only in the current PowerShell session or an
+ignored environment file, with optional attribution headers:
 
 ```powershell
 $env:OPENROUTER_API_KEY="<key>"
 $env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
 $env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
 $env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
+
+python llm_models.py test --model openrouter-free --confirm-live-llm-call
 
 python creative_angle_pack.py generate `
   --lit-verdict-file fixtures/lit_verdicts/sample.json `
@@ -1134,6 +1138,11 @@ python llm_models.py show --model ollama-local
 python llm_models.py test --model openrouter-free --dry-run
 python llm_models.py test --model ollama-local --dry-run
 ```
+
+`openrouter/free` is the starting router. Explicit `:free` IDs, available
+GLM/DeepSeek-style models, paid OpenRouter models, BytePlus ModelArk, and
+user-provided or self-hosted HTTPS endpoints can be added later as profiles;
+`creative_angle_pack.py` does not change.
 
 Free routes may be rate-limited or unavailable, and free/open models may have
 weaker JSON reliability. All output still must pass strict local schema and

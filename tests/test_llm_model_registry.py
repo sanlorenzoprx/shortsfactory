@@ -44,6 +44,7 @@ def test_registry_loads_safe_example_profiles():
 def test_free_openrouter_and_local_ollama_profiles_load():
     registry = _registry()
     openrouter = registry.require("openrouter-free", require_json_schema=True)
+    assert openrouter.provider == "openrouter"
     assert openrouter.provider_model == "openrouter/free"
     assert openrouter.api_key_env == "OPENROUTER_API_KEY"
     assert openrouter.base_url_env == "OPENROUTER_BASE_URL"
@@ -174,6 +175,14 @@ def test_openrouter_requires_api_key_and_supports_optional_attribution(monkeypat
         adapter._headers()
 
 
+def test_openrouter_requires_https_base_url(monkeypatch):
+    profile = _registry().require("openrouter-free")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "http://openrouter.ai/api/v1")
+    with pytest.raises(LLMAdapterError, match="must use HTTPS"):
+        build_llm_adapter(profile, allow_network=False, require_config=True)
+
+
 def test_ollama_requires_no_key_and_accepts_explicit_loopback_only(monkeypatch):
     profile = _registry().require("ollama-local", require_json_schema=True)
     monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
@@ -260,3 +269,50 @@ def test_chat_json_adapter_expands_base_url_without_network():
     )
     assert adapter._request_url() == "https://provider.example/v1/chat/completions"
     assert adapter.network_called is False
+
+
+def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(monkeypatch):
+    profile = _registry().require("openrouter-free", require_json_schema=True)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    requests = []
+
+    def transport(**request):
+        requests.append(request)
+        return {
+            "choices": [{
+                "message": {
+                    "content": '{"ok": true}',
+                    "reasoning_details": [{"type": "hidden", "text": "do not retain"}],
+                },
+            }],
+            "usage": {"total_tokens": 12},
+        }
+
+    adapter = build_llm_adapter(
+        profile,
+        allow_network=True,
+        require_config=True,
+        transport=transport,
+    )
+    result = adapter.generate_json(
+        '{"task":"test"}',
+        {
+            "type": "object",
+            "properties": {"ok": {"type": "boolean"}},
+            "required": ["ok"],
+            "additionalProperties": False,
+        },
+        profile,
+    )
+
+    assert result == {"ok": True}
+    assert len(requests) == 1
+    request = requests[0]
+    assert request["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert request["json"]["model"] == "openrouter/free"
+    assert request["json"]["temperature"] == 0.2
+    assert request["json"]["max_tokens"] == 4000
+    assert request["json"]["stream"] is False
+    assert "reasoning_details" not in json.dumps(result)
+    assert adapter.raw_response_stored is False

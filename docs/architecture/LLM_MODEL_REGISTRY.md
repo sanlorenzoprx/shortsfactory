@@ -30,7 +30,15 @@ fields are rejected even in local profile files.
 `provider_model: openrouter/free`, requires `OPENROUTER_API_KEY`, and reads its
 HTTPS base URL from `OPENROUTER_BASE_URL`. Optional `OPENROUTER_HTTP_REFERER`
 and `OPENROUTER_APP_TITLE` values add attribution headers but are never required
-or persisted.
+or persisted. Register with OpenRouter and create a new key; revoke any key
+previously pasted into chat or otherwise exposed. Keep credentials only in the
+PowerShell session or an ignored environment file.
+
+Explicit OpenRouter `:free` IDs and available GLM/DeepSeek-style models can be
+added as profiles later. BytePlus ModelArk remains a future fallback. Paid
+OpenRouter models, user-provided OpenAI-compatible services, and future
+self-hosted HTTPS endpoints use the same contract and require no changes to
+`creative_angle_pack.py`.
 
 `ollama-local` is the preferred no-cloud route. It defaults to
 `provider_model: llama3.1:8b`, needs no API key, and reads `OLLAMA_BASE_URL`.

@@ -16,13 +16,18 @@ ignored `.local/llm/models.json`. Profiles never contain credentials. Generic
 HTTP adapters read the exact environment-variable names declared by each
 profile.
 
-The preferred free remote profile is `openrouter-free`:
+The first recommended cloud route is `openrouter-free`. Register with
+OpenRouter, create a new API key, and revoke any key that was pasted into chat
+or otherwise exposed. Keep the new key only in the current PowerShell session
+or an ignored environment file:
 
 ```powershell
 $env:OPENROUTER_API_KEY="<key>"
 $env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
 $env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
 $env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
+
+python llm_models.py test --model openrouter-free --confirm-live-llm-call
 ```
 
 The preferred no-cloud profile is `ollama-local`:
@@ -30,6 +35,12 @@ The preferred no-cloud profile is `ollama-local`:
 ```powershell
 $env:OLLAMA_BASE_URL="http://localhost:11434/v1"
 ```
+
+The starting router is `openrouter/free`. Explicit OpenRouter `:free` model IDs
+and GLM/DeepSeek-style models can be added later as profiles when available.
+Paid OpenRouter models need only another profile; `creative_angle_pack.py` does
+not change. BytePlus ModelArk remains a future fallback, and user-provided or
+self-hosted HTTPS OpenAI-compatible endpoints use the same provider contract.
 
 OpenRouter free capacity can be rate-limited or unavailable. Ollama and other
 free/open models may be weaker at structured JSON. Both still pass the same

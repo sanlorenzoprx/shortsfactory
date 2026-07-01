@@ -22,7 +22,7 @@ from content_factory.autopilot.creative_providers import (
     OnlineLLMCreativeGenerationProvider,
 )
 from content_factory.autopilot.llm_model_registry import LLMModelRegistry
-from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter
+from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter, build_llm_adapter
 
 
 FIXTURE = Path("fixtures/lit_verdicts/sample.json")
@@ -162,6 +162,53 @@ def test_fake_adapter_generates_valid_online_creative_pack_without_network(tmp_p
         "lit_verdict_id", "lit_verdict", "required_angles", "brand_context", "requirements",
     }
     assert "source_receipt_references" not in json.dumps(prompt_input)
+
+
+def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp_path, monkeypatch):
+    profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require(
+        "openrouter-free", require_json_schema=True,
+    )
+    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    exposed_marker = "reasoning-must-not-be-stored"
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-openrouter-key")
+    monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+    calls = []
+
+    def transport(**request):
+        calls.append(request)
+        return {
+            "choices": [{
+                "message": {
+                    "content": json.dumps(fixture["creative_output"]),
+                    "reasoning_details": [{"text": exposed_marker}],
+                },
+            }],
+        }
+
+    adapter = build_llm_adapter(
+        profile,
+        allow_network=True,
+        require_config=True,
+        transport=transport,
+    )
+    provider = OnlineLLMCreativeGenerationProvider(profile, adapter)
+    output, generator, receipt = _generate(tmp_path, provider, online_explicit=True)
+    _, jobs, _ = _artifacts(output, receipt)
+    persisted = generator.receipt_path(receipt.angle_pack_id).read_text(encoding="utf-8")
+
+    assert receipt.status == "passed"
+    assert receipt.model_provider == "openrouter"
+    assert receipt.short_jobs_created == 5
+    assert len(jobs) == 5
+    assert {job.angle_id for job in jobs} == EXPECTED_ANGLES
+    assert receipt.raw_response_stored is False
+    assert receipt.secrets_recorded is False
+    assert receipt.publish_attempted is False
+    assert receipt.youtube_api_called is False
+    assert len(calls) == 1
+    assert calls[0]["json"]["stream"] is False
+    assert exposed_marker not in persisted
+    assert "test-only-openrouter-key" not in persisted
 
 
 @pytest.mark.parametrize("response_mode", ["malformed_json", "schema_invalid"])

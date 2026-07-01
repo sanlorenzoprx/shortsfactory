@@ -91,7 +91,7 @@
     },
     {
       "model_id": "openrouter-free",
-      "provider": "generic_http",
+      "provider": "openrouter",
       "provider_model": "openrouter/free",
       "display_name": "OpenRouter Free Router",
       "endpoint_type": "chat_json",
@@ -103,7 +103,7 @@
       "cost_per_1m_output_tokens": 0,
       "latency_class": "balanced",
       "recommended_for": ["hooks", "scripts", "captions", "metadata", "longform"],
-      "safety_notes": "Free route may be rate-limited or unavailable. Output must still pass schema and gates.",
+      "safety_notes": "OpenRouter free router. Requires API key. Free route may be rate-limited or unavailable. Output must pass schema and quality gates.",
       "enabled": true,
       "api_key_env": "OPENROUTER_API_KEY",
       "base_url_env": "OPENROUTER_BASE_URL",

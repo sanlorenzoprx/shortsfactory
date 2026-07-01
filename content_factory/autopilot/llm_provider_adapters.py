@@ -375,7 +375,13 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         body = {
             "model": model_profile.provider_model,
             "messages": [
-                {"role": "system", "content": "Return only schema-valid JSON. Never publish or call platform APIs."},
+                {
+                    "role": "system",
+                    "content": (
+                        "Return strict schema-valid JSON only, with no markdown fences or surrounding text. "
+                        "Never publish or call platform APIs."
+                    ),
+                },
                 {"role": "user", "content": prompt},
             ],
             "response_format": (
@@ -386,7 +392,9 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 if model_profile.supports_json_schema
                 else {"type": "json_object"}
             ),
+            "temperature": 0.2,
             "max_tokens": model_profile.max_output_tokens,
+            "stream": False,
         }
         self.network_called = True
         try:
