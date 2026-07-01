@@ -26,7 +26,6 @@ from .creative_generation_provider import CreativeGenerationContext, CreativeGen
 from .creative_pack_comparison import CreativePackComparator, CreativePackComparisonError
 from .creative_providers import (
     ANGLE_RUBRIC,
-    CTA,
     RUBRIC_VERSION,
     CreativeProviderError,
     DeterministicCreativeGenerationProvider,
@@ -282,7 +281,7 @@ class CreativeAnglePackGenerator:
                     longform_present=True,
                     longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
                     longform_ghosttowntest_cta_present=(
-                        CTA.casefold() in longform.cta_to_ghosttowntest_com.casefold()
+                        "GhostTownTest.com" in longform.cta_to_ghosttowntest_com
                     ),
                 )
         except (CreativeAngleContractError, CreativeProviderError, KeyError, TypeError, ValueError) as exc:
@@ -347,7 +346,7 @@ class CreativeAnglePackGenerator:
                     longform_present=True,
                     longform_cta_present=bool(longform.cta_to_ghosttowntest_com.strip()),
                     longform_ghosttowntest_cta_present=(
-                        CTA.casefold() in longform.cta_to_ghosttowntest_com.casefold()
+                        "GhostTownTest.com" in longform.cta_to_ghosttowntest_com
                     ),
                 )
             return self._write_receipt(
@@ -493,8 +492,9 @@ class CreativeAnglePackGenerator:
                 "thumbnail_text_present": bool(job.thumbnail_text.strip()),
                 "hashtags_present": bool(job.hashtags),
                 "cta_present": bool(job.cta.strip()),
-                "ghosttowntest_cta_present": all(
-                    CTA.casefold() in str(value).casefold() for value in cta_values
+                "ghosttowntest_cta_present": (
+                    "GhostTownTest.com" in job.cta
+                    and all(job.cta in str(value) for value in cta_values)
                 ),
             })
         return summaries

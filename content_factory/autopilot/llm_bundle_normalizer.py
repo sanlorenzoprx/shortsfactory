@@ -8,6 +8,13 @@ from .llm_bundle_schema import LLMCreativeBundleV1, REQUIRED_ANGLE_IDS
 TIMESTAMPS = ("00:00", "00:30", "01:00", "01:30", "02:00", "02:30")
 
 
+def _with_canonical_cta(content: str, cta: str) -> str:
+    value = content.rstrip()
+    if cta.casefold() in value.casefold():
+        return value
+    return f"{value}\n\n{cta}" if value else cta
+
+
 def normalize_llm_creative_bundle(
     bundle: LLMCreativeBundleV1,
     *,
@@ -18,7 +25,9 @@ def normalize_llm_creative_bundle(
     angles_by_id = {row["angle_id"]: row for row in value["angles"]}
     chapters_by_id = {row["angle_id"]: row for row in value["longform"]["chapters"]}
     rubric_by_id = {row["angle_id"]: dict(row) for row in angle_rubric}
-    cta = canonical_cta
+    if "ghosttowntest.com" not in canonical_cta.casefold():
+        raise ValueError("configured canonical CTA must include GhostTownTest.com")
+    cta = str(value["cta"]).strip()
     transitions = list(value["longform"]["transitions"][:4])
     while len(transitions) < 4:
         transitions.append("Next, compare this angle with the same buyer evidence.")
@@ -31,8 +40,8 @@ def normalize_llm_creative_bundle(
         shorts[angle_id] = {
             "title_variants": [angle["title"]],
             "hook": angle["hook"],
-            "script": angle["script"],
-            "caption": angle["caption"],
+            "script": _with_canonical_cta(angle["script"], cta),
+            "caption": _with_canonical_cta(angle["caption"], cta),
             "thumbnail_text": angle["thumbnail_text"],
             "cta": cta,
             "youtube_metadata_draft": {

@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .creative_angle_models import AngleShortJob, CreativeAnglePack, LongFormAssemblyPlan
-from .creative_providers import ANGLE_RUBRIC, CTA
+from .creative_providers import ANGLE_RUBRIC
 
 
 SECRET_PATTERN = re.compile(
@@ -144,16 +144,18 @@ def evaluate_creative_pack(
         "scripts require human grounding review: " + ", ".join(low_overlap),
         review=True,
     ))
+    canonical_cta = longform.cta_to_ghosttowntest_com
     cta_failures = [
         job.angle_id for job in short_jobs
-        if job.cta != CTA
-        or CTA not in job.script
-        or CTA not in job.caption
-        or job.youtube_metadata_draft.get("cta") != CTA
+        if job.cta != canonical_cta
+        or canonical_cta not in job.script
+        or canonical_cta not in job.caption
+        or job.youtube_metadata_draft.get("cta") != canonical_cta
+        or "GhostTownTest.com" not in job.cta
     ]
     gates.append(_gate(
         "ghost_town_cta",
-        not cta_failures and longform.cta_to_ghosttowntest_com == CTA,
+        not cta_failures and "GhostTownTest.com" in canonical_cta,
         "all short and long-form content uses the canonical GhostTownTest.com CTA",
         "CTA is missing or malformed in: " + ", ".join(cta_failures or ["long_form"]),
     ))

@@ -284,6 +284,10 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert "Keep each caption under 280 characters." in compact_prompt
     assert "Keep each longform chapter summary under 300 characters." in compact_prompt
     assert "Return compact JSON only using the LLMCreativeBundleV1 schema." in compact_prompt
+    assert "each hook must match its angle_id" in compact_prompt
+    assert "each hook must include a concrete risk, buyer action, or validation mistake" in compact_prompt
+    assert "thumbnail_text must be specific to the angle, not generic" in compact_prompt
+    assert "no external facts beyond the LIT verdict" in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
 
@@ -291,14 +295,22 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
 def test_compact_bundle_normalizer_builds_internal_scaffolding_without_trusting_ids():
     from content_factory.autopilot.creative_providers import ANGLE_RUBRIC, CTA
 
-    compact = LLMCreativeBundleV1.validate(_compact_bundle())
+    compact = LLMCreativeBundleV1.validate(_compact_bundle_missing_script_caption_cta())
     normalized = normalize_llm_creative_bundle(
-        compact, angle_rubric=ANGLE_RUBRIC, canonical_cta=CTA,
+        compact,
+        angle_rubric=ANGLE_RUBRIC,
+        canonical_cta="Configured fallback at GhostTownTest.com must not replace bundle CTA",
     )
     assert len(normalized["angles"]) == 5
     assert set(normalized["shorts"]) == EXPECTED_ANGLES
-    assert all(value["cta"] == CTA for value in normalized["shorts"].values())
+    bundle_cta = compact.value["cta"]
+    assert all(value["cta"] == bundle_cta for value in normalized["shorts"].values())
+    assert all(bundle_cta in value["script"] for value in normalized["shorts"].values())
+    assert all(bundle_cta in value["caption"] for value in normalized["shorts"].values())
+    assert all("GhostTownTest.com" in value["cta"] for value in normalized["shorts"].values())
+    assert all(value["youtube_metadata_draft"]["cta"] == bundle_cta for value in normalized["shorts"].values())
     assert all(value["youtube_metadata_draft"]["live_publish_enabled"] is False for value in normalized["shorts"].values())
+    assert normalized["longform"]["cta_to_ghosttowntest_com"] == bundle_cta
     assert len(normalized["longform"]["ordered_chapters"]) == 5
     assert len(normalized["longform"]["suggested_chapters_timestamps"]) == 6
 
@@ -307,6 +319,7 @@ def test_compact_bundle_normalizer_builds_internal_scaffolding_without_trusting_
     "mutation, expected_path",
     [
         (lambda value: value.pop("idea_summary"), "$.idea_summary"),
+        (lambda value: value.pop("cta"), "$.cta"),
         (lambda value: value["angles"].pop(), "$.angles"),
         (lambda value: value["angles"].__setitem__(1, dict(value["angles"][0])), "$.angles[].angle_id"),
         (lambda value: value["angles"][0].__setitem__("angle_id", "unknown"), "$.angles[].angle_id"),
@@ -502,17 +515,29 @@ def test_compact_openrouter_fallback_continues_on_internal_normalization_failure
 
 
 def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp_path):
+    markers = (
+        "private-hook-marker-must-not-store",
+        "private-script-marker-must-not-store",
+        "private-caption-marker-must-not-store",
+        "private-longform-marker-must-not-store",
+    )
     invalid = _compact_bundle()
-    invalid["angles"][0]["hook"] = "Seven generic words avoid every expected angle signal"
+    invalid["angles"][0]["hook"] = f"Seven generic words avoid every expected angle signal {markers[0]}"
+    invalid["angles"][0]["script"] += f" {markers[1]}"
+    invalid["angles"][0]["caption"] += f" {markers[2]}"
+    invalid["longform"]["intro"] += f" {markers[3]}"
     valid = _compact_bundle()
 
     def response_for_profile(profile):
         content = invalid if profile.model_id == "openrouter-gemma-4-26b-free" else valid
         return {"choices": [{"message": {"content": json.dumps(content)}}]}
 
-    fallback, _, receipt, _ = _fallback_runner(
+    runner = _fallback_runner(
         tmp_path, _openrouter_adapter_factory(response_for_profile),
-    ).run(lit_verdict_file=FIXTURE)
+    )
+    fallback, fallback_path, receipt, _ = runner.run(lit_verdict_file=FIXTURE)
+    first_receipt_path = runner.output_root / fallback["attempts"][0]["receipt"]
+    persisted = fallback_path.read_text(encoding="utf-8") + first_receipt_path.read_text(encoding="utf-8")
     assert fallback["status"] == "passed"
     assert fallback["total_attempts"] == 2
     diagnostics = fallback["attempts"][0]["provider_diagnostics"]
@@ -520,13 +545,27 @@ def test_compact_openrouter_fallback_continues_on_normalized_quality_failure(tmp
     assert diagnostics["internal_schema_valid"] is True
     assert diagnostics["parse_error_type"] is None
     assert diagnostics["quality_error_type"] == "weak_or_mismatched_hooks"
+    assert diagnostics["quality_failed_checks"] == ["specific_hooks"]
+    assert diagnostics["ghosttowntest_cta_present"] is True
+    assert not any(path.endswith(".ghosttowntest_cta") for path in diagnostics["quality_missing_fields"])
     assert diagnostics["final_block_reason"] == "quality_invalid"
     assert fallback["attempts"][0]["stage_reached"] == "quality_invalid"
     assert fallback["best_attempt_stage_reached"] == "passed"
+    assert all(marker not in json.dumps(diagnostics) for marker in markers)
+    assert all(marker not in persisted for marker in markers)
+    assert '"hook"' not in json.dumps(diagnostics)
+    assert '"script"' not in json.dumps(diagnostics)
+    assert '"caption"' not in json.dumps(diagnostics)
+    assert '"longform"' not in json.dumps(diagnostics)
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
     assert receipt is not None
 
 
-def test_quality_gate_diagnostics_split_parse_schema_and_safe_cta_metadata(tmp_path):
+def test_canonical_cta_propagation_clears_safe_quality_diagnostics(tmp_path):
     marker = "quality-diagnostic-marker-must-not-store"
     invalid = _compact_bundle_missing_script_caption_cta(marker)
 
@@ -541,20 +580,20 @@ def test_quality_gate_diagnostics_split_parse_schema_and_safe_cta_metadata(tmp_p
     first_receipt = json.loads((runner.output_root / fallback["attempts"][0]["receipt"]).read_text(encoding="utf-8"))
     persisted = fallback_path.read_text(encoding="utf-8") + json.dumps(first_receipt, ensure_ascii=False)
 
-    assert fallback["status"] == "blocked"
-    assert fallback["total_attempts"] == 5
-    assert receipt is None and generator is None
+    assert fallback["status"] == "passed"
+    assert fallback["total_attempts"] == 1
+    assert receipt is not None and generator is not None
     assert fallback["attempts"][0]["schema_valid"] is True
-    assert fallback["attempts"][0]["quality_valid"] is False
-    assert fallback["attempts"][0]["stage_reached"] == "quality_invalid"
+    assert fallback["attempts"][0]["quality_valid"] is True
+    assert fallback["attempts"][0]["stage_reached"] == "passed"
     assert diagnostics["parse_error_type"] is None
     assert diagnostics["schema_error_type"] is None
     assert diagnostics["compact_schema_valid"] is True
     assert diagnostics["internal_schema_valid"] is True
-    assert diagnostics["quality_valid"] is False
-    assert diagnostics["quality_error_type"] == "missing_required_cta"
-    assert diagnostics["quality_error_count"] == 1
-    assert diagnostics["quality_failed_checks"] == ["ghost_town_cta"]
+    assert diagnostics["quality_valid"] is True
+    assert diagnostics["quality_error_type"] is None
+    assert diagnostics["quality_error_count"] == 0
+    assert diagnostics["quality_failed_checks"] == []
     assert diagnostics["required_angle_ids_present"] == [
         "ghost_town_risk",
         "buyer_reality",
@@ -564,13 +603,13 @@ def test_quality_gate_diagnostics_split_parse_schema_and_safe_cta_metadata(tmp_p
     ]
     assert diagnostics["required_angle_ids_missing"] == []
     assert diagnostics["cta_present"] is True
-    assert diagnostics["ghosttowntest_cta_present"] is False
+    assert diagnostics["ghosttowntest_cta_present"] is True
     assert diagnostics["longform_present"] is True
     assert diagnostics["scripts_present_count"] == 5
     assert diagnostics["captions_present_count"] == 5
     assert diagnostics["thumbnail_text_present_count"] == 5
     assert diagnostics["hashtags_present_count"] == 5
-    assert all(path.endswith(".ghosttowntest_cta") for path in diagnostics["quality_missing_fields"])
+    assert not any(path.endswith(".ghosttowntest_cta") for path in diagnostics["quality_missing_fields"])
     assert marker not in persisted
     assert marker not in json.dumps(diagnostics)
     assert first_receipt["raw_response_stored"] is False
@@ -584,6 +623,7 @@ def test_quality_gate_diagnostics_split_parse_schema_and_safe_cta_metadata(tmp_p
 def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate_limit(tmp_path):
     marker = "best-stage-marker-must-not-store"
     invalid = _compact_bundle_missing_script_caption_cta(marker)
+    invalid["angles"][0]["hook"] = "Seven generic words avoid every expected angle signal"
 
     class RateLimitedResponse:
         status_code = 429
@@ -628,7 +668,13 @@ def test_fallback_best_attempt_stage_prefers_quality_invalid_over_parse_and_rate
     assert fifth_diagnostics["compact_schema_valid"] is True
     assert fifth_diagnostics["internal_schema_valid"] is True
     assert fifth_diagnostics["parse_error_type"] is None
-    assert fifth_diagnostics["quality_error_type"] == "missing_required_cta"
+    assert fifth_diagnostics["quality_error_type"] == "weak_or_mismatched_hooks"
+    assert fifth_diagnostics["quality_failed_checks"] == ["specific_hooks"]
+    assert fifth_diagnostics["ghosttowntest_cta_present"] is True
+    assert not any(
+        path.endswith(".ghosttowntest_cta")
+        for path in fifth_diagnostics["quality_missing_fields"]
+    )
     assert fallback["raw_response_stored"] is False
     assert fallback["reasoning_details_stored"] is False
     assert fallback["publish_attempted"] is False
