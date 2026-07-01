@@ -38,6 +38,7 @@ class CreativeGenerationProvider(ABC):
     estimated_input_tokens: int | None = None
     estimated_output_tokens: int | None = None
     estimated_cost: float | None = None
+    provider_reported_cost: float | None = None
     raw_response_stored: bool = False
 
     @abstractmethod

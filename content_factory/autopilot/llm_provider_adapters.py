@@ -32,6 +32,7 @@ class LLMProviderAdapter(ABC):
         self.estimated_output_tokens = 0
         self.estimated_cost = 0.0
         self.tokens_used: int | None = None
+        self.provider_reported_cost: float | None = None
         self.raw_response_stored = False
 
     @abstractmethod
@@ -375,23 +376,9 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         body = {
             "model": model_profile.provider_model,
             "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Return strict schema-valid JSON only, with no markdown fences or surrounding text. "
-                        "Never publish or call platform APIs."
-                    ),
-                },
+                {"role": "system", "content": "Return strict JSON only. No markdown. No explanation."},
                 {"role": "user", "content": prompt},
             ],
-            "response_format": (
-                {
-                    "type": "json_schema",
-                    "json_schema": {"name": "creative_generation", "strict": True, "schema": schema},
-                }
-                if model_profile.supports_json_schema
-                else {"type": "json_object"}
-            ),
             "temperature": 0.2,
             "max_tokens": model_profile.max_output_tokens,
             "stream": False,
@@ -422,6 +409,11 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             usage = raw.get("usage", {}) if isinstance(raw, dict) else {}
             if isinstance(usage, dict) and isinstance(usage.get("total_tokens"), int):
                 self.tokens_used = usage["total_tokens"]
+            reported_cost = usage.get("cost") if isinstance(usage, dict) else None
+            if reported_cost is None and isinstance(raw, dict):
+                reported_cost = raw.get("cost")
+            if isinstance(reported_cost, (int, float)) and not isinstance(reported_cost, bool) and reported_cost >= 0:
+                self.provider_reported_cost = float(reported_cost)
             self._record_usage(prompt, value, model_profile)
             return value
         except LLMAdapterError:

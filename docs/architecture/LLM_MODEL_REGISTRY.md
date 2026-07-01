@@ -26,19 +26,16 @@ fields are rejected even in local profile files.
 
 ## Preferred free routes
 
-`openrouter-free` is the preferred first remote route. It uses
-`provider_model: openrouter/free`, requires `OPENROUTER_API_KEY`, and reads its
-HTTPS base URL from `OPENROUTER_BASE_URL`. Optional `OPENROUTER_HTTP_REFERER`
-and `OPENROUTER_APP_TITLE` values add attribution headers but are never required
-or persisted. Register with OpenRouter and create a new key; revoke any key
-previously pasted into chat or otherwise exposed. Keep credentials only in the
-PowerShell session or an ignored environment file.
+OpenRouter is the preferred first cloud provider. The
+`openrouter-free-creative-chain` tries four explicit `:free` creative models,
+then `openrouter/free` last because the automatic router can select unsuitable
+models. Every profile requires `OPENROUTER_API_KEY` and reads the HTTPS base URL
+from `OPENROUTER_BASE_URL`; optional attribution headers are never persisted.
+Keep credentials only in the PowerShell session or an ignored environment file.
 
-Explicit OpenRouter `:free` IDs and available GLM/DeepSeek-style models can be
-added as profiles later. BytePlus ModelArk remains a future fallback. Paid
-OpenRouter models, user-provided OpenAI-compatible services, and future
-self-hosted HTTPS endpoints use the same contract and require no changes to
-`creative_angle_pack.py`.
+Exact model slugs are editable in ignored `.local/llm/models.json`. Prefer
+`:free` slugs to avoid accidental paid use. BytePlus ModelArk and future
+self-hosted HTTPS services remain provider-profile additions.
 
 `ollama-local` is the preferred no-cloud route. It defaults to
 `provider_model: llama3.1:8b`, needs no API key, and reads `OLLAMA_BASE_URL`.
@@ -75,7 +72,10 @@ python llm_models.py init-local-config
 
 ```powershell
 python llm_models.py validate-config
-python llm_models.py show --model openrouter-free
+python llm_models.py show --model openrouter-gemma-4-26b-free
+python llm_models.py list-fallbacks
+python llm_models.py show-fallback --fallback-group openrouter-free-creative-chain
+python llm_models.py test-fallback --fallback-group openrouter-free-creative-chain --dry-run
 python llm_models.py show --model ollama-local
 python llm_models.py show --model <model_id>
 python llm_models.py test --model <model_id> --dry-run

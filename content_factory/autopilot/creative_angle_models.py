@@ -210,6 +210,7 @@ class CreativeAnglePackReceipt:
     estimated_input_tokens: int | None
     estimated_output_tokens: int | None
     estimated_cost: float | None
+    provider_reported_cost: float | None
     adapter_type: str | None
     five_angles_generated: bool
     short_jobs_created: int
@@ -219,6 +220,8 @@ class CreativeAnglePackReceipt:
     secrets_recorded: bool
     network_called: bool
     raw_response_stored: bool
+    reasoning_details_stored: bool
+    stream_enabled: bool
     publish_attempted: bool
     youtube_api_called: bool
     videos_insert_called: bool
@@ -238,6 +241,10 @@ class CreativeAnglePackReceipt:
             raise CreativeAngleContractError("receipts must not record secrets")
         if self.raw_response_stored is not False:
             raise CreativeAngleContractError("receipts must not store raw LLM responses")
+        if self.reasoning_details_stored is not False:
+            raise CreativeAngleContractError("receipts must not store LLM reasoning details")
+        if self.stream_enabled is not False:
+            raise CreativeAngleContractError("creative generation must not stream LLM responses")
         if self.publish_attempted is not False:
             raise CreativeAngleContractError("creative generation cannot publish")
         if self.youtube_api_called is not False or self.videos_insert_called is not False:
@@ -254,4 +261,10 @@ class CreativeAnglePackReceipt:
 
     @classmethod
     def from_dict(cls, value: JsonDict) -> "CreativeAnglePackReceipt":
-        return cls(**{**value, "gates": tuple(value.get("gates", []))})
+        return cls(**{
+            "provider_reported_cost": None,
+            "reasoning_details_stored": False,
+            "stream_enabled": False,
+            **value,
+            "gates": tuple(value.get("gates", [])),
+        })

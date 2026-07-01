@@ -13,7 +13,8 @@ from content_factory.autopilot.creative_angle_models import (
     CreativeAnglePackReceipt,
     LongFormAssemblyPlan,
 )
-from content_factory.autopilot.creative_angle_pack import CreativeAnglePackGenerator, main
+from content_factory.autopilot.creative_angle_pack import CreativeAnglePackGenerator, build_parser, main
+from content_factory.autopilot.creative_fallback import CreativeFallbackRunner
 from content_factory.autopilot.creative_pack_comparison import CreativePackComparator
 from content_factory.autopilot.creative_providers import (
     CTA,
@@ -166,7 +167,7 @@ def test_fake_adapter_generates_valid_online_creative_pack_without_network(tmp_p
 
 def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp_path, monkeypatch):
     profile = LLMModelRegistry(local_path=NO_LOCAL_MODELS).require(
-        "openrouter-free", require_json_schema=True,
+        "openrouter-free-router", require_json_schema=True,
     )
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     exposed_marker = "reasoning-must-not-be-stored"
@@ -202,6 +203,8 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert len(jobs) == 5
     assert {job.angle_id for job in jobs} == EXPECTED_ANGLES
     assert receipt.raw_response_stored is False
+    assert receipt.reasoning_details_stored is False
+    assert receipt.stream_enabled is False
     assert receipt.secrets_recorded is False
     assert receipt.publish_attempted is False
     assert receipt.youtube_api_called is False
@@ -209,6 +212,139 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert calls[0]["json"]["stream"] is False
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
+
+
+def _fallback_runner(tmp_path, adapter_factory):
+    return CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / "fallback output",
+        adapter_factory=adapter_factory,
+        now=lambda: NOW,
+    )
+
+
+@pytest.mark.parametrize("first_mode", ["malformed_json", "schema_invalid"])
+def test_openrouter_fallback_retries_invalid_json_then_stops_on_first_valid_model(tmp_path, first_mode):
+    adapters = {}
+
+    def adapter_factory(profile):
+        mode = first_mode if profile.model_id == "openrouter-gemma-4-26b-free" else "valid"
+        adapter = FakeLLMAdapter(response_mode=mode)
+        adapters[profile.model_id] = adapter
+        return adapter
+
+    runner = _fallback_runner(tmp_path, adapter_factory)
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+
+    assert fallback["status"] == "passed"
+    assert fallback["selected_model_id"] == "openrouter-gemma-4-31b-free"
+    assert fallback["selected_provider_model"] == "google/gemma-4-31b-it:free"
+    assert fallback["total_attempts"] == 2
+    assert [row["status"] for row in fallback["attempts"]] == ["blocked", "passed"]
+    assert fallback["network_called"] is False
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["stream_enabled"] is False
+    assert receipt is not None and generator is not None
+    assert receipt.source_receipt_references["fallback_attempt_receipt"] == (
+        fallback_path.relative_to(runner.output_root).as_posix()
+    )
+    assert generator.receipt_path(receipt.angle_pack_id).is_file()
+    assert not adapters["openrouter-gemma-4-31b-free"].network_called
+
+
+class QualityInvalidFakeAdapter(FakeLLMAdapter):
+    def generate_json(self, prompt, schema, model_profile):
+        value = super().generate_json(prompt, schema, model_profile)
+        value["shorts"]["ghost_town_risk"]["hook"] = (
+            "Seven generic words avoid every expected angle signal"
+        )
+        return value
+
+
+def test_openrouter_fallback_retries_quality_invalid_pack(tmp_path):
+    def adapter_factory(profile):
+        if profile.model_id == "openrouter-gemma-4-26b-free":
+            return QualityInvalidFakeAdapter()
+        return FakeLLMAdapter()
+
+    fallback, _, receipt, _ = _fallback_runner(tmp_path, adapter_factory).run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "passed"
+    assert fallback["total_attempts"] == 2
+    assert fallback["attempts"][0]["schema_valid"] is True
+    assert fallback["attempts"][0]["quality_valid"] is False
+    assert receipt is not None and receipt.model_id == "openrouter-gemma-4-31b-free"
+
+
+def test_openrouter_fallback_all_failures_write_blocked_redacted_attempt_receipts(tmp_path):
+    runner = _fallback_runner(tmp_path, lambda profile: FakeLLMAdapter(response_mode="malformed_json"))
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    persisted = fallback_path.read_text(encoding="utf-8")
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 5
+    assert receipt is None and generator is None
+    assert all(row["status"] == "blocked" for row in fallback["attempts"])
+    assert all((runner.output_root / row["receipt"]).is_file() for row in fallback["attempts"])
+    assert "api_key" not in persisted.casefold()
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["videos_insert_called"] is False
+    assert fallback["secrets_recorded"] is False
+    assert fallback["raw_response_stored"] is False
+
+
+def test_openrouter_fallback_stops_on_secret_detection(tmp_path):
+    def adapter_factory(profile):
+        if profile.model_id == "openrouter-gemma-4-26b-free":
+            return SecretFakeAdapter()
+        return FakeLLMAdapter()
+
+    fallback, _, receipt, _ = _fallback_runner(tmp_path, adapter_factory).run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 1
+    assert fallback["attempts"][0]["status"] == "blocked"
+    assert receipt is None
+
+
+def test_openrouter_fallback_missing_credentials_fails_closed_without_network(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    calls = []
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / "fallback output",
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+
+    assert fallback["status"] == "blocked"
+    assert fallback["total_attempts"] == 0
+    assert fallback["configuration_error"]
+    assert fallback["network_called"] is False
+    assert fallback_path.is_file()
+    assert receipt is None and generator is None
+    assert calls == []
+
+
+def test_model_and_fallback_group_cli_options_are_mutually_exclusive():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args([
+            "generate", "--lit-verdict-file", str(FIXTURE), "--provider", "online_llm",
+            "--model", "fake-json-model", "--fallback-group", "openrouter-free-creative-chain",
+        ])
+
+
+def test_fallback_group_requires_online_provider(tmp_path, capsys):
+    result = main([
+        "generate", "--lit-verdict-file", str(FIXTURE), "--provider", "deterministic",
+        "--fallback-group", "openrouter-free-creative-chain", "--output-root", str(tmp_path),
+    ])
+    assert result == 1
+    assert "requires --provider online_llm" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("response_mode", ["malformed_json", "schema_invalid"])

@@ -141,12 +141,16 @@ class CreativeAnglePackGenerator:
         output_root: str | Path = "output",
         now: Callable[[], datetime] = _utc_now,
         online_provider_explicit: bool = False,
+        fallback_attempt: bool = False,
+        additional_source_receipt_references: dict[str, str] | None = None,
     ):
         self.provider = provider or DeterministicCreativeGenerationProvider()
         self.output_root = Path(output_root).expanduser().resolve()
         self.store = AutopilotStore(self.output_root)
         self.now = now
         self.online_provider_explicit = online_provider_explicit
+        self.fallback_attempt = fallback_attempt
+        self.additional_source_receipt_references = additional_source_receipt_references or {}
 
     def generate(
         self,
@@ -167,6 +171,7 @@ class CreativeAnglePackGenerator:
                 self._validate_id(batch_id, "batch_id")
             source_batch, idea, verdict_record = self._find_source(idea_id, batch_id)
             source_references = self._source_references(source_batch)
+        source_references.update(self.additional_source_receipt_references)
         return self.generate_from_records(
             idea=idea,
             verdict_record=verdict_record,
@@ -259,13 +264,23 @@ class CreativeAnglePackGenerator:
             )
         except (CreativeAngleContractError, CreativeProviderError, KeyError, TypeError, ValueError) as exc:
             output_hash = _sha256(raw_output)
+            error_text = str(exc).casefold()
+            gate_name = (
+                "secret_redaction"
+                if "secret" in error_text or "authentication url" in error_text
+                else "provider_schema_validation"
+            )
             gates = ({
-                "gate_name": "provider_schema_validation",
+                "gate_name": gate_name,
                 "status": "fail",
                 "blocking": True,
-                "reason": f"provider output failed schema validation ({type(exc).__name__})",
+                "reason": (
+                    "provider output failed safety validation"
+                    if gate_name == "secret_redaction"
+                    else f"provider output failed schema validation ({type(exc).__name__})"
+                ),
             },)
-            attempt_status = (
+            attempt_status = "blocked" if self.fallback_attempt else (
                 "failed"
                 if self.provider.provider_type == "online_llm" and self.provider.network_called
                 else "blocked"
@@ -495,6 +510,7 @@ class CreativeAnglePackGenerator:
             estimated_input_tokens=self.provider.estimated_input_tokens,
             estimated_output_tokens=self.provider.estimated_output_tokens,
             estimated_cost=self.provider.estimated_cost,
+            provider_reported_cost=self.provider.provider_reported_cost,
             adapter_type=self.provider.adapter_type,
             five_angles_generated=five_angles_generated,
             short_jobs_created=short_jobs_created,
@@ -504,6 +520,8 @@ class CreativeAnglePackGenerator:
             secrets_recorded=False,
             network_called=self.provider.network_called,
             raw_response_stored=self.provider.raw_response_stored,
+            reasoning_details_stored=False,
+            stream_enabled=False,
             publish_attempted=False,
             youtube_api_called=False,
             videos_insert_called=False,
@@ -518,6 +536,8 @@ class CreativeAnglePackGenerator:
                 "live_publishing_enabled": False,
                 "credentials_recorded": False,
                 "raw_provider_response_recorded": False,
+                "reasoning_details_recorded": False,
+                "stream_enabled": False,
                 "youtube_metadata_is_draft": True,
             },
         )
@@ -636,7 +656,9 @@ def build_parser() -> argparse.ArgumentParser:
     source.add_argument("--lit-verdict-file")
     generate.add_argument("--batch-id", help="Optional source autopilot batch ID")
     generate.add_argument("--provider", choices=("deterministic", "fixture", "online_llm"), default="deterministic")
-    generate.add_argument("--model", help="Required registry model ID for online_llm")
+    selection = generate.add_mutually_exclusive_group()
+    selection.add_argument("--model", help="Registry model ID for online_llm")
+    selection.add_argument("--fallback-group", help="Ordered registry fallback group for online_llm")
     generate.add_argument(
         "--models-file", "--online-config", dest="models_file", default=str(DEFAULT_LOCAL_PATH),
         help="Ignored local model registry overrides",
@@ -651,12 +673,18 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _provider_from_args(args: argparse.Namespace) -> CreativeGenerationProvider:
     if args.provider == "deterministic":
+        if args.model or args.fallback_group:
+            raise CreativeProviderError("--model and --fallback-group require --provider online_llm")
         return DeterministicCreativeGenerationProvider()
     if args.provider == "fixture":
+        if args.model or args.fallback_group:
+            raise CreativeProviderError("--model and --fallback-group require --provider online_llm")
         if not args.lit_verdict_file:
             raise CreativeProviderError("fixture provider requires --lit-verdict-file")
         _, _, fixture = load_lit_verdict_fixture(args.lit_verdict_file)
         return FixtureCreativeGenerationProvider(fixture.get("creative_output"))
+    if args.fallback_group:
+        raise CreativeProviderError("fallback groups must be run through the fallback runner")
     registry = LLMModelRegistry(local_path=args.models_file)
     profile = registry.require(args.model, require_json_schema=True)
     adapter = build_llm_adapter(profile, allow_network=True, require_config=False)
@@ -677,6 +705,36 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("Network called: false")
             print("Publishing attempted: false")
             return 0
+        if args.fallback_group:
+            if args.provider != "online_llm":
+                raise CreativeProviderError("--fallback-group requires --provider online_llm")
+            from .creative_fallback import CreativeFallbackRunner
+
+            runner = CreativeFallbackRunner(
+                registry=LLMModelRegistry(local_path=args.models_file),
+                fallback_group_id=args.fallback_group,
+                output_root=args.output_root,
+            )
+            fallback_receipt, fallback_path, receipt, generator = runner.run(
+                idea_id=args.idea_id,
+                batch_id=args.batch_id,
+                lit_verdict_file=args.lit_verdict_file,
+            )
+            print(f"Fallback group: {fallback_receipt['fallback_group_id']}")
+            print(f"Status: {fallback_receipt['status']}")
+            print(f"Total attempts: {fallback_receipt['total_attempts']}")
+            print(f"Selected model: {fallback_receipt['selected_model_id'] or 'none'}")
+            print(f"Fallback receipt: {fallback_path}")
+            if receipt is not None and generator is not None:
+                print(f"Creative angle pack: {receipt.angle_pack_id}")
+                print(f"Short jobs: {receipt.short_jobs_created}")
+                print(f"Receipt: {generator.receipt_path(receipt.angle_pack_id)}")
+                if receipt.longform_plan_created:
+                    print(f"Long-form plan: {generator.longform_path(receipt.angle_pack_id)}")
+            print("Full autopilot enabled: false")
+            print("Supervised autopilot enabled: false")
+            print("Live publishing enabled: false")
+            return 0 if fallback_receipt["status"] == "passed" else 1
         provider = _provider_from_args(args)
         generator = CreativeAnglePackGenerator(
             provider=provider,

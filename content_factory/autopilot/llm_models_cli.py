@@ -20,8 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--example-models", default=str(DEFAULT_EXAMPLE_PATH), help="Safe checked-in example profiles")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("list", help="List model profiles without credentials")
+    commands.add_parser("list-fallbacks", help="List ordered model fallback groups")
     show = commands.add_parser("show", help="Show one redacted model profile")
     show.add_argument("--model", required=True)
+    show_fallback = commands.add_parser("show-fallback", help="Show one ordered fallback group")
+    show_fallback.add_argument("--fallback-group", required=True)
     commands.add_parser("validate-config", help="Validate example and local profile files")
     init = commands.add_parser("init-local-config", help="Create an ignored real-model profile template")
     init.add_argument("--force", action="store_true", help="Replace an existing local model profile file")
@@ -30,6 +33,10 @@ def build_parser() -> argparse.ArgumentParser:
     mode = test.add_mutually_exclusive_group(required=True)
     mode.add_argument("--dry-run", action="store_true", help="Validate only; never call a network")
     mode.add_argument("--confirm-live-llm-call", action="store_true", help="Explicitly allow one provider test call")
+    test_fallback = commands.add_parser("test-fallback", help="Test fallback-chain readiness without generation")
+    test_fallback.add_argument("--fallback-group", required=True)
+    fallback_mode = test_fallback.add_mutually_exclusive_group(required=True)
+    fallback_mode.add_argument("--dry-run", action="store_true", help="Validate only; never call a network")
     return parser
 
 
@@ -69,12 +76,53 @@ def main(argv: Sequence[str] | None = None) -> int:
                 for profile in registry.list_profiles()
             ], indent=2, ensure_ascii=False))
             return 0
+        if args.command == "list-fallbacks":
+            print(json.dumps([
+                group.to_dict() for group in registry.list_fallback_groups()
+            ], indent=2, ensure_ascii=False))
+            return 0
         if args.command == "show":
             profile = registry.require(args.model, require_enabled=False)
             print(json.dumps({**profile.to_dict(), "model_profile_hash": profile.profile_hash}, indent=2, ensure_ascii=False))
             return 0
+        if args.command == "show-fallback":
+            group, profiles = registry.require_fallback_group(args.fallback_group)
+            print(json.dumps({
+                **group.to_dict(),
+                "profiles": [
+                    {
+                        "model_id": profile.model_id,
+                        "provider": profile.provider,
+                        "provider_model": profile.provider_model,
+                        "enabled": profile.enabled,
+                        "model_profile_hash": profile.profile_hash,
+                    }
+                    for profile in profiles
+                ],
+            }, indent=2, ensure_ascii=False))
+            return 0
         if args.command == "validate-config":
             print(json.dumps(registry.validate(), indent=2, ensure_ascii=False))
+            return 0
+        if args.command == "test-fallback":
+            group, profiles = registry.require_fallback_group(args.fallback_group)
+            results = []
+            for profile in profiles:
+                adapter = build_llm_adapter(profile, allow_network=False, require_config=False)
+                health = adapter.healthcheck()
+                results.append({
+                    "model_id": profile.model_id,
+                    "provider_model": profile.provider_model,
+                    "runtime_configuration_status": health.get("status"),
+                    "network_called": False,
+                })
+            print(json.dumps({
+                "fallback_group_id": group.fallback_group_id,
+                "status": "ready",
+                "dry_run": True,
+                "network_called": False,
+                "models": results,
+            }, indent=2, ensure_ascii=False))
             return 0
         profile = registry.require(args.model, require_json_schema=True)
         adapter = build_llm_adapter(

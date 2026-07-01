@@ -30,7 +30,7 @@ def _registry():
 def test_registry_loads_safe_example_profiles():
     registry = _registry()
     profiles = registry.list_profiles()
-    assert len(profiles) == 6
+    assert len(profiles) == 10
     fake = registry.require("fake-json-model", require_json_schema=True)
     assert fake.provider == "fake"
     assert fake.endpoint_type == "fake_json"
@@ -41,11 +41,11 @@ def test_registry_loads_safe_example_profiles():
     assert len(fake.profile_hash) == 64
 
 
-def test_free_openrouter_and_local_ollama_profiles_load():
+def test_explicit_openrouter_rotation_and_local_ollama_profiles_load():
     registry = _registry()
-    openrouter = registry.require("openrouter-free", require_json_schema=True)
+    openrouter = registry.require("openrouter-gemma-4-26b-free", require_json_schema=True)
     assert openrouter.provider == "openrouter"
-    assert openrouter.provider_model == "openrouter/free"
+    assert openrouter.provider_model == "google/gemma-4-26b-a4b-it:free"
     assert openrouter.api_key_env == "OPENROUTER_API_KEY"
     assert openrouter.base_url_env == "OPENROUTER_BASE_URL"
     assert openrouter.allow_localhost is False
@@ -57,6 +57,25 @@ def test_free_openrouter_and_local_ollama_profiles_load():
     assert ollama.base_url_env == "OLLAMA_BASE_URL"
     assert ollama.allow_localhost is True
     assert ollama.supports_json_schema is False
+
+
+def test_openrouter_fallback_group_loads_in_exact_order_with_router_last():
+    group, profiles = _registry().require_fallback_group("openrouter-free-creative-chain")
+    assert group.model_ids == (
+        "openrouter-gemma-4-26b-free",
+        "openrouter-gemma-4-31b-free",
+        "openrouter-llama-3-3-70b-free",
+        "openrouter-gpt-oss-120b-free",
+        "openrouter-free-router",
+    )
+    assert tuple(profile.model_id for profile in profiles) == group.model_ids
+    assert tuple(profile.provider_model for profile in profiles) == (
+        "google/gemma-4-26b-a4b-it:free",
+        "google/gemma-4-31b-it:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "openai/gpt-oss-120b:free",
+        "openrouter/free",
+    )
 
 
 def test_registry_refuses_missing_disabled_and_schema_incapable_models():
@@ -152,7 +171,7 @@ def test_generic_http_adapter_refuses_missing_credentials_without_network(monkey
 
 
 def test_openrouter_requires_api_key_and_supports_optional_attribution(monkeypatch):
-    profile = _registry().require("openrouter-free")
+    profile = _registry().require("openrouter-gemma-4-26b-free")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(LLMAdapterError, match="requires provider API key"):
@@ -176,7 +195,7 @@ def test_openrouter_requires_api_key_and_supports_optional_attribution(monkeypat
 
 
 def test_openrouter_requires_https_base_url(monkeypatch):
-    profile = _registry().require("openrouter-free")
+    profile = _registry().require("openrouter-gemma-4-26b-free")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "http://openrouter.ai/api/v1")
     with pytest.raises(LLMAdapterError, match="must use HTTPS"):
@@ -240,7 +259,7 @@ def test_model_cli_free_route_dry_runs_need_no_network_or_credentials(tmp_path, 
     for name in ("OPENROUTER_API_KEY", "OPENROUTER_BASE_URL", "OLLAMA_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
     registry_args = ["--models-file", str(tmp_path / "missing-models.json")]
-    assert main([*registry_args, "test", "--model", "openrouter-free", "--dry-run"]) == 0
+    assert main([*registry_args, "test", "--model", "openrouter-free-router", "--dry-run"]) == 0
     assert '"runtime_configuration_status": "blocked_missing_config"' in capsys.readouterr().out
     assert main([*registry_args, "test", "--model", "ollama-local", "--dry-run"]) == 0
     assert '"network_called": false' in capsys.readouterr().out
@@ -254,6 +273,27 @@ def test_model_cli_init_local_config_reports_safe_creation(tmp_path, monkeypatch
     output = capsys.readouterr().out
     assert '"git_ignored": true' in output
     assert '"credentials_included": false' in output
+
+
+def test_model_cli_lists_shows_and_dry_runs_fallback_without_network(tmp_path, monkeypatch, capsys):
+    calls = []
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: calls.append((args, kwargs)))
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENROUTER_BASE_URL", raising=False)
+    registry_args = ["--models-file", str(tmp_path / "missing-models.json")]
+    assert main([*registry_args, "list-fallbacks"]) == 0
+    assert "openrouter-free-creative-chain" in capsys.readouterr().out
+    assert main([
+        *registry_args, "show-fallback", "--fallback-group", "openrouter-free-creative-chain",
+    ]) == 0
+    shown = capsys.readouterr().out
+    assert shown.index("openrouter-gemma-4-26b-free") < shown.index("openrouter-free-router")
+    assert main([
+        *registry_args, "test-fallback", "--fallback-group", "openrouter-free-creative-chain", "--dry-run",
+    ]) == 0
+    tested = capsys.readouterr().out
+    assert '"network_called": false' in tested
+    assert calls == []
 
 
 def test_cost_estimation_uses_profile_rates():
@@ -272,7 +312,7 @@ def test_chat_json_adapter_expands_base_url_without_network():
 
 
 def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(monkeypatch):
-    profile = _registry().require("openrouter-free", require_json_schema=True)
+    profile = _registry().require("openrouter-free-router", require_json_schema=True)
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-only-key")
     monkeypatch.setenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     requests = []
@@ -286,7 +326,7 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
                     "reasoning_details": [{"type": "hidden", "text": "do not retain"}],
                 },
             }],
-            "usage": {"total_tokens": 12},
+            "usage": {"total_tokens": 12, "cost": 0.00125},
         }
 
     adapter = build_llm_adapter(
@@ -314,5 +354,11 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
     assert request["json"]["temperature"] == 0.2
     assert request["json"]["max_tokens"] == 4000
     assert request["json"]["stream"] is False
+    assert request["json"]["messages"][0] == {
+        "role": "system", "content": "Return strict JSON only. No markdown. No explanation.",
+    }
+    assert "reasoning" not in request["json"]
+    assert "response_format" not in request["json"]
     assert "reasoning_details" not in json.dumps(result)
     assert adapter.raw_response_stored is False
+    assert adapter.provider_reported_cost == 0.00125

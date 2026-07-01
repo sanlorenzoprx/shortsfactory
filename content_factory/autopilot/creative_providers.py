@@ -346,6 +346,10 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
     def raw_response_stored(self) -> bool:
         return self.adapter.raw_response_stored
 
+    @property
+    def provider_reported_cost(self) -> float | None:
+        return self.adapter.provider_reported_cost
+
     def _call(self, task: str, payload: JsonDict, schema: JsonDict) -> Any:
         prompt = json.dumps(
             {"system_prefix": self.prompt_prefix, "task": task, "input": payload},

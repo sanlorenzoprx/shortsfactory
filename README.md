@@ -1100,7 +1100,9 @@ live modes remain closed.
 
 ### Free/open-source model routes
 
-`openrouter-free` is the first recommended cloud route. Register with
+OpenRouter is the first recommended cloud provider. The default creative route
+is the ordered `openrouter-free-creative-chain`, not the automatic free router.
+Register with
 OpenRouter and create a new key; revoke any key previously pasted into chat or
 otherwise exposed. Keep the key only in the current PowerShell session or an
 ignored environment file, with optional attribution headers:
@@ -1111,12 +1113,14 @@ $env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
 $env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
 $env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
 
-python llm_models.py test --model openrouter-free --confirm-live-llm-call
+python llm_models.py list-fallbacks
+python llm_models.py show-fallback --fallback-group openrouter-free-creative-chain
+python llm_models.py test-fallback --fallback-group openrouter-free-creative-chain --dry-run
 
 python creative_angle_pack.py generate `
   --lit-verdict-file fixtures/lit_verdicts/sample.json `
   --provider online_llm `
-  --model openrouter-free
+  --fallback-group openrouter-free-creative-chain
 ```
 
 `ollama-local` is the preferred no-cloud route and needs no API key:
@@ -1133,16 +1137,21 @@ python creative_angle_pack.py generate `
 Inspect both profiles without a network call:
 
 ```powershell
-python llm_models.py show --model openrouter-free
+python llm_models.py show --model openrouter-gemma-4-26b-free
 python llm_models.py show --model ollama-local
-python llm_models.py test --model openrouter-free --dry-run
+python llm_models.py test-fallback --fallback-group openrouter-free-creative-chain --dry-run
 python llm_models.py test --model ollama-local --dry-run
 ```
 
-`openrouter/free` is the starting router. Explicit `:free` IDs, available
-GLM/DeepSeek-style models, paid OpenRouter models, BytePlus ModelArk, and
-user-provided or self-hosted HTTPS endpoints can be added later as profiles;
-`creative_angle_pack.py` does not change.
+The chain tries four explicit `:free` creative model slugs before
+`openrouter/free`. The automatic router is last because it can choose an
+unsuitable safety or moderation model. Exact slugs are ordinary profiles and
+can be corrected in ignored `.local/llm/models.json` if OpenRouter changes
+availability. Prefer `:free` to avoid accidental paid usage. BytePlus ModelArk
+and user-provided or self-hosted HTTPS endpoints remain future profiles.
+
+Each attempt is one non-streaming strict-JSON request. `reasoning.enabled` is
+never sent, and raw responses and `reasoning_details` are never stored.
 
 Free routes may be rate-limited or unavailable, and free/open models may have
 weaker JSON reliability. All output still must pass strict local schema and

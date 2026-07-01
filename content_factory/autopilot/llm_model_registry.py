@@ -112,6 +112,32 @@ class LLMModelProfile:
         return _canonical_hash(self.to_dict())
 
 
+@dataclass(frozen=True)
+class LLMFallbackGroup:
+    fallback_group_id: str
+    model_ids: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not SAFE_ID.fullmatch(self.fallback_group_id):
+            raise LLMModelRegistryError("fallback_group_id contains unsafe characters")
+        if not self.model_ids or len(set(self.model_ids)) != len(self.model_ids):
+            raise LLMModelRegistryError("fallback group requires unique ordered model IDs")
+        if any(not isinstance(model_id, str) or not SAFE_ID.fullmatch(model_id) for model_id in self.model_ids):
+            raise LLMModelRegistryError("fallback group contains an unsafe model ID")
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "LLMFallbackGroup":
+        if not isinstance(value, dict) or not isinstance(value.get("models"), list):
+            raise LLMModelRegistryError("fallback group must contain a models list")
+        return cls(
+            fallback_group_id=str(value.get("fallback_group_id", "")),
+            model_ids=tuple(value["models"]),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"fallback_group_id": self.fallback_group_id, "models": list(self.model_ids)}
+
+
 class LLMModelRegistry:
     def __init__(
         self,
@@ -121,10 +147,11 @@ class LLMModelRegistry:
     ):
         self.example_path = Path(example_path).expanduser().resolve()
         self.local_path = Path(local_path).expanduser().resolve()
-        self._profiles = self._load()
+        self._profiles, self._fallback_groups = self._load()
 
-    def _load(self) -> dict[str, LLMModelProfile]:
+    def _load(self) -> tuple[dict[str, LLMModelProfile], dict[str, LLMFallbackGroup]]:
         profiles: dict[str, LLMModelProfile] = {}
+        fallback_groups: dict[str, LLMFallbackGroup] = {}
         for path, required in ((self.example_path, True), (self.local_path, False)):
             if not path.is_file():
                 if required:
@@ -134,9 +161,18 @@ class LLMModelRegistry:
             for raw in value["models"]:
                 profile = LLMModelProfile.from_dict(raw)
                 profiles[profile.model_id] = profile
+            for raw in value.get("fallback_groups", []):
+                group = LLMFallbackGroup.from_dict(raw)
+                fallback_groups[group.fallback_group_id] = group
         if not profiles:
             raise LLMModelRegistryError("model registry contains no profiles")
-        return profiles
+        for group in fallback_groups.values():
+            missing = [model_id for model_id in group.model_ids if model_id not in profiles]
+            if missing:
+                raise LLMModelRegistryError(
+                    f"fallback group {group.fallback_group_id} references missing models: " + ", ".join(missing)
+                )
+        return profiles, fallback_groups
 
     @staticmethod
     def _read_config(path: Path) -> dict[str, Any]:
@@ -146,6 +182,8 @@ class LLMModelRegistry:
             raise LLMModelRegistryError(f"model registry config is invalid: {path.name}") from exc
         if not isinstance(value, dict) or not isinstance(value.get("models"), list):
             raise LLMModelRegistryError(f"model registry config must contain a models list: {path.name}")
+        if "fallback_groups" in value and not isinstance(value["fallback_groups"], list):
+            raise LLMModelRegistryError(f"model registry fallback_groups must be a list: {path.name}")
         if LLMModelRegistry._contains_forbidden_key(value):
             raise LLMModelRegistryError(f"model registry profiles must not contain credentials: {path.name}")
         return value
@@ -166,6 +204,21 @@ class LLMModelRegistry:
 
     def get(self, model_id: str) -> LLMModelProfile | None:
         return self._profiles.get(model_id)
+
+    def list_fallback_groups(self) -> tuple[LLMFallbackGroup, ...]:
+        return tuple(sorted(self._fallback_groups.values(), key=lambda row: row.fallback_group_id))
+
+    def get_fallback_group(self, fallback_group_id: str) -> LLMFallbackGroup | None:
+        return self._fallback_groups.get(fallback_group_id)
+
+    def require_fallback_group(self, fallback_group_id: str | None) -> tuple[LLMFallbackGroup, tuple[LLMModelProfile, ...]]:
+        if not fallback_group_id:
+            raise LLMModelRegistryError("online_llm requires --fallback-group <fallback_group_id>")
+        group = self.get_fallback_group(fallback_group_id)
+        if group is None:
+            raise LLMModelRegistryError(f"fallback group not found in registry: {fallback_group_id}")
+        profiles = tuple(self.require(model_id, require_json_schema=True) for model_id in group.model_ids)
+        return group, profiles
 
     def require(
         self,
@@ -196,6 +249,7 @@ class LLMModelRegistry:
             "profile_count": len(profiles),
             "enabled_count": sum(profile.enabled for profile in profiles),
             "disabled_count": sum(not profile.enabled for profile in profiles),
+            "fallback_group_count": len(self._fallback_groups),
             "secrets_recorded": False,
         }
 

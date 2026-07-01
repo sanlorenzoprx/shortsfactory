@@ -16,7 +16,9 @@ ignored `.local/llm/models.json`. Profiles never contain credentials. Generic
 HTTP adapters read the exact environment-variable names declared by each
 profile.
 
-The first recommended cloud route is `openrouter-free`. Register with
+OpenRouter is the first recommended cloud provider. Creative generation uses
+the ordered `openrouter-free-creative-chain`; `openrouter/free` is only its last
+fallback because automatic routing can choose an unsuitable model. Register with
 OpenRouter, create a new API key, and revoke any key that was pasted into chat
 or otherwise exposed. Keep the new key only in the current PowerShell session
 or an ignored environment file:
@@ -27,7 +29,7 @@ $env:OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
 $env:OPENROUTER_HTTP_REFERER="https://ghosttowntest.com" # optional
 $env:OPENROUTER_APP_TITLE="Ghost Town Test"              # optional
 
-python llm_models.py test --model openrouter-free --confirm-live-llm-call
+python llm_models.py test-fallback --fallback-group openrouter-free-creative-chain --dry-run
 ```
 
 The preferred no-cloud profile is `ollama-local`:
@@ -36,11 +38,15 @@ The preferred no-cloud profile is `ollama-local`:
 $env:OLLAMA_BASE_URL="http://localhost:11434/v1"
 ```
 
-The starting router is `openrouter/free`. Explicit OpenRouter `:free` model IDs
-and GLM/DeepSeek-style models can be added later as profiles when available.
-Paid OpenRouter models need only another profile; `creative_angle_pack.py` does
-not change. BytePlus ModelArk remains a future fallback, and user-provided or
-self-hosted HTTPS OpenAI-compatible endpoints use the same provider contract.
+The chain tries the two Gemma profiles, Llama 3.3 70B, and GPT OSS 120B before
+the automatic router. Prefer explicit `:free` slugs to avoid accidental paid
+usage. If OpenRouter rejects a slug, correct that profile in ignored
+`.local/llm/models.json`. BytePlus ModelArk and self-hosted HTTPS endpoints
+remain future provider profiles.
+
+Every attempt uses one strict-JSON request with `temperature: 0.2` and
+`stream: false`. The adapter does not send `reasoning.enabled`; raw provider
+responses and `reasoning_details` are never stored.
 
 OpenRouter free capacity can be rate-limited or unavailable. Ollama and other
 free/open models may be weaker at structured JSON. Both still pass the same
