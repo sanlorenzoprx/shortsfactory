@@ -90,6 +90,10 @@ class ProviderContentDiagnostics:
     external_fact_failed_angle_ids: list[str] = field(default_factory=list)
     external_fact_signal_categories: list[str] = field(default_factory=list)
     external_fact_category_counts: dict[str, int] = field(default_factory=dict)
+    output_budget_tokens: int = 0
+    compact_prompt_budget_enabled: bool = False
+    expected_budget_profile: str | None = None
+    truncation_risk_detected: bool = False
     final_block_reason: str | None = None
 
     def record_content(self, content: str | None) -> None:
@@ -134,6 +138,7 @@ class ProviderContentDiagnostics:
             "markdown_fence_detected", "parse_stage",
         ):
             setattr(self, name, getattr(diagnostics, name))
+        self.truncation_risk_detected = bool(diagnostics.likely_truncated)
         if self.parse_error_type is not None:
             self.final_block_reason = self.parse_error_type
 

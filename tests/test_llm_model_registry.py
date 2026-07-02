@@ -524,12 +524,18 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
     assert request["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert request["json"]["model"] == "openrouter/free"
     assert request["json"]["temperature"] == 0.2
-    assert request["json"]["max_tokens"] == 4000
+    assert profile.max_output_tokens == 4000
+    assert request["json"]["max_tokens"] == 3500
     assert request["json"]["stream"] is False
     system_prompt = request["json"]["messages"][0]
     assert system_prompt["role"] == "system"
     for instruction in (
         "Return exactly one valid JSON object.",
+        "Return compact JSON.",
+        "Do not pretty-print.",
+        "Do not add extra whitespace.",
+        "Keep all fields concise.",
+        "Complete the JSON object before ending.",
         "No markdown.",
         "No comments.",
         "No trailing commas.",
@@ -551,3 +557,7 @@ def test_openrouter_chat_request_is_non_streaming_and_drops_reasoning_details(mo
     assert diagnostics["provider_http_status"] == 200
     assert diagnostics["provider_selected_model"] == "openrouter/free"
     assert diagnostics["provider_selected_provider"] == "openrouter"
+    assert diagnostics["output_budget_tokens"] == 3500
+    assert diagnostics["compact_prompt_budget_enabled"] is True
+    assert diagnostics["expected_budget_profile"] == "compact_json_v1"
+    assert diagnostics["truncation_risk_detected"] is False

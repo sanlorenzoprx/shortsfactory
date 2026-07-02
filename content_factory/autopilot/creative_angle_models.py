@@ -324,6 +324,8 @@ class CreativeAnglePackReceipt:
             "opportunity_terms_count", "external_fact_error_type",
             "external_fact_failed_angle_ids", "external_fact_signal_categories",
             "external_fact_category_counts",
+            "output_budget_tokens", "compact_prompt_budget_enabled",
+            "expected_budget_profile", "truncation_risk_detected",
             "final_block_reason",
         }
         if set(self.provider_diagnostics) - allowed_diagnostics:
@@ -382,6 +384,14 @@ class CreativeAnglePackReceipt:
             for category, count in external_counts.items()
         ):
             raise CreativeAngleContractError("provider diagnostics contain unsafe external fact counts")
+        output_budget = self.provider_diagnostics.get("output_budget_tokens", 0)
+        if not isinstance(output_budget, int) or isinstance(output_budget, bool) or output_budget < 0:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe output budget")
+        if self.provider_diagnostics.get("expected_budget_profile") not in {None, "compact_json_v1"}:
+            raise CreativeAngleContractError("provider diagnostics contain an unsafe budget profile")
+        for field_name in ("compact_prompt_budget_enabled", "truncation_risk_detected"):
+            if not isinstance(self.provider_diagnostics.get(field_name, False), bool):
+                raise CreativeAngleContractError("provider diagnostics contain an unsafe budget flag")
         for field_name in (
             "buyer_signal_missing_count",
             "pain_signal_missing_count",

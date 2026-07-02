@@ -416,15 +416,35 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert diagnostics["opportunity_terms_count"] > 0
     assert diagnostics["external_fact_error_type"] is None
     assert diagnostics["external_fact_failed_angle_ids"] == []
+    assert profile.max_output_tokens == 4000
+    assert diagnostics["output_budget_tokens"] == 3500
+    assert diagnostics["compact_prompt_budget_enabled"] is True
+    assert diagnostics["expected_budget_profile"] == "compact_json_v1"
+    assert diagnostics["truncation_risk_detected"] is False
     assert receipt.secrets_recorded is False
     assert receipt.publish_attempted is False
     assert receipt.youtube_api_called is False
     assert len(calls) == 1
     assert calls[0]["json"]["stream"] is False
     compact_prompt = calls[0]["json"]["messages"][1]["content"]
-    assert "Keep each script under 900 characters." in compact_prompt
-    assert "Keep each caption under 280 characters." in compact_prompt
-    assert "Keep each longform chapter summary under 300 characters." in compact_prompt
+    for budget_rule in (
+        "exactly 5 angles",
+        "hook: max 120 characters",
+        "script: max 450 characters",
+        "caption: max 180 characters",
+        "thumbnail_text: max 36 characters",
+        "tags: max 4 items",
+        "hashtags: max 4 items",
+        "longform.title: max 90 characters",
+        "longform.intro: max 250 characters",
+        "longform chapter summary: max 160 characters",
+        "transitions: max 3 items, max 80 characters each",
+        "longform.conclusion: max 220 characters",
+        "longform.description: max 300 characters",
+        "Return compact JSON. Do not pretty-print. Do not add extra whitespace.",
+        "Keep all fields concise. Complete the JSON object before ending.",
+    ):
+        assert budget_rule in compact_prompt
     assert "Return compact JSON only using the LLMCreativeBundleV1 schema." in compact_prompt
     assert "each hook must match its angle_id" in compact_prompt
     assert "each hook must include a concrete risk, buyer action, or validation mistake" in compact_prompt
@@ -450,6 +470,8 @@ def test_valid_fake_openrouter_response_creates_exactly_five_safe_short_jobs(tmp
     assert "If a detail is missing, speak generally using buyer, market, validation test, builder action, idea, risk, or demand signal." in compact_prompt
     assert "Do not invent specifics." in compact_prompt
     assert "Grounding packet:" in compact_prompt
+    assert all(angle_id in compact_prompt for angle_id in EXPECTED_ANGLES)
+    assert "Run your idea through the Ghost Town Test at GhostTownTest.com" in compact_prompt
     assert "no external facts beyond the LIT verdict" in compact_prompt
     assert exposed_marker not in persisted
     assert "test-only-openrouter-key" not in persisted
@@ -563,6 +585,13 @@ def test_compact_openrouter_fallback_records_safe_failure_then_stops_on_normaliz
         assert first_diagnostics["json_parse_error_type"] is None
     else:
         assert first_diagnostics["parse_error_type"] == expected_error
+    if expected_error == "malformed_json":
+        assert first_diagnostics["json_parse_error_type"] == "unexpected_end_of_json"
+        assert first_diagnostics["likely_truncated"] is True
+        assert first_diagnostics["truncation_risk_detected"] is True
+        assert first_diagnostics["output_budget_tokens"] == 3500
+        assert first_diagnostics["compact_prompt_budget_enabled"] is True
+        assert first_diagnostics["expected_budget_profile"] == "compact_json_v1"
     assert first_diagnostics["internal_schema_valid"] is False
     selected_diagnostics = fallback["attempts"][1]["provider_diagnostics"]
     assert selected_diagnostics["compact_schema_valid"] is True

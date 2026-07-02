@@ -24,8 +24,14 @@ SECRET_PATTERN = re.compile(
 )
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
 SAFE_PROVIDER_IDENTIFIER = re.compile(r"^[A-Za-z0-9._:/-]{1,200}$")
+COMPACT_JSON_OUTPUT_BUDGET_TOKENS = 3500
 STRICT_JSON_SYSTEM_PROMPT = (
     "Return exactly one valid JSON object.\n"
+    "Return compact JSON.\n"
+    "Do not pretty-print.\n"
+    "Do not add extra whitespace.\n"
+    "Keep all fields concise.\n"
+    "Complete the JSON object before ending.\n"
     "No markdown.\n"
     "No comments.\n"
     "No trailing commas.\n"
@@ -394,9 +400,18 @@ class GenericHTTPAdapter(LLMProviderAdapter):
             raise LLMAdapterError("selected model does not support required JSON schema output")
         if self._estimate_tokens(prompt) > model_profile.max_input_tokens:
             raise LLMAdapterError("prompt exceeds the selected model input-token limit")
+        compact_json_request = model_profile.provider == "openrouter"
+        output_budget_tokens = (
+            min(model_profile.max_output_tokens, COMPACT_JSON_OUTPUT_BUDGET_TOKENS)
+            if compact_json_request
+            else model_profile.max_output_tokens
+        )
         self.provider_diagnostics = ProviderContentDiagnostics(
             provider_selected_model=model_profile.provider_model,
             provider_selected_provider=model_profile.provider,
+            output_budget_tokens=output_budget_tokens,
+            compact_prompt_budget_enabled=compact_json_request,
+            expected_budget_profile=("compact_json_v1" if compact_json_request else None),
         )
         body = {
             "model": model_profile.provider_model,
@@ -408,7 +423,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
-            "max_tokens": model_profile.max_output_tokens,
+            "max_tokens": output_budget_tokens,
             "stream": False,
         }
         self.network_called = True
