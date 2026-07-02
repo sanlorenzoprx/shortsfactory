@@ -22,11 +22,18 @@ from content_factory.autopilot.creative_providers import (
     DeterministicCreativeGenerationProvider,
     FixtureCreativeGenerationProvider,
     OnlineLLMCreativeGenerationProvider,
+    SplitOpenRouterCreativeGenerationProvider,
 )
 from content_factory.autopilot.llm_model_registry import LLMModelRegistry
 from content_factory.autopilot.llm_provider_adapters import FakeLLMAdapter, GenericHTTPAdapter, build_llm_adapter
 from content_factory.autopilot.llm_bundle_normalizer import normalize_llm_creative_bundle
-from content_factory.autopilot.llm_bundle_schema import LLMBundleValidationError, LLMCreativeBundleV1
+from content_factory.autopilot.llm_bundle_schema import (
+    LLM_CREATIVE_ANGLE_V1_JSON_SCHEMA,
+    LLMBundleValidationError,
+    LLMCreativeAngleV1,
+    LLMCreativeBundleV1,
+    REQUIRED_ANGLE_IDS,
+)
 from content_factory.autopilot.verdict_grounding import (
     EXTERNAL_FACT_CATEGORIES,
     build_verdict_grounding_packet,
@@ -529,6 +536,7 @@ def _fallback_runner(tmp_path, adapter_factory):
         fallback_group_id="openrouter-free-creative-chain",
         output_root=tmp_path / "fallback output",
         adapter_factory=adapter_factory,
+        split_generation_enabled=False,
         now=lambda: NOW,
     )
 
@@ -1317,7 +1325,13 @@ def test_valid_openrouter_config_proceeds_to_attempts_without_local_only_guard(t
     persisted = fallback_path.read_text(encoding="utf-8")
 
     assert fallback["status"] == "blocked"
-    assert fallback["total_attempts"] == 5
+    assert fallback["total_attempts"] == 25
+    assert fallback["split_generation_enabled"] is True
+    assert fallback["split_generation_strategy"] == "per_angle_v1"
+    assert fallback["angle_attempt_count"] == 25
+    assert fallback["angle_success_count"] == 0
+    assert fallback["angle_failure_count"] == 5
+    assert fallback["angle_ids_failed"] == list(REQUIRED_ANGLE_IDS)
     assert fallback["configuration_error"] is None
     assert fallback["configuration_error_type"] is None
     assert fallback["configuration_error_stage"] is None
@@ -1329,7 +1343,7 @@ def test_valid_openrouter_config_proceeds_to_attempts_without_local_only_guard(t
     assert fallback["attempted_before_config_error"] is False
     assert fallback["attempts"][0]["stage_reached"] == "malformed_json"
     assert fallback["attempts"][0]["network_called"] is True
-    assert len(calls) == 5
+    assert len(calls) == 25
     assert all(call[1]["json"]["stream"] is False for call in calls)
     assert "test-only-openrouter-key-must-not-store" not in persisted
     assert "Authorization" not in persisted
@@ -1561,3 +1575,185 @@ def test_deterministic_vs_online_comparison_receipt(tmp_path):
     assert receipt["quality_gate_result"] == {"left": True, "right": True}
     assert receipt["safety"]["network_called"] is False
     assert receipt["safety"]["publish_attempted"] is False
+
+
+def _split_adapter_factory(*, first_angle_failure: str | None = None, captured_requests=None):
+    compact_angles = {row["angle_id"]: row for row in _compact_bundle()["angles"]}
+    calls_by_angle: dict[str, int] = {}
+    captured_requests = captured_requests if captured_requests is not None else []
+
+    def factory(profile):
+        def transport(**request):
+            captured_requests.append(request)
+            prompt = request["json"]["messages"][1]["content"]
+            angle_id = next(angle_id for angle_id in REQUIRED_ANGLE_IDS if f"target angle_id: {angle_id}" in prompt)
+            calls_by_angle[angle_id] = calls_by_angle.get(angle_id, 0) + 1
+            if angle_id == REQUIRED_ANGLE_IDS[0] and calls_by_angle[angle_id] == 1 and first_angle_failure:
+                if first_angle_failure in {"provider_rate_limited", "provider_unavailable"}:
+                    status_code = 429 if first_angle_failure == "provider_rate_limited" else 503
+
+                    class FailedResponse:
+                        def __init__(self, status):
+                            self.status_code = status
+
+                        def raise_for_status(self):
+                            raise RuntimeError("safe simulated provider failure")
+
+                    return FailedResponse(status_code)
+                if first_angle_failure == "malformed_json":
+                    return {"choices": [{"message": {"content": '{"broken":'}}]}
+                if first_angle_failure == "empty_provider_content":
+                    return {"choices": [{"message": {"content": " "}}]}
+                if first_angle_failure == "compact_schema_invalid":
+                    return {"choices": [{"message": {"content": json.dumps({"angle_id": angle_id})}}]}
+                if first_angle_failure == "quality_invalid":
+                    invalid = dict(compact_angles[angle_id], hook="Generic hook")
+                    return {"choices": [{"message": {"content": json.dumps(invalid)}}]}
+            return {
+                "choices": [{"message": {"content": json.dumps(compact_angles[angle_id])}}],
+                "model": profile.provider_model,
+                "provider": "openrouter",
+            }
+
+        return GenericHTTPAdapter(
+            endpoint_url="https://openrouter.ai/api/v1",
+            api_key="test-only-key",
+            allow_network=True,
+            endpoint_type="chat_json",
+            transport=transport,
+        )
+
+    return factory
+
+
+def test_single_angle_schema_is_strict_and_smaller_than_full_bundle_schema():
+    angle = _compact_bundle()["angles"][0]
+    validated = LLMCreativeAngleV1.validate(angle, expected_angle_id="ghost_town_risk")
+    assert validated.to_dict() == angle
+    assert set(LLM_CREATIVE_ANGLE_V1_JSON_SCHEMA["required"]) == {
+        "angle_id", "title", "hook", "script", "caption", "thumbnail_text", "tags", "hashtags",
+    }
+    invalid = dict(angle, longform={"unsafe": "extra"})
+    with pytest.raises(LLMBundleValidationError) as error:
+        LLMCreativeAngleV1.validate(invalid, expected_angle_id="ghost_town_risk")
+    assert "$.longform" in error.value.paths
+
+
+def test_split_generation_requests_each_angle_and_assembles_code_owned_bundle(tmp_path):
+    requests = []
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / "split output",
+        adapter_factory=_split_adapter_factory(captured_requests=requests),
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+
+    assert fallback["status"] == "passed"
+    assert fallback["split_generation_enabled"] is True
+    assert fallback["split_generation_strategy"] == "per_angle_v1"
+    assert fallback["angle_attempt_count"] == 5
+    assert fallback["angle_success_count"] == 5
+    assert fallback["angle_failure_count"] == 0
+    assert fallback["angle_ids_completed"] == list(REQUIRED_ANGLE_IDS)
+    assert fallback["angle_ids_failed"] == []
+    assert len(requests) == 5
+    assert all(request["json"]["max_tokens"] == 1000 for request in requests)
+    assert all(request["json"]["stream"] is False for request in requests)
+    prompts = [request["json"]["messages"][1]["content"] for request in requests]
+    for expected_id, prompt in zip(REQUIRED_ANGLE_IDS, prompts):
+        assert f"target angle_id: {expected_id}" in prompt
+        assert prompt.count("target angle_id:") == 1
+        assert "use only the supplied LIT verdict and grounding packet" in prompt
+        assert "no external facts" in prompt
+        assert "buyer, pain or risk, and concrete action" in prompt
+        assert "generic safe terms: buyer, market, validation test, builder action" in prompt
+        assert "Return exactly one valid JSON object." in prompt
+    assert receipt is not None and generator is not None
+    _, jobs, longform = _artifacts(generator.output_root, receipt)
+    assert len(jobs) == len(longform.ordered_chapters) == 5
+    assert {chapter["angle_id"] for chapter in longform.ordered_chapters} == EXPECTED_ANGLES
+    persisted = fallback_path.read_text(encoding="utf-8")
+    for angle in _compact_bundle()["angles"]:
+        assert angle["hook"] not in persisted
+        assert angle["script"] not in persisted
+        assert angle["caption"] not in persisted
+        assert angle["thumbnail_text"] not in persisted
+    assert fallback["raw_response_stored"] is False
+    assert fallback["reasoning_details_stored"] is False
+    assert fallback["publish_attempted"] is False
+    assert fallback["youtube_api_called"] is False
+    assert fallback["videos_insert_called"] is False
+    assert fallback["full_autopilot_enabled"] is False
+    assert fallback["supervised_autopilot_enabled"] is False
+
+
+@pytest.mark.parametrize(
+    "failure, expected_stage",
+    [
+        ("malformed_json", "malformed_json"),
+        ("empty_provider_content", "empty_provider_content"),
+        ("compact_schema_invalid", "compact_schema_invalid"),
+        ("quality_invalid", "quality_invalid"),
+        ("provider_rate_limited", "provider_rate_limited"),
+        ("provider_unavailable", "network_failed"),
+    ],
+)
+def test_split_generation_continues_fallback_for_one_angle_then_stops_on_pass(
+    tmp_path, failure, expected_stage,
+):
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / failure,
+        adapter_factory=_split_adapter_factory(first_angle_failure=failure),
+        now=lambda: NOW,
+    )
+    fallback, _, receipt, _ = runner.run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "passed"
+    assert fallback["angle_attempt_count"] == 6
+    assert fallback["angle_success_count"] == 5
+    assert fallback["angle_results"][0]["angle_attempt_count"] == 2
+    assert fallback["attempts"][0]["stage_reached"] == expected_stage
+    assert fallback["attempts"][1]["stage_reached"] == "passed"
+    assert receipt is not None
+
+
+def test_split_generation_blocks_missing_angle_without_storing_generated_content(tmp_path):
+    compact_angles = {row["angle_id"]: row for row in _compact_bundle()["angles"]}
+
+    def factory(profile):
+        def transport(**request):
+            prompt = request["json"]["messages"][1]["content"]
+            angle_id = next(angle_id for angle_id in REQUIRED_ANGLE_IDS if f"target angle_id: {angle_id}" in prompt)
+            content = (
+                json.dumps(dict(compact_angles[angle_id], angle_id="buyer_reality"))
+                if angle_id == "ghost_town_risk"
+                else json.dumps(compact_angles[angle_id])
+            )
+            return {"choices": [{"message": {"content": content}}]}
+
+        return GenericHTTPAdapter(
+            endpoint_url="https://openrouter.ai/api/v1", api_key="test-only-key",
+            allow_network=True, endpoint_type="chat_json", transport=transport,
+        )
+
+    runner = CreativeFallbackRunner(
+        registry=LLMModelRegistry(local_path=NO_LOCAL_MODELS),
+        fallback_group_id="openrouter-free-creative-chain",
+        output_root=tmp_path / "missing angle",
+        adapter_factory=factory,
+        now=lambda: NOW,
+    )
+    fallback, fallback_path, receipt, generator = runner.run(lit_verdict_file=FIXTURE)
+    assert fallback["status"] == "blocked"
+    assert fallback["angle_success_count"] == 4
+    assert fallback["angle_failure_count"] == 1
+    assert fallback["angle_ids_failed"] == ["ghost_town_risk"]
+    assert fallback["angle_results"][0]["stage_reached"] == "compact_schema_invalid"
+    assert receipt is None and generator is None
+    persisted = fallback_path.read_text(encoding="utf-8")
+    assert compact_angles["buyer_reality"]["script"] not in persisted
+    assert '\"choices\"' not in persisted
+    assert '\"reasoning_details\":' not in persisted

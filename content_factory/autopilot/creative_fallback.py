@@ -4,15 +4,20 @@ import hashlib
 import json
 import os
 import tempfile
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from .creative_angle_models import CreativeAnglePackReceipt
 from .creative_angle_pack import CreativeAnglePackGenerator
-from .creative_providers import OnlineLLMCreativeGenerationProvider
+from .creative_providers import (
+    OnlineLLMCreativeGenerationProvider,
+    SplitOpenRouterCreativeGenerationProvider,
+)
 from .llm_model_registry import LLMModelProfile, LLMModelRegistry, LLMModelRegistryError
 from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter, build_llm_adapter
+from .llm_bundle_schema import REQUIRED_ANGLE_IDS
 
 
 FALLBACK_RECEIPT_VERSION = "phase5b.5b.openrouter-fallback.v1"
@@ -83,6 +88,7 @@ class CreativeFallbackRunner:
         fallback_group_id: str,
         output_root: str | Path = "output",
         adapter_factory: Callable[[LLMModelProfile], LLMProviderAdapter] | None = None,
+        split_generation_enabled: bool | None = None,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
         self.registry = registry
@@ -92,6 +98,7 @@ class CreativeFallbackRunner:
         self.output_root = Path(output_root).expanduser().resolve()
         self.uses_live_adapter = adapter_factory is None
         self.adapter_factory = adapter_factory or self._live_adapter
+        self.split_generation_enabled = True if split_generation_enabled is None else split_generation_enabled
         self.now = now
         self.configuration_diagnostics = self._resolve_group_and_profiles()
 
@@ -132,6 +139,16 @@ class CreativeFallbackRunner:
                 configuration_error = "LLMAdapterError: fallback configuration refused"
 
         profiles_to_attempt = self.profiles if configuration_error is None else ()
+        if profiles_to_attempt and self.split_generation_enabled:
+            return self._run_split_generation(
+                fallback_attempt_id=fallback_attempt_id,
+                timestamp=timestamp,
+                path=path,
+                relative_path=relative_path,
+                idea_id=idea_id,
+                batch_id=batch_id,
+                lit_verdict_file=lit_verdict_file,
+            )
         for profile in profiles_to_attempt:
             try:
                 adapter = self.adapter_factory(profile)
@@ -182,6 +199,52 @@ class CreativeFallbackRunner:
         )
         _atomic_json(path, result)
         return result, path, selected_receipt, selected_generator
+
+    def _run_split_generation(
+        self,
+        *,
+        fallback_attempt_id: str,
+        timestamp: str,
+        path: Path,
+        relative_path: str,
+        idea_id: str | None,
+        batch_id: str | None,
+        lit_verdict_file: str | Path | None,
+    ) -> tuple[dict[str, Any], Path, CreativeAnglePackReceipt | None, CreativeAnglePackGenerator | None]:
+        provider = SplitOpenRouterCreativeGenerationProvider(self.profiles, self.adapter_factory)
+        generator = CreativeAnglePackGenerator(
+            provider=provider,
+            output_root=self.output_root,
+            now=self.now,
+            online_provider_explicit=True,
+            fallback_attempt=True,
+            additional_source_receipt_references={"fallback_attempt_receipt": relative_path},
+        )
+        receipt = generator.generate(
+            idea_id=idea_id,
+            batch_id=batch_id,
+            lit_verdict_file=lit_verdict_file,
+        )
+        receipt_reference = generator.receipt_path(receipt.angle_pack_id).relative_to(
+            generator.output_root,
+        ).as_posix()
+        attempts = deepcopy(provider.angle_attempts)
+        for number, attempt in enumerate(attempts, 1):
+            attempt["attempt_number"] = number
+            attempt["receipt"] = receipt_reference
+        selected_receipt = receipt if receipt.status == "passed" else None
+        split_metadata = provider.split_generation_metadata
+        result = self._receipt(
+            fallback_attempt_id=fallback_attempt_id,
+            timestamp=timestamp,
+            attempts=attempts,
+            selected_receipt=selected_receipt,
+            configuration_error=None,
+            split_metadata=split_metadata,
+            final_provider_diagnostics=dict(receipt.provider_diagnostics),
+        )
+        _atomic_json(path, result)
+        return result, path, selected_receipt, generator if selected_receipt is not None else None
 
     def _resolve_group_and_profiles(self) -> dict[str, Any]:
         group = self.registry.get_fallback_group(self.fallback_group_id)
@@ -285,6 +348,8 @@ class CreativeFallbackRunner:
         attempts: list[dict[str, Any]],
         selected_receipt: CreativeAnglePackReceipt | None,
         configuration_error: str | None,
+        split_metadata: dict[str, Any] | None = None,
+        final_provider_diagnostics: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         selected_profile = (
             next((profile for profile in self.profiles if profile.model_id == selected_receipt.model_id), None)
@@ -296,7 +361,7 @@ class CreativeFallbackRunner:
             row["provider_reported_cost"] for row in attempts
             if isinstance(row["provider_reported_cost"], (int, float))
         ]
-        diagnostics = (
+        diagnostics = final_provider_diagnostics if final_provider_diagnostics is not None else (
             dict(selected_receipt.provider_diagnostics)
             if selected_receipt is not None
             else dict(attempts[-1]["provider_diagnostics"]) if attempts else {}
@@ -305,11 +370,26 @@ class CreativeFallbackRunner:
         final_block_reason = None if selected_receipt is not None else (
             "configuration_error"
             if configuration_error and not attempts
-            else best_attempt.get("stage_reached") if best_attempt else None
+            else (
+                diagnostics.get("final_block_reason")
+                if split_metadata is not None
+                else best_attempt.get("stage_reached") if best_attempt else None
+            )
         )
         configuration_diagnostics = {
             **self.configuration_diagnostics,
             "attempted_before_config_error": bool(attempts) if configuration_error else False,
+        }
+        split = split_metadata or {
+            "split_generation_enabled": bool(self.split_generation_enabled),
+            "split_generation_strategy": "per_angle_v1" if self.split_generation_enabled else None,
+            "angle_attempt_count": 0,
+            "angle_success_count": 0,
+            "angle_failure_count": 0,
+            "angle_ids_completed": [],
+            "angle_ids_failed": [],
+            "required_angle_ids": list(REQUIRED_ANGLE_IDS) if self.split_generation_enabled else [],
+            "angle_results": [],
         }
         return {
             "receipt_version": FALLBACK_RECEIPT_VERSION,
@@ -341,6 +421,7 @@ class CreativeFallbackRunner:
             "raw_response_stored": False,
             "reasoning_details_stored": False,
             "stream_enabled": False,
+            **split,
             **configuration_diagnostics,
             "provider_diagnostics": diagnostics,
             **diagnostics,

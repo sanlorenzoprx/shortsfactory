@@ -25,6 +25,7 @@ SECRET_PATTERN = re.compile(
 AUTH_URL_PATTERN = re.compile(r"(?i)https?://[^\s\"<>]*(?:oauth|authorize|token_uri)[^\s\"<>]*")
 SAFE_PROVIDER_IDENTIFIER = re.compile(r"^[A-Za-z0-9._:/-]{1,200}$")
 COMPACT_JSON_OUTPUT_BUDGET_TOKENS = 3500
+SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS = 1000
 STRICT_JSON_SYSTEM_PROMPT = (
     "Return exactly one valid JSON object.\n"
     "Return compact JSON.\n"
@@ -70,6 +71,22 @@ class LLMProviderAdapter(ABC):
         model_profile: LLMModelProfile,
     ) -> Any:
         raise NotImplementedError
+
+    def generate_json_with_budget(
+        self,
+        prompt: str,
+        schema: dict[str, Any],
+        model_profile: LLMModelProfile,
+        *,
+        output_budget_tokens: int,
+        expected_budget_profile: str,
+    ) -> Any:
+        """Generate with a smaller explicit budget when an adapter supports it.
+
+        Non-HTTP test/local adapters retain their existing behavior; the live HTTP
+        adapter overrides this method and applies the budget to the request.
+        """
+        return self.generate_json(prompt, schema, model_profile)
 
     def estimate_cost(
         self,
@@ -392,6 +409,34 @@ class GenericHTTPAdapter(LLMProviderAdapter):
     def generate_json(
         self, prompt: str, schema: dict[str, Any], model_profile: LLMModelProfile,
     ) -> Any:
+        return self._generate_json(prompt, schema, model_profile)
+
+    def generate_json_with_budget(
+        self,
+        prompt: str,
+        schema: dict[str, Any],
+        model_profile: LLMModelProfile,
+        *,
+        output_budget_tokens: int,
+        expected_budget_profile: str,
+    ) -> Any:
+        return self._generate_json(
+            prompt,
+            schema,
+            model_profile,
+            output_budget_tokens=output_budget_tokens,
+            expected_budget_profile=expected_budget_profile,
+        )
+
+    def _generate_json(
+        self,
+        prompt: str,
+        schema: dict[str, Any],
+        model_profile: LLMModelProfile,
+        *,
+        output_budget_tokens: int | None = None,
+        expected_budget_profile: str | None = None,
+    ) -> Any:
         self._validate_config()
         if not self.allow_network:
             raise LLMAdapterError("live LLM network call requires explicit confirmation")
@@ -401,17 +446,22 @@ class GenericHTTPAdapter(LLMProviderAdapter):
         if self._estimate_tokens(prompt) > model_profile.max_input_tokens:
             raise LLMAdapterError("prompt exceeds the selected model input-token limit")
         compact_json_request = model_profile.provider == "openrouter"
-        output_budget_tokens = (
-            min(model_profile.max_output_tokens, COMPACT_JSON_OUTPUT_BUDGET_TOKENS)
-            if compact_json_request
-            else model_profile.max_output_tokens
+        effective_output_budget = min(
+            model_profile.max_output_tokens,
+            output_budget_tokens if output_budget_tokens is not None else (
+                COMPACT_JSON_OUTPUT_BUDGET_TOKENS if compact_json_request else model_profile.max_output_tokens
+            ),
         )
         self.provider_diagnostics = ProviderContentDiagnostics(
             provider_selected_model=model_profile.provider_model,
             provider_selected_provider=model_profile.provider,
-            output_budget_tokens=output_budget_tokens,
+            output_budget_tokens=effective_output_budget,
             compact_prompt_budget_enabled=compact_json_request,
-            expected_budget_profile=("compact_json_v1" if compact_json_request else None),
+            expected_budget_profile=(
+                expected_budget_profile
+                if expected_budget_profile is not None
+                else "compact_json_v1" if compact_json_request else None
+            ),
         )
         body = {
             "model": model_profile.provider_model,
@@ -423,7 +473,7 @@ class GenericHTTPAdapter(LLMProviderAdapter):
                 {"role": "user", "content": prompt},
             ],
             "temperature": 0.2,
-            "max_tokens": output_budget_tokens,
+            "max_tokens": effective_output_budget,
             "stream": False,
         }
         self.network_called = True

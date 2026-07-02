@@ -24,6 +24,56 @@ class LLMBundleValidationError(ValueError):
         self.paths = paths
 
 
+ANGLE_STRING_LIMITS = {
+    "hook": 120,
+    "script": 450,
+    "caption": 180,
+    "thumbnail_text": 36,
+}
+
+
+@dataclass(frozen=True)
+class LLMCreativeAngleV1:
+    value: dict[str, Any]
+
+    @classmethod
+    def validate(cls, value: Any, *, expected_angle_id: str | None = None) -> "LLMCreativeAngleV1":
+        errors: list[str] = []
+        if not isinstance(value, dict):
+            raise LLMBundleValidationError(["$"])
+        for field in ANGLE_FIELDS:
+            if field not in value:
+                errors.append(f"$.{field}")
+        for field in sorted(set(value) - set(ANGLE_FIELDS)):
+            errors.append(f"$.{field}")
+        for field in ("angle_id", "title", "hook", "script", "caption", "thumbnail_text"):
+            field_value = value.get(field)
+            if not isinstance(field_value, str) or not field_value.strip():
+                errors.append(f"$.{field}")
+            elif field in ANGLE_STRING_LIMITS and len(field_value) > ANGLE_STRING_LIMITS[field]:
+                errors.append(f"$.{field}")
+        angle_id = value.get("angle_id")
+        if angle_id not in REQUIRED_ANGLE_IDS or (
+            expected_angle_id is not None and angle_id != expected_angle_id
+        ):
+            errors.append("$.angle_id")
+        for field in ("tags", "hashtags"):
+            items = value.get(field)
+            if (
+                not isinstance(items, list)
+                or not items
+                or len(items) > 4
+                or any(not isinstance(item, str) or not item.strip() for item in items)
+            ):
+                errors.append(f"$.{field}")
+        if errors:
+            raise LLMBundleValidationError(sorted(set(errors)))
+        return cls(deepcopy(value))
+
+    def to_dict(self) -> dict[str, Any]:
+        return deepcopy(self.value)
+
+
 @dataclass(frozen=True)
 class LLMCreativeBundleV1:
     value: dict[str, Any]
@@ -113,4 +163,21 @@ class LLMCreativeBundleV1:
 LLM_CREATIVE_BUNDLE_V1_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {field: {} for field in TOP_LEVEL_FIELDS},
+}
+
+
+LLM_CREATIVE_ANGLE_V1_JSON_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "angle_id": {"type": "string", "enum": list(REQUIRED_ANGLE_IDS)},
+        "title": {"type": "string"},
+        "hook": {"type": "string"},
+        "script": {"type": "string"},
+        "caption": {"type": "string"},
+        "thumbnail_text": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 4},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 4},
+    },
+    "required": list(ANGLE_FIELDS),
+    "additionalProperties": False,
 }

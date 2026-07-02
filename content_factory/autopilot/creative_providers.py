@@ -1,23 +1,34 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from copy import deepcopy
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, Callable
 
 from .creative_generation_provider import CreativeGenerationContext, CreativeGenerationProvider, JsonDict
 from .llm_model_registry import LLMModelProfile
-from .llm_provider_adapters import LLMAdapterError, LLMProviderAdapter
+from .llm_provider_adapters import (
+    LLMAdapterError,
+    LLMProviderAdapter,
+    SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS,
+)
 from .llm_bundle_normalizer import normalize_llm_creative_bundle
 from .llm_bundle_schema import (
     LLM_CREATIVE_BUNDLE_V1_JSON_SCHEMA,
+    LLM_CREATIVE_ANGLE_V1_JSON_SCHEMA,
     LLMBundleValidationError,
+    LLMCreativeAngleV1,
     LLMCreativeBundleV1,
     REQUIRED_ANGLE_IDS,
 )
+from .provider_diagnostics import ProviderContentDiagnostics
 from .verdict_grounding import build_verdict_grounding_packet
 
 
-CTA = "Test your business idea at GhostTownTest.com."
+CTA = "Run your idea through the Ghost Town Test at GhostTownTest.com"
+SPLIT_GENERATION_STRATEGY = "per_angle_v1"
+SPLIT_BUDGET_PROFILE = "compact_angle_v1"
 RUBRIC_VERSION = "creative-angle-rubric.v1"
 PROMPT_PREFIX = (
     "You create evidence-grounded business validation content. Return only the requested JSON. "
@@ -727,3 +738,490 @@ class OnlineLLMCreativeGenerationProvider(CreativeGenerationProvider):
             "required": ["angles", "shorts", "longform"],
             "additionalProperties": False,
         }
+
+
+class SplitOpenRouterCreativeGenerationProvider(OnlineLLMCreativeGenerationProvider):
+    """Generate compact creative content one angle at a time across a fallback chain."""
+
+    split_generation_enabled = True
+    split_generation_strategy = SPLIT_GENERATION_STRATEGY
+
+    def __init__(
+        self,
+        profiles: tuple[LLMModelProfile, ...],
+        adapter_factory: Callable[[LLMModelProfile], LLMProviderAdapter],
+    ) -> None:
+        if not profiles or any(profile.provider != "openrouter" for profile in profiles):
+            raise CreativeProviderError("split generation requires OpenRouter profiles")
+        self.profiles = profiles
+        self.adapter_factory = adapter_factory
+        self.profile = profiles[0]
+        self.model_id = profiles[0].model_id
+        self.model_provider = "openrouter"
+        self.model_profile_hash = hashlib.sha256(
+            "|".join(profile.profile_hash for profile in profiles).encode("utf-8")
+        ).hexdigest()
+        self.adapter_type = "split_per_angle"
+        self._bundle: JsonDict | None = None
+        self.idea_summary: str | None = None
+        self.verdict_summary: str | None = None
+        self._grounding_packet: JsonDict = {}
+        self._diagnostics = ProviderContentDiagnostics(
+            output_budget_tokens=SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS,
+            compact_prompt_budget_enabled=True,
+            expected_budget_profile=SPLIT_BUDGET_PROFILE,
+        )
+        self._adapters: list[LLMProviderAdapter] = []
+        self.angle_attempts: list[JsonDict] = []
+        self.angle_results: list[JsonDict] = []
+        self.angle_ids_completed: list[str] = []
+        self.angle_ids_failed: list[str] = []
+
+    @property
+    def network_called(self) -> bool:
+        return any(adapter.network_called for adapter in self._adapters)
+
+    @property
+    def tokens_used(self) -> int | None:
+        values = [adapter.tokens_used for adapter in self._adapters if isinstance(adapter.tokens_used, int)]
+        return sum(values) if values else None
+
+    @property
+    def cost_estimate(self) -> float:
+        return round(sum(adapter.estimated_cost for adapter in self._adapters), 8)
+
+    @property
+    def estimated_input_tokens(self) -> int:
+        return sum(adapter.estimated_input_tokens for adapter in self._adapters)
+
+    @property
+    def estimated_output_tokens(self) -> int:
+        return sum(adapter.estimated_output_tokens for adapter in self._adapters)
+
+    @property
+    def estimated_cost(self) -> float:
+        return self.cost_estimate
+
+    @property
+    def raw_response_stored(self) -> bool:
+        return False
+
+    @property
+    def provider_reported_cost(self) -> float | None:
+        values = [
+            adapter.provider_reported_cost
+            for adapter in self._adapters
+            if isinstance(adapter.provider_reported_cost, (int, float))
+        ]
+        return round(sum(values), 8) if values else None
+
+    @property
+    def provider_diagnostics(self) -> JsonDict:
+        return self._diagnostics.to_dict()
+
+    @property
+    def split_generation_metadata(self) -> JsonDict:
+        return {
+            "split_generation_enabled": True,
+            "split_generation_strategy": self.split_generation_strategy,
+            "angle_attempt_count": len(self.angle_attempts),
+            "angle_success_count": len(self.angle_ids_completed),
+            "angle_failure_count": len(self.angle_ids_failed),
+            "angle_ids_completed": list(self.angle_ids_completed),
+            "angle_ids_failed": list(self.angle_ids_failed),
+            "required_angle_ids": list(REQUIRED_ANGLE_IDS),
+            "angle_results": [
+                {key: deepcopy(value) for key, value in row.items() if not key.startswith("_")}
+                for row in self.angle_results
+            ],
+        }
+
+    def mark_internal_schema_valid(self) -> None:
+        self._diagnostics.internal_schema_valid = True
+        self._diagnostics.parse_error_type = None
+        self._diagnostics.schema_error_type = None
+        self._diagnostics.missing_required_fields = []
+        self._diagnostics.schema_error_count = 0
+
+    def mark_internal_schema_invalid(self, paths: list[str] | None = None) -> None:
+        self._diagnostics.internal_schema_valid = False
+        self._diagnostics.record_schema_failure("internal_schema_invalid", paths or ["$"])
+
+    def mark_quality_result(
+        self,
+        *,
+        quality_valid: bool,
+        gates: tuple[JsonDict, ...],
+        required_angle_ids: list[str],
+        angle_ids: list[str],
+        short_summaries: list[JsonDict],
+        longform_present: bool,
+        longform_cta_present: bool,
+        longform_ghosttowntest_cta_present: bool,
+    ) -> None:
+        self._diagnostics.record_grounding_packet(self._grounding_packet)
+        self._diagnostics.record_quality_result(
+            quality_valid=quality_valid,
+            gates=gates,
+            required_angle_ids=required_angle_ids,
+            angle_ids=angle_ids,
+            short_summaries=short_summaries,
+            longform_present=longform_present,
+            longform_cta_present=longform_cta_present,
+            longform_ghosttowntest_cta_present=longform_ghosttowntest_cta_present,
+        )
+
+    def mark_quality_invalid(self, **kwargs: Any) -> None:
+        self.mark_quality_result(quality_valid=False, **kwargs)
+
+    def _ensure_bundle(self, context: CreativeGenerationContext) -> JsonDict:
+        if self._bundle is not None:
+            return self._bundle
+        self._grounding_packet = build_verdict_grounding_packet(context.verdict_record.verdict)
+        accepted: list[JsonDict] = []
+        for angle_id in REQUIRED_ANGLE_IDS:
+            accepted_angle = self._generate_angle_with_fallback(context, angle_id)
+            if accepted_angle is None:
+                self.angle_ids_failed.append(angle_id)
+            else:
+                self.angle_ids_completed.append(angle_id)
+                accepted.append(accepted_angle)
+        if self.angle_ids_failed:
+            failed_results = [row for row in self.angle_results if row["angle_status"] == "blocked"]
+            best_failure = max(failed_results, key=lambda row: self._stage_rank(row["stage_reached"]))
+            self._diagnostics = ProviderContentDiagnostics(**deepcopy(best_failure["_provider_diagnostics"]))
+            self._diagnostics.compact_schema_valid = False
+            self._diagnostics.internal_schema_valid = False
+            self._diagnostics.final_block_reason = best_failure["final_block_reason"]
+            raise CreativeProviderError("one or more required split-generation angles failed")
+
+        compact_value = self._assemble_compact_bundle(context, accepted)
+        try:
+            compact = LLMCreativeBundleV1.validate(compact_value)
+            value = normalize_llm_creative_bundle(compact, angle_rubric=ANGLE_RUBRIC, canonical_cta=CTA)
+            LLMProviderAdapter.validate_json_schema(value, self._bundle_schema())
+        except LLMBundleValidationError as exc:
+            self._diagnostics.compact_schema_valid = False
+            self._diagnostics.record_schema_failure("compact_schema_invalid", exc.paths)
+            raise CreativeProviderError("assembled split creative bundle is invalid") from exc
+        except LLMAdapterError as exc:
+            self.mark_internal_schema_invalid(["$"])
+            raise CreativeProviderError("assembled split creative bundle failed internal schema") from exc
+        self.idea_summary = compact.value["idea_summary"]
+        self.verdict_summary = compact.value["verdict_summary"]
+        last_success = self.angle_attempts[-1]["provider_diagnostics"]
+        self._diagnostics = ProviderContentDiagnostics(**deepcopy(last_success))
+        self._diagnostics.compact_schema_valid = True
+        self._diagnostics.internal_schema_valid = False
+        self._diagnostics.output_budget_tokens = SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS
+        self._diagnostics.compact_prompt_budget_enabled = True
+        self._diagnostics.expected_budget_profile = SPLIT_BUDGET_PROFILE
+        self._diagnostics.record_grounding_packet(self._grounding_packet)
+        self._bundle = value
+        return value
+
+    def _generate_angle_with_fallback(
+        self, context: CreativeGenerationContext, angle_id: str,
+    ) -> JsonDict | None:
+        attempts: list[JsonDict] = []
+        accepted: JsonDict | None = None
+        for profile in self.profiles:
+            diagnostics = ProviderContentDiagnostics(
+                provider_selected_model=profile.provider_model,
+                provider_selected_provider=profile.provider,
+                output_budget_tokens=SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS,
+                compact_prompt_budget_enabled=True,
+                expected_budget_profile=SPLIT_BUDGET_PROFILE,
+            )
+            adapter: LLMProviderAdapter | None = None
+            try:
+                adapter = self.adapter_factory(profile)
+                self._adapters.append(adapter)
+                value = adapter.generate_json_with_budget(
+                    self._angle_prompt(context, self._grounding_packet, angle_id),
+                    LLM_CREATIVE_ANGLE_V1_JSON_SCHEMA,
+                    profile,
+                    output_budget_tokens=SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS,
+                    expected_budget_profile=SPLIT_BUDGET_PROFILE,
+                )
+                diagnostics = adapter.provider_diagnostics
+                diagnostics.output_budget_tokens = SINGLE_ANGLE_OUTPUT_BUDGET_TOKENS
+                diagnostics.compact_prompt_budget_enabled = True
+                diagnostics.expected_budget_profile = SPLIT_BUDGET_PROFILE
+                angle = LLMCreativeAngleV1.validate(value, expected_angle_id=angle_id)
+                diagnostics.compact_schema_valid = True
+                self._record_angle_quality(diagnostics, angle.value, context)
+                if not diagnostics.quality_valid:
+                    raise CreativeProviderError("split angle failed quality validation")
+                accepted = angle.to_dict()
+            except LLMBundleValidationError as exc:
+                if adapter is not None:
+                    diagnostics = adapter.provider_diagnostics
+                diagnostics.compact_schema_valid = False
+                diagnostics.record_schema_failure("compact_schema_invalid", exc.paths)
+            except (LLMAdapterError, CreativeProviderError):
+                if adapter is not None:
+                    diagnostics = adapter.provider_diagnostics
+                if (
+                    diagnostics.content_present
+                    and diagnostics.parse_error_type is None
+                    and diagnostics.provider_error_type is None
+                    and diagnostics.schema_error_type is None
+                    and not diagnostics.quality_error_type
+                ):
+                    diagnostics.record_schema_failure("compact_schema_invalid", ["$"])
+            stage = "passed" if accepted is not None else self._diagnostic_stage(diagnostics)
+            attempt = self._safe_angle_attempt(
+                angle_id=angle_id,
+                profile=profile,
+                angle_attempt_number=len(attempts) + 1,
+                diagnostics=diagnostics,
+                stage=stage,
+                adapter=adapter,
+            )
+            attempts.append(attempt)
+            self.angle_attempts.append(attempt)
+            if accepted is not None:
+                self.model_id = profile.model_id
+                break
+        selected = attempts[-1] if accepted is not None else max(
+            attempts, key=lambda row: self._stage_rank(row["stage_reached"]),
+        )
+        self.angle_results.append({
+            "angle_id": angle_id,
+            "angle_attempt_count": len(attempts),
+            "angle_status": "passed" if accepted is not None else "blocked",
+            "stage_reached": selected["stage_reached"],
+            "final_block_reason": selected["final_block_reason"],
+            "provider_selected_model": selected["provider_diagnostics"].get("provider_selected_model"),
+            "provider_selected_provider": selected["provider_diagnostics"].get("provider_selected_provider"),
+            "provider_http_status": selected["provider_diagnostics"].get("provider_http_status"),
+            "content_present": selected["provider_diagnostics"].get("content_present", False),
+            "content_length": selected["provider_diagnostics"].get("content_length", 0),
+            "parse_error_type": selected["provider_diagnostics"].get("parse_error_type"),
+            "json_parse_error_type": selected["provider_diagnostics"].get("json_parse_error_type"),
+            "likely_truncated": selected["provider_diagnostics"].get("likely_truncated", False),
+            "truncation_risk_detected": selected["provider_diagnostics"].get("truncation_risk_detected", False),
+            "compact_schema_valid": selected["provider_diagnostics"].get("compact_schema_valid", False),
+            "angle_quality_valid": selected["provider_diagnostics"].get("quality_valid", False),
+            "quality_error_type": selected["provider_diagnostics"].get("quality_error_type"),
+            "quality_failed_checks": selected["provider_diagnostics"].get("quality_failed_checks", []),
+            "output_budget_tokens": selected["provider_diagnostics"].get("output_budget_tokens", 0),
+            "expected_budget_profile": selected["provider_diagnostics"].get("expected_budget_profile"),
+            "_provider_diagnostics": deepcopy(selected["provider_diagnostics"]),
+        })
+        return accepted
+
+    def _record_angle_quality(
+        self, diagnostics: ProviderContentDiagnostics, angle: JsonDict, context: CreativeGenerationContext,
+    ) -> None:
+        from .creative_angle_gates import (
+            buyer_pain_action_signals,
+            hook_specificity_signals,
+            verdict_grounding_signals,
+        )
+
+        job = SimpleNamespace(
+            angle_id=angle["angle_id"],
+            hook=angle["hook"],
+            script=angle["script"],
+            caption=angle["caption"],
+            thumbnail_text=angle["thumbnail_text"],
+            cta=CTA,
+        )
+        buyer = buyer_pain_action_signals(job)
+        verdict = verdict_grounding_signals(job, context.verdict_record.verdict, self._grounding_packet)
+        hook = hook_specificity_signals(job, context.verdict_record.verdict)
+        checks = {
+            "specific_hooks": not (
+                hook["hook_generic"] or not hook["hook_angle_match"] or not hook["hook_verdict_signal_present"]
+            ),
+            "buyer_pain_action_specificity": all(buyer.values()),
+            "verdict_grounded_claims": (
+                verdict["verdict_signal_present"]
+                and not verdict["generic_claim_signal_present"]
+                and not verdict["external_fact_signal_present"]
+                and verdict["idea_specificity_present"]
+                and verdict["angle_specificity_present"]
+            ),
+            "thumbnail_specificity": 3 <= len(angle["thumbnail_text"].split()) and len(angle["thumbnail_text"]) <= 36,
+        }
+        gates = [
+            {"gate_name": name, "status": "pass" if passed else "fail", "blocking": not passed}
+            for name, passed in checks.items()
+        ]
+        summary = {
+            "angle_id": angle["angle_id"],
+            "script_present": True,
+            "caption_present": True,
+            "thumbnail_text_present": True,
+            "hashtags_present": bool(angle["hashtags"]),
+            "cta_present": True,
+            "ghosttowntest_cta_present": True,
+            **buyer,
+            **verdict,
+            **hook,
+        }
+        diagnostics.record_grounding_packet(self._grounding_packet)
+        diagnostics.record_quality_result(
+            quality_valid=all(checks.values()),
+            gates=gates,
+            required_angle_ids=[angle["angle_id"]],
+            angle_ids=[angle["angle_id"]],
+            short_summaries=[summary],
+            longform_present=True,
+            longform_cta_present=True,
+            longform_ghosttowntest_cta_present=True,
+        )
+
+    @staticmethod
+    def _safe_angle_attempt(
+        *, angle_id: str, profile: LLMModelProfile, angle_attempt_number: int,
+        diagnostics: ProviderContentDiagnostics, stage: str, adapter: LLMProviderAdapter | None,
+    ) -> JsonDict:
+        safe = diagnostics.to_dict()
+        return {
+            "attempt_number": 0,
+            "angle_attempt_number": angle_attempt_number,
+            "angle_id": angle_id,
+            "model_id": profile.model_id,
+            "provider_model": profile.provider_model,
+            "status": "passed" if stage == "passed" else "blocked",
+            "schema_valid": stage == "passed",
+            "quality_valid": safe.get("quality_valid", False),
+            "stage_reached": stage,
+            "final_block_reason": None if stage == "passed" else stage,
+            "tokens_used": adapter.tokens_used if adapter is not None else None,
+            "cost_estimate": adapter.estimated_cost if adapter is not None else None,
+            "provider_reported_cost": adapter.provider_reported_cost if adapter is not None else None,
+            "network_called": adapter.network_called if adapter is not None else False,
+            "publish_attempted": False,
+            "youtube_api_called": False,
+            "videos_insert_called": False,
+            "full_autopilot_enabled": False,
+            "supervised_autopilot_enabled": False,
+            "live_publishing_enabled": False,
+            "secrets_recorded": False,
+            "raw_response_stored": False,
+            "reasoning_details_stored": False,
+            "stream_enabled": False,
+            "provider_diagnostics": safe,
+        }
+
+    @staticmethod
+    def _stage_rank(stage: str) -> int:
+        return {
+            "network_failed": 0,
+            "provider_rate_limited": 1,
+            "empty_provider_content": 2,
+            "malformed_json": 3,
+            "compact_schema_invalid": 4,
+            "quality_invalid": 6,
+            "passed": 7,
+        }.get(stage, -1)
+
+    @staticmethod
+    def _diagnostic_stage(diagnostics: ProviderContentDiagnostics) -> str:
+        if diagnostics.quality_error_type or diagnostics.final_block_reason == "quality_invalid":
+            return "quality_invalid"
+        if diagnostics.schema_error_type == "compact_schema_invalid":
+            return "compact_schema_invalid"
+        if diagnostics.provider_error_type == "rate_limited":
+            return "provider_rate_limited"
+        if diagnostics.parse_error_type == "empty_provider_content":
+            return "empty_provider_content"
+        if diagnostics.parse_error_type in {"malformed_json", "json_object_not_found", "unsafe_provider_content"}:
+            return "malformed_json"
+        return "network_failed"
+
+    @staticmethod
+    def _assemble_compact_bundle(
+        context: CreativeGenerationContext, angles: list[JsonDict],
+    ) -> JsonDict:
+        idea_label = _clip(_clean(context.idea.name, "Business idea"), 90)
+        verdict_text = _clip(
+            _clean(context.verdict_record.verdict.get("summary"), "Review the stored LIT verdict before building"),
+            180,
+        )
+        chapters = [
+            {
+                "angle_id": angle["angle_id"],
+                "title": _clip(angle["title"], 90),
+                "summary": _clip(angle["script"], 160),
+            }
+            for angle in angles
+        ]
+        return {
+            "idea_summary": idea_label,
+            "verdict_summary": verdict_text,
+            "cta": CTA,
+            "angles": deepcopy(angles),
+            "longform": {
+                "title": _clip(f"Ghost Town Test: {idea_label}", 90),
+                "intro": _clip(f"Use the stored Ghost Town Test verdict to examine {idea_label}.", 250),
+                "chapters": chapters,
+                "transitions": [
+                    "Next, compare this angle with the same buyer evidence.",
+                    "Now test the next assumption against the stored verdict.",
+                    "Then narrow the opportunity using the same demand signal.",
+                    "Finally, turn the evidence into one builder action.",
+                ],
+                "conclusion": _clip(f"Use the evidence before building more. {CTA}", 220),
+                "description": _clip(f"Five verdict-grounded validation angles for {idea_label}. {CTA}", 300),
+            },
+        }
+
+    @staticmethod
+    def _angle_prompt(
+        context: CreativeGenerationContext, grounding_packet: JsonDict, angle_id: str,
+    ) -> str:
+        intent = {
+            "ghost_town_risk": "Name the risk of building for people who may not care and the verdict's buyer or market uncertainty.",
+            "buyer_reality": "Confront whether a real buyer would pay, reply, book, switch, decide, or act.",
+            "fast_validation_test": "Name one fast test before building and the result that would prove interest.",
+            "contrarian_opportunity": "Identify a narrow buyer, user, or use case and the pain or constraint that makes it real.",
+            "builder_action_plan": "State what to cut, test, ask, validate, or decide next using a buyer or market signal.",
+        }[angle_id]
+        schema_example = {
+            "angle_id": angle_id,
+            "title": "...",
+            "hook": "...",
+            "script": "...",
+            "caption": "...",
+            "thumbnail_text": "...",
+            "tags": ["..."],
+            "hashtags": ["..."],
+        }
+        return (
+            f"Generate exactly one compact creative angle JSON object for target angle_id: {angle_id}.\n\n"
+            "Rules:\n"
+            f"- angle_id must be exactly {angle_id}\n"
+            f"- angle-specific intent: {intent}\n"
+            "- use only the supplied LIT verdict and grounding packet\n"
+            "- do not invent buyer segments, platforms, channels, metrics, revenue, competitors, market size, or outcomes\n"
+            "- no external facts\n"
+            "- if details are absent, use generic safe terms: buyer, market, validation test, builder action, idea, risk, demand signal\n"
+            "- hook must be specific to the target angle and include a verdict signal\n"
+            "- hook and script must include a buyer, pain or risk, and concrete action\n"
+            "- thumbnail_text must be specific to the angle and verdict\n"
+            f"- canonical CTA for code-owned final assembly: {CTA}\n"
+            "- do not repeat the CTA in this angle object\n"
+            "- hook: max 120 characters\n"
+            "- script: max 450 characters\n"
+            "- caption: max 180 characters\n"
+            "- thumbnail_text: max 36 characters\n"
+            "- tags: max 4 items\n"
+            "- hashtags: max 4 items\n"
+            "- Return exactly one valid JSON object.\n"
+            "- Return compact JSON.\n"
+            "- No pretty printing.\n"
+            "- No markdown.\n"
+            "- No explanation.\n"
+            "- No comments.\n"
+            "- No trailing commas.\n"
+            "- No extra text before or after JSON.\n"
+            "- Complete the JSON object before ending.\n\n"
+            f"Single-angle schema:\n{json.dumps(schema_example, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            f"Grounding packet:\n{json.dumps(grounding_packet, ensure_ascii=False, separators=(',', ':'))}\n\n"
+            f"LIT verdict:\n{json.dumps(context.verdict_record.verdict, ensure_ascii=False, sort_keys=True)}"
+        )
